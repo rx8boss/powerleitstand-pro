@@ -23,7 +23,7 @@ Das Projekt wurde mit Unterstützung künstlicher Intelligenz, unter anderem Ope
 - Timer: Herunterfahren, Neustart oder Sperren nach einstellbarer Zeit; laufenden Timer abbrechen und Warnton anpassen.
 - Benutzerübersicht mit Erstellen, Umbenennen, Bearbeiten und Löschen lokaler Konten (Name, Beschreibung, Aktivierung, Administratorrolle) sowie Kennwortzurücksetzung oder -entfernung. Ein Konto ohne Kennwort ist beim Erstellen und Zurücksetzen wählbar; Windows-Richtlinien können das ablehnen. Eine Windows-Hello-PIN wird dadurch nicht entfernt; der Dialog verweist für die PIN auf die Anmeldeoptionen des angemeldeten Benutzers. Der Profilordner wird beim Umbenennen nicht umbenannt und beim Löschen des Kontos nicht gelöscht. Änderungen erfordern Administratorrechte; integrierte Konten, das aktuelle Konto und das letzte aktive Administratorkonto sind bei kritischen Aktionen geschützt.
 - Windows-Reparatur: DISM und SFC mit Fortschritt, Abbruch, Ergebniszusammenfassung und kopierbarem Befehl. Reparaturen benötigen Administratorrechte und starten den PC nicht automatisch neu.
-- Deutsch und Englisch, neun Designs, vier App-Größen, Tray-Menü und optionaler Autostart.
+- Deutsch und Englisch, sieben Designs, vier App-Größen, Tray-Menü und optionaler Autostart.
 - Manuelle Update-Prüfung unter Optionen: GitHub-Release-Version prüfen, die einzige EXE im Release anhand des GitHub-SHA-256-Digests verifizieren und nach Zustimmung am bisherigen Ort austauschen. Laufende Timer oder Reparaturen blockieren das Update. Bei keiner oder mehreren EXEs wird nicht automatisch aktualisiert.
 - Dauerhafte Ereignis- und Reparaturprotokolle unter `%LOCALAPPDATA%\Power Control PRO\logs`; Einstellungen unter `%LOCALAPPDATA%\Power Control PRO\settings.json`.
 
@@ -57,7 +57,7 @@ This project was created and further developed with AI assistance, including Ope
 - Scheduled shutdown, restart or lock; cancel an active timer and customize warning sounds.
 - Refreshable local-user overview; create, rename, edit and delete local accounts (name, description, enabled state and administrator role), or reset or remove a password. Passwordless creation and reset are optional, subject to Windows policy. This does not remove a Windows Hello PIN; the dialog links the signed-in user to Windows sign-in options. Renaming does not rename the profile folder; account deletion does not delete it. Administrator rights are required; built-in accounts, the current account and the last active administrator are protected for critical actions.
 - DISM and SFC repair with progress, cancellation, result summary and a copyable command. Administrator rights are required; the app does not restart Windows automatically after repair.
-- German and English, nine themes, four app sizes, tray menu and optional startup with Windows.
+- German and English, seven themes, four app sizes, tray menu and optional startup with Windows.
 - Manual update check in Options: compare the GitHub release version, verify the release's only EXE against its GitHub SHA-256 digest, and replace the EXE at its current location with consent. Active timers or repairs defer the update. No automatic update occurs if the release has zero or multiple EXEs.
 - Persistent event and repair logs in `%LOCALAPPDATA%\Power Control PRO\logs`; settings in `%LOCALAPPDATA%\Power Control PRO\settings.json`.
 
