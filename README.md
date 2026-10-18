@@ -1,6 +1,6 @@
 # PowerLeitstand PRO · Windows (WPF)
 
-![PowerLeitstand PRO v1.1.4 – Hauptfenster](docs/screenshots/main-window.png)
+![PowerLeitstand PRO v1.1.4 – Kompaktansicht](docs/screenshots/main-window.png)
 
 
 [![CodeQL · C#](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml/badge.svg)](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml)
@@ -81,7 +81,7 @@ The standalone `PowerLeitstand-PRO.exe` is placed in `publish\Windows-x64`; thes
 
 ## Vorschau / Preview
 
-Aktuelle WPF-Oberfläche in Version 1.1.4 (Standarddesign; Diagnose-Platzhalter im Bild oben). Korrekturversion auf Basis von 1.1.3 mit überarbeiteter Installationsbestätigung und passenden Benutzer-Buttons. / Current WPF interface in version 1.1.4 (default theme; diagnostic placeholders in the image above). Correction release based on 1.1.3 with revised installation confirmation and correctly sized user buttons.
+Aktuelle WPF-Oberfläche in Version 1.1.4 (Kompaktansicht im Standarddesign, 860 × 620; Diagnose-Platzhalter im Bild oben). Korrekturversion auf Basis von 1.1.3 mit überarbeiteter Installationsbestätigung und passenden Benutzer-Buttons. / Current WPF interface in version 1.1.4 (compact view in the default theme, 860 × 620; diagnostic placeholders in the image above). Correction release based on 1.1.3 with revised installation confirmation and correctly sized user buttons.
 
 
 ### Update-Download / Update download
