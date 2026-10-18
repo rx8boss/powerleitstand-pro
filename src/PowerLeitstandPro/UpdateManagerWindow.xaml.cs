@@ -219,9 +219,7 @@ public partial class UpdateManagerWindow : Window
             _ => null
         };
         if (update is null) return;
-        var question = (_english ? "Install version " : "Version ") + update.Version + (_english ? "? The app will restart." : " installieren? Die App startet danach neu.");
-        if (update.Version < _installed) question += _english ? "\nEarlier versions may not contain current features." : "\nÄltere Versionen enthalten möglicherweise nicht alle aktuellen Funktionen.";
-        if (ThemedMessageBox.Show(this, question, "PowerLeitstand PRO", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (new UpdateInstallWindow(CurrentPalette, _english, _installed, update) { Owner = this }.ShowDialog() != true) return;
         if (_busy()) { RefreshActions(); return; }
         SelectedUpdate = update;
         DialogResult = true;

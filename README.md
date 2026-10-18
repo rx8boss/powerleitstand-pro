@@ -1,6 +1,6 @@
 # PowerLeitstand PRO · Windows (WPF)
 
-![PowerLeitstand PRO v1.1.3 – Hauptfenster](docs/screenshots/main-window.png)
+![PowerLeitstand PRO v1.1.4 – Hauptfenster](docs/screenshots/main-window.png)
 
 
 [![CodeQL · C#](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml/badge.svg)](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml)
@@ -15,7 +15,7 @@ Das Projekt wurde mit Unterstützung künstlicher Intelligenz, unter anderem Ope
 
 ### Download und Start
 
-[**Windows-EXE herunterladen**](https://github.com/rx8boss/powerleitstand-pro/releases/latest) – ab Version 1.1.0 heißt die Datei `PowerLeitstand-PRO.exe`. Der Release enthält außerdem ein ZIP mit EXE, Kurzanleitung auf Deutsch und Englisch sowie Prüfsumme. Die EXE ist portabel und benötigt keine separate .NET-Installation. Prüfe Release-Version, Herkunft und SHA-256-Prüfsumme vor dem Start.
+[**Windows-EXE herunterladen**](https://github.com/rx8boss/powerleitstand-pro/releases/latest) – ab Version 1.1.0 heißt die Datei `PowerLeitstand-PRO.exe`. Das ZIP enthält ausschließlich die EXE, die zweisprachige Kurzanleitung, den deutschen/englischen Changelog und den Ordner `Lizenzen`. Prüfsummen werden separat angeboten. Die EXE ist portabel und benötigt keine separate .NET-Installation. Prüfe Release-Version, Herkunft und SHA-256-Prüfsumme vor dem Start.
 
 ### Funktionen
 
@@ -81,7 +81,7 @@ The standalone `PowerLeitstand-PRO.exe` is placed in `publish\Windows-x64`; thes
 
 ## Vorschau / Preview
 
-Aktuelle WPF-Oberfläche in Version 1.1.3 (Standarddesign; Diagnose-Platzhalter im Bild oben). / Current WPF interface in version 1.1.3 (default theme; diagnostic placeholders in the image above).
+Aktuelle WPF-Oberfläche in Version 1.1.4 (Standarddesign; Diagnose-Platzhalter im Bild oben). Korrekturversion auf Basis von 1.1.3 mit überarbeiteter Installationsbestätigung und passenden Benutzer-Buttons. / Current WPF interface in version 1.1.4 (default theme; diagnostic placeholders in the image above). Correction release based on 1.1.3 with revised installation confirmation and correctly sized user buttons.
 
 
 ### Update-Download / Update download
@@ -92,4 +92,4 @@ Sichtbarer Download mit Fortschritt, Datenmenge, Dateiprüfung und Abbruch. Der 
 
 ### Versions- und Sprachprüfung / Version and language checks
 
-[Release-Ablauf / Release checklist](docs/release-checklist.md) · [Änderungen 1.1.3 / Changes in 1.1.3](docs/releases/v1.1.3.md)
+[Release-Ablauf / Release checklist](docs/release-checklist.md) · [Änderungen 1.1.4 / Changes in 1.1.4](docs/releases/v1.1.4.md)

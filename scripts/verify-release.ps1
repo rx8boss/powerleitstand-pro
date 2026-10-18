@@ -43,8 +43,16 @@ if ($PublicZip) {
         if (@($archive.Entries | Where-Object FullName -match '(?i)testbericht|test[ _-]?report').Count -gt 0) {
             throw 'Privater Prüfbericht im öffentlichen ZIP / Private report in public ZIP.'
         }
+        $paths = @($archive.Entries | Where-Object { $_.Name.Length -gt 0 } | ForEach-Object { $_.FullName.Replace('\','/') })
+        $rootFiles = @('PowerLeitstand-PRO.exe','Kurzanleitung.txt','Changelog-DE-EN.md')
+        if (@($paths | Where-Object { $_ -notin $rootFiles -and $_ -notmatch '^Lizenzen/[^/]+$' }).Count -gt 0 -or
+            @($rootFiles | Where-Object { $_ -notin $paths }).Count -gt 0 -or
+            @($paths | Where-Object { $_ -match '^Lizenzen/[^/]+$' }).Count -eq 0 -or
+            @($paths | Group-Object | Where-Object Count -gt 1).Count -gt 0) {
+            throw 'ZIP-Aufbau muss EXE, Kurzanleitung, Changelog und Lizenzen entsprechen / Invalid public ZIP layout.'
+        }
     } finally { $archive.Dispose() }
-    Write-Output 'PASS PUBLIC ZIP: no private development reports.'
+    Write-Output 'PASS PUBLIC ZIP: EXE, guide, bilingual changelog and Lizenzen only; no private development reports.'
 }
 if ($GitHubReleaseJson) {
     $release = Get-Content -LiteralPath $GitHubReleaseJson -Raw | ConvertFrom-Json

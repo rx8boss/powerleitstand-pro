@@ -6,6 +6,13 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
+        Korrekturversion auf Basis von 1.1.3
+        • Bestehende Funktionen von Version 1.1.3 bleiben erhalten.
+        • Installationsbestätigung mit Blitz, Streifen, Versionsvergleich und rotem Abbrechen-Button an alle Designs angepasst.
+        • Deutsche und englische Dialogtexte einschließlich Wiederherstellung und älterer Versionen geprüft.
+        • Benutzer-Buttons auf Seite 2 passen ihre Breite an Text und Icons an.
+
+        Enthaltene Funktionen aus Version 1.1.3
         Updates und Wiederherstellung
         • Kompakte Updateübersicht mit installierter Version und kompatiblen GitHub-Versionen.
         • Änderungen per Button im selben Fenster öffnen; Zurück erhält die Auswahl.
@@ -36,6 +43,13 @@ internal static class AppReleaseNotes
         • Deutsche und englische Beschriftungen, Hinweise und eigene Fehlermeldungen überarbeitet.
         """;
     internal const string English = """
+        Correction release based on 1.1.3
+        • Existing version 1.1.3 features are retained.
+        • Installation confirmation with lightning icon, stripes, version comparison and a red Cancel button matches every theme.
+        • German and English dialog text checked, including restoration and older versions.
+        • Page 2 user buttons adapt their width to their captions and icons.
+
+        Included features from version 1.1.3
         Updates and recovery
         • Compact update overview with the installed version and compatible GitHub releases.
         • Open changes within the same window; going back preserves the selection.

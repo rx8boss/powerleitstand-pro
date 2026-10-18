@@ -21,7 +21,7 @@ internal static class Program
         Directory.CreateDirectory(output);
         // A compiled test runner has its own entry assembly; use the app's pack resources.
         typeof(System.Windows.Application).GetField("_resourceAssembly", BindingFlags.NonPublic | BindingFlags.Static)!.SetValue(null, typeof(MainWindow).Assembly);
-        var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var app = new IsolatedTestApp { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         int cases = 0;
         var dispatcherErrors = new List<Exception>();
         app.DispatcherUnhandledException += (_, e) => { dispatcherErrors.Add(e.Exception); e.Handled = true; };
@@ -37,6 +37,7 @@ internal static class Program
         try
         {
             CrossButtonAppearance.Initialize();
+            if (args.Contains("--install-dialog")) return InstallDialogTests.Run(app, output);
             if (args.Contains("--languages")) return LanguageTests.Run(app, output);
             if (args.Contains("--updates")) return UpdateManagerTests.Run(app, output);
             if (args.Contains("--manager-exe")) return ManagerExeIntegration.Run(output, args.Last());

@@ -10,6 +10,8 @@
 
 ## Versionshinweise und Sicherungen
 
+ZIP-Aufbau: Im Hauptverzeichnis ausschließlich `PowerLeitstand-PRO.exe`, `Kurzanleitung.txt`, `Changelog-DE-EN.md` und den Ordner `Lizenzen/` aufnehmen. .NET-/WPF-Lizenzen und `ThirdPartyNotices.txt` liegen vollständig unter `Lizenzen/`. Prüfsummen separat neben dem ZIP veröffentlichen; keine Build-Dateien oder internen Unterlagen ins ZIP übernehmen.
+
 Die App zeigt den Abschnitt `## Deutsch` oder `## English` passend zur Sprache. Sicherungen enthalten beide Texte zusammen im bestehenden Metadatenfeld; ältere Sicherungen bleiben lesbar. Fehlt eine Sprachfassung, zeigt die App einen lokalisierten Hinweis und den unveränderten Originaltext. Ältere Veröffentlichungen werden nicht nachträglich erfunden oder stillschweigend übersetzt.
 
 Historische Protokolle, Kontobeschreibungen, Gerätenamen und Windows-/DISM-/SFC-Ausgaben bleiben Originaldaten. Eigene Beschriftungen, Schweregradanzeigen und bekannte eigene Fehlermeldungen werden übersetzt. Ein Sprachwechsel verändert weder die gespeicherten Protokolle noch die internen Designkennungen.

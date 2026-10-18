@@ -522,9 +522,12 @@ public partial class MainWindow : Window
         UpdateRepairProtocolButtonLabel();
         UserList.Height = double.NaN;
         UserList.ItemContainerStyle = (System.Windows.Style)UserList.Resources["UserListRowStyle"];
-        CreateUserButton.Width = EditUserButton.Width = 164 * factor;
+        // Keep fixed-size icons and translated text inside the button at every scale.
+        CreateUserButton.Width = EditUserButton.Width = double.NaN;
+        CreateUserButton.MinWidth = EditUserButton.MinWidth = 164 * factor;
         CreateUserButton.Height = EditUserButton.Height = RefreshUsersButton.Height = 40 * factor;
-        RefreshUsersButton.Width = 132 * factor;
+        RefreshUsersButton.Width = double.NaN;
+        RefreshUsersButton.MinWidth = 132 * factor;
         foreach (var badge in new[] { StatusBadge, UserStatusBadge, RepairStatusBadge })
         {
             badge.Width = badge.Height = 54 * factor;

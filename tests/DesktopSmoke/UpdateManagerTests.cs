@@ -151,7 +151,7 @@ internal static class UpdateManagerTests
                 var answer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
                 answer.Tick += (_, _) =>
                 {
-                    var dialog = app.Windows.OfType<ThemedMessageBoxWindow>().FirstOrDefault(w => w.IsLoaded);
+                    var dialog = app.Windows.Cast<Window>().FirstOrDefault(w => w.IsLoaded && w is ThemedMessageBoxWindow or UpdateInstallWindow);
                     if (dialog is null) return;
                     answer.Stop(); ((Button)dialog.FindName(yes ? "ConfirmButton" : "CancelButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 };
