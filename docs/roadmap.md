@@ -34,7 +34,7 @@ Details und Prüfgrenzen: `docs/update-tray-v1.1.3.md`.
 - [x] Freigegebene isolierte Vorschau als WPF-Dialog umgesetzt: echter Byte-/Prozentfortschritt, Laufbalken bei unbekannter Größe, sichtbare Prüfsumme und Neustartphase.
 - [x] Abbrechen/X/Escape mit CancellationToken; Dialog bleibt bis zum Ende des Abbruchs offen. Nach Übergabe an den Update-Helfer ist Abbrechen gesperrt.
 - [x] 17 Downloadprüfungen und 70 Dialog-/Design-/Größen-/Sprachkombinationen bestanden. Zusätzlich echter GitHub-Download mit dem neuen Updatecode in isolierter Testkopie, Prüfsumme, Austausch und Neustart geprüft.
-- [x] Lokale Test-EXE v1.1.2 und begleitender Testbericht erstellt. Der Dialog erscheint bei verfügbarer neuerer Version nach Downloadbestätigung.
+- [x] Lokale Test-EXE v1.1.2 und lokale Prüfdokumentation erstellt. Der Dialog erscheint bei verfügbarer neuerer Version nach Downloadbestätigung.
 - [x] GitHub-Release v1.1.2 am 18.10.2026 veröffentlicht, mit aktueller Startseitenaufnahme und Update-Dialog in der README. Alle vier Asset-Prüfsummen abgeglichen; öffentlicher Download, Dateiaustausch und Neustart in isolierter Testkopie bestanden. Nachweise: `docs/releases/v1.1.2/README.md`.
 - VirusTotal-Verknüpfung/-Automatik auf Nutzerwunsch verworfen.
 
@@ -43,7 +43,7 @@ Details und Prüfgrenzen: `docs/update-tray-v1.1.3.md`.
 - [x] Protokollansichten vom Nutzer abgehakt.
 - [x] Neon beim Verschieben vom Nutzer abgehakt.
 - [x] Startgeschwindigkeit vom Nutzer abgehakt; keine weitere Optimierung beauftragt.
-- [x] Version 1.1.1: Designs/Größen geprüft, Test-EXE und Testbericht erstellt, produktiven GitHub-Updatecode mit isoliertem Ausgangsprozess getestet und veröffentlicht. Nachweise unter docs/releases/v1.1.1; manueller Klicktest der alten UI bleibt beim Nutzer.
+- [x] Version 1.1.1: Designs/Größen geprüft, Test-EXE und lokale Prüfdokumentation erstellt, produktiven GitHub-Updatecode mit isoliertem Ausgangsprozess getestet und veröffentlicht. Nachweise unter docs/releases/v1.1.1; manueller Klicktest der alten UI bleibt beim Nutzer.
 
 # PowerLeitstand PRO – Planungsstand
 

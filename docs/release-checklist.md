@@ -4,8 +4,8 @@
 2. Alle Änderungen seit dem letzten veröffentlichten Stand in `AppReleaseNotes.German` und `.English` pflegen. Beide Listen müssen vollständig sein und dieselben Änderungen enthalten. Keine automatische Übersetzung von Windows-Ausgaben oder fremden Release-Texten behaupten.
 3. `scripts/verify-release.ps1 -PrepareNotes -Exe <neue EXE>` ausführen. Der Befehl bereitet `docs/releases/v<VERSION>.md` aus genau diesen beiden Texten vor und prüft Projekt-, Datei- und Produktversion. Die Prüfung muss erfolgreich sein.
 4. `DesktopSmoke --languages` ausführen: Deutsch und Englisch, drei Seiten und Optionen, kleine/große Ansicht, Hauptdialoge, Protokollanzeige und sprachabhängige Versionshinweise aus GitHub-Testdaten sowie gespeicherten Sicherungen. Fachliche Gleichheit der Texte zusätzlich lesen; gleiche Anzahl an Punkten allein reicht nicht.
-5. `DesktopSmoke --updates` und Downloadprüfungen durchführen. Aktuell/Update verfügbar/frühere Version durch Vergleichs- und Katalogtests prüfen. Neue EXE starten; Testbericht mit tatsächlichem Umfang und Grenzen ergänzen.
-6. Erst nach gesonderter Freigabe die EXE und den vorbereiteten zweisprachigen Text veröffentlichen. GitHub-Tag muss exakt `v<VERSION>` lauten.
+5. `DesktopSmoke --updates` und Downloadprüfungen durchführen. Aktuell/Update verfügbar/frühere Version durch Vergleichs- und Katalogtests prüfen. Neue EXE starten. Interne Prüfberichte ausschließlich lokal außerhalb des Repositorys speichern; niemals hochladen, verlinken oder in Release-ZIPs aufnehmen.
+6. Erst nach gesonderter Freigabe die EXE und den vorbereiteten zweisprachigen Text veröffentlichen. GitHub-Tag muss exakt `v<VERSION>` lauten. ZIP vor dem Upload mit `-PublicZip <ZIP>` prüfen. Nur EXE, öffentliches ZIP und Prüfsummen veröffentlichen; interne Prüfunterlagen bleiben privat.
 7. Frische GitHub-Release-JSON abrufen und `scripts/verify-release.ps1 -Exe <EXE> -GitHubReleaseJson <JSON>` ausführen. Damit werden veröffentlichter Tag, vollständiger Text und SHA-256 der hochgeladenen EXE geprüft. Ohne frische JSON darf die Prüfung nicht als GitHub-Veröffentlichungsprüfung gemeldet werden.
 
 ## Versionshinweise und Sicherungen

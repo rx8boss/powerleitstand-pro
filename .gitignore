@@ -18,3 +18,9 @@ settings.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Private development reports must never be committed or published.
+**/[Tt]estbericht*
+**/[Tt]est[Rr]eport*
+**/[Tt]est-[Rr]eport*
+**/[Tt]est_[Rr]eport*

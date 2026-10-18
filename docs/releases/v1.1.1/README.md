@@ -1,7 +1,6 @@
 # PowerLeitstand PRO v1.1.1 – Prüfnachweise
 
 - [Programm, ZIP und Prüfsummen im Release](https://github.com/rx8boss/powerleitstand-pro/releases/tag/v1.1.1)
-- [Testbericht herunterladen](Testbericht.xlsx)
 - [Übersicht der sieben Designs](Designvergleich.png)
 
 Die veröffentlichte EXE gehört zum Quellstand `142ac318b1bb3ebed8ed689fdc336856c813b5cc`.
