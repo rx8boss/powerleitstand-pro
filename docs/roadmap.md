@@ -3,7 +3,7 @@
 - [x] Protokollansichten vom Nutzer abgehakt.
 - [x] Neon beim Verschieben vom Nutzer abgehakt.
 - [x] Startgeschwindigkeit vom Nutzer abgehakt; keine weitere Optimierung beauftragt.
-- [ ] Version 1.1.1: alle Designs/Größen prüfen, Test-EXE und Testbericht erstellen, GitHub-Update testen und veröffentlichen (freigegeben).
+- [x] Version 1.1.1: Designs/Größen geprüft, Test-EXE und Testbericht erstellt, produktiven GitHub-Updatecode mit isoliertem Ausgangsprozess getestet und veröffentlicht. Nachweise unter docs/releases/v1.1.1; manueller Klicktest der alten UI bleibt beim Nutzer.
 
 # PowerLeitstand PRO – Planungsstand
 
