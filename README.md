@@ -1,6 +1,6 @@
 # PowerLeitstand PRO · Windows (WPF)
 
-![PowerLeitstand PRO v1.1.0 – Hauptfenster](docs/screenshots/main-window.png)
+![PowerLeitstand PRO v1.1.2 – Hauptfenster](docs/screenshots/main-window.png)
 
 
 [![CodeQL · C#](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml/badge.svg)](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml)
@@ -77,4 +77,11 @@ The standalone `PowerLeitstand-PRO.exe` is placed in `publish\Windows-x64`; thes
 
 ## Vorschau / Preview
 
-Aktuelle WPF-Oberfläche in Version 1.1.0 (Standarddesign, Beispielprotokoll) / Current WPF interface in version 1.1.0 (default theme, sample log):
+Aktuelle WPF-Oberfläche in Version 1.1.2 (Standarddesign; Beispielwerte und Beispielprotokoll im Bild oben). / Current WPF interface in version 1.1.2 (default theme; sample metrics and logs in the image above).
+
+
+### Update-Download / Update download
+
+Sichtbarer Download mit Fortschritt, Datenmenge, Dateiprüfung und Abbruch. Der folgende echte WPF-Dialog zeigt Beispieldaten. / Visible download progress, transferred data, file verification and cancellation. This real WPF dialog shows sample data.
+
+![PowerLeitstand PRO – Update-Download](docs/screenshots/update-dialog.png)

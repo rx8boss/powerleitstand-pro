@@ -69,6 +69,7 @@ public partial class MainWindow : Window
     internal bool SkipSavedPlacementForTests { get; set; }
     private bool _currentUserIsAdministrator;
     private AvailableUpdate? _availableUpdate;
+    private bool _updateInProgress;
     private UpdateCheckState _updateCheckState = UpdateCheckState.Checking;
     private bool _updateCheckFailedConnection;
     private int _updateCheckSequence;
@@ -78,7 +79,7 @@ public partial class MainWindow : Window
     private string LogFilePath => Path.Combine(_logDirectory, "events.log");
     private string RepairLogFilePath => Path.Combine(_logDirectory, "repair.log");
     internal bool IsTimerActive => _timer.IsEnabled;
-    internal bool IsBusy => _timer.IsEnabled || _repairRunning;
+    internal bool IsBusy => _timer.IsEnabled || _repairRunning || _updateInProgress;
     internal bool IsEnglish => _english;
     internal string CurrentThemeName => SelectedTheme();
     internal string CurrentIconSet => ThemePalette.For(SelectedTheme()).IconSet;
@@ -336,9 +337,21 @@ public partial class MainWindow : Window
             }
             SetUpdateCheckState(UpdateCheckState.Available);
             if (MessageBox.Show(_english ? $"Download and install version {update.Version}? The app will restart." : $"Version {update.Version} herunterladen und installieren? Die App startet danach neu.", "PowerLeitstand PRO", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            UpdateStatus.Text = _english ? "Downloading and verifying SHA-256…" : "Download und SHA-256-Prüfung laufen…";
-            await UpdateService.PrepareAndLaunchAsync(update, () => IsBusy);
-            System.Windows.Application.Current.Shutdown();
+            _updateInProgress = true;
+            try
+            {
+                var dialog = new UpdateDownloadWindow(update, ThemePalette.For(SelectedTheme()), _english,
+                    () => _timer.IsEnabled || _repairRunning) { Owner = this };
+                var completed = dialog.ShowDialog() == true;
+                if (dialog.Failure is not null) throw dialog.Failure;
+                if (completed)
+                {
+                    _updateInProgress = false;
+                    System.Windows.Application.Current.Shutdown();
+                }
+                else Log(_english ? "Update cancelled; existing program unchanged." : "Update abgebrochen; bisheriges Programm unverändert.");
+            }
+            finally { _updateInProgress = false; }
         }
         catch (Exception exception)
         {

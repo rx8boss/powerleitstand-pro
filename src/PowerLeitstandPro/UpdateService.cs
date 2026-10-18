@@ -7,6 +7,9 @@ using System.Text.Json;
 
 namespace PowerControlProWpf;
 
+internal enum UpdatePhase { Downloading, Verifying, Restarting }
+internal sealed record UpdateProgress(UpdatePhase Phase, long ReceivedBytes, long? TotalBytes);
+
 internal static class UpdateService
 {
     private static readonly HttpClient Client = CreateClient();
@@ -14,7 +17,7 @@ internal static class UpdateService
     private static HttpClient CreateClient()
     {
         var client = new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("PowerLeitstand-PRO/1.1.1");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("PowerLeitstand-PRO/1.1.2");
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         return client;
     }
@@ -28,7 +31,8 @@ internal static class UpdateService
         return ReleaseAssetSelector.Select(data.RootElement, current);
     }
 
-    internal static async Task PrepareAndLaunchAsync(AvailableUpdate update, Func<bool> isBusy, CancellationToken cancellationToken = default)
+    internal static async Task PrepareAndLaunchAsync(AvailableUpdate update, Func<bool> isBusy,
+        CancellationToken cancellationToken = default, IProgress<UpdateProgress>? progress = null)
     {
         var target = Environment.ProcessPath ?? throw new InvalidOperationException("EXE-Pfad nicht ermittelbar.");
         if (!target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Updates benötigen die veröffentlichte Windows-EXE.");
@@ -38,19 +42,16 @@ internal static class UpdateService
         var backup = Path.Combine(directory, $".{Path.GetFileName(target)}.{Guid.NewGuid():N}.bak");
         try
         {
-            using var response = await Client.GetAsync(update.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            response.EnsureSuccessStatusCode();
-            await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken))
-            await using (var output = new FileStream(staged, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                await input.CopyToAsync(output, cancellationToken);
-            await using (var file = File.OpenRead(staged))
-            {
-                var hash = Convert.ToHexString(await SHA256.HashDataAsync(file, cancellationToken));
-                if (!hash.Equals(update.Sha256, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("SHA-256-Prüfsumme stimmt nicht überein. Das Update wurde verworfen.");
-            }
+            await DownloadAndVerifyAsync(Client, update, staged, progress, cancellationToken);
             if (isBusy()) throw new InvalidOperationException("Ein Timer oder eine Reparatur wurde während des Downloads gestartet.");
-            File.Copy(target, helper);
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Run(() => File.Copy(target, helper), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(new(UpdatePhase.Restarting, 0, null));
+            // Give the UI its queued status notification before starting the helper.
+            await Task.Yield();
+            cancellationToken.ThrowIfCancellationRequested();
+            if (isBusy()) throw new InvalidOperationException("Ein Timer oder eine Reparatur verhindert den Neustart.");
             var start = new ProcessStartInfo(helper) { UseShellExecute = false, CreateNoWindow = true };
             start.ArgumentList.Add("--update-helper");
             start.ArgumentList.Add(target);
@@ -63,6 +64,53 @@ internal static class UpdateService
         {
             try { if (File.Exists(staged)) File.Delete(staged); } catch { }
             try { if (File.Exists(helper)) File.Delete(helper); } catch { }
+            throw;
+        }
+    }
+
+    internal static async Task DownloadAndVerifyAsync(HttpClient client, AvailableUpdate update, string staged,
+        IProgress<UpdateProgress>? progress, CancellationToken cancellationToken)
+    {
+        var created = false;
+        try
+        {
+            using var response = await client.GetAsync(update.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            long? total = response.Content.Headers.ContentLength is > 0 ? response.Content.Headers.ContentLength : null;
+            long received = 0;
+            progress?.Report(new(UpdatePhase.Downloading, 0, total));
+            var watch = Stopwatch.StartNew();
+            await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+            await using (var output = new FileStream(staged, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, useAsync: true))
+            {
+                created = true;
+                var buffer = new byte[65536];
+                int count;
+                while ((count = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) != 0)
+                {
+                    await output.WriteAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
+                    received += count;
+                    if (watch.ElapsedMilliseconds >= 80)
+                    {
+                        progress?.Report(new(UpdatePhase.Downloading, received, total));
+                        watch.Restart();
+                    }
+                }
+            }
+            if (total is not null && received != total.Value)
+                throw new InvalidDataException("Der Download ist unvollständig. Die bisherige EXE bleibt erhalten.");
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(new(UpdatePhase.Downloading, received, total));
+            progress?.Report(new(UpdatePhase.Verifying, received, total));
+            await using var file = File.OpenRead(staged);
+            var hash = Convert.ToHexString(await SHA256.HashDataAsync(file, cancellationToken).ConfigureAwait(false));
+            if (!hash.Equals(update.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("SHA-256-Prüfsumme stimmt nicht überein. Das Update wurde verworfen.");
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch
+        {
+            try { if (created && File.Exists(staged)) File.Delete(staged); } catch { }
             throw;
         }
     }

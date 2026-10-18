@@ -1,3 +1,12 @@
+## Update-Downloadfenster – Teststand 18.10.2026
+
+- [x] Freigegebene isolierte Vorschau als WPF-Dialog umgesetzt: echter Byte-/Prozentfortschritt, Laufbalken bei unbekannter Größe, sichtbare Prüfsumme und Neustartphase.
+- [x] Abbrechen/X/Escape mit CancellationToken; Dialog bleibt bis zum Ende des Abbruchs offen. Nach Übergabe an den Update-Helfer ist Abbrechen gesperrt.
+- [x] 17 Downloadprüfungen und 70 Dialog-/Design-/Größen-/Sprachkombinationen bestanden. Zusätzlich echter GitHub-Download mit dem neuen Updatecode in isolierter Testkopie, Prüfsumme, Austausch und Neustart geprüft.
+- [x] Lokale Test-EXE v1.1.2 und begleitender Testbericht erstellt. Der Dialog erscheint bei verfügbarer neuerer Version nach Downloadbestätigung.
+- [ ] GitHub-Release v1.1.2 mit aktueller Startseitenaufnahme und Update-Dialog in der README veröffentlichen; vom Nutzer am 18.10.2026 freigegeben.
+- VirusTotal-Verknüpfung/-Automatik auf Nutzerwunsch verworfen.
+
 ## Abnahme und Release-Vorbereitung – 18.10.2026
 
 - [x] Protokollansichten vom Nutzer abgehakt.
