@@ -63,7 +63,7 @@
                      Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
         </StackPanel>
         <Button Grid.Column="1" Width="30" Height="29" Click="CloseDialog" Style="{StaticResource DialogCloseButton}"
-                Background="#A51D36" BorderBrush="#FF6388" Foreground="White" Padding="0"><Path Data="M 3,3 L 16,16 M 16,3 L 3,16" Stroke="White" StrokeThickness="2" Width="13" Height="13" Stretch="Uniform"/></Button>
+                Background="#651C30" BorderBrush="#FF6388" Foreground="#FF4B4B" Padding="0"><Path Data="M 3,3 L 16,16 M 16,3 L 3,16" Stroke="#FF4B4B" StrokeThickness="2" Width="13" Height="13" Stretch="Uniform"/></Button>
       </Grid>
       <Border x:Name="ResultCard" Grid.Row="1" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
               BorderThickness="1" CornerRadius="7" Padding="10" Margin="0,7,0,0">
@@ -85,7 +85,7 @@
       </Border>
       <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Button x:Name="LaterButton" Grid.Column="0" Height="33" Margin="0,0,5,0" Click="CloseDialog"
-                Style="{StaticResource DialogButton}" Padding="3"><StackPanel Orientation="Horizontal"><Path Data="M 3,3 L 16,16 M 16,3 L 3,16" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.8" Width="14" Height="14" Stretch="Uniform" Margin="0,0,7,0"/><TextBlock x:Name="LaterLabel" Text="Später" VerticalAlignment="Center"/></StackPanel></Button>
+                Style="{StaticResource DialogButton}" Padding="3"><StackPanel Orientation="Horizontal"><Path Data="M 3,3 L 16,16 M 16,3 L 3,16" Stroke="#FF4B4B" StrokeThickness="1.8" Width="14" Height="14" Stretch="Uniform" Margin="0,0,7,0"/><TextBlock x:Name="LaterLabel" Text="Später" VerticalAlignment="Center"/></StackPanel></Button>
         <Button x:Name="RestartButton" Grid.Column="1" Height="33" Margin="5,0,0,0" Click="RestartDialog"
                 Style="{StaticResource DialogButton}" Background="{DynamicResource SuccessBrush}"
                 BorderBrush="{DynamicResource ReadyBrush}" Foreground="White" Padding="3"><StackPanel Orientation="Horizontal"><Path Data="M 18,7 A 9,9 0 1 0 20,13 M 18,3 L 18,9 L 12,9" Stroke="White" StrokeThickness="2" Width="16" Height="16" Stretch="Uniform" Margin="0,0,7,0"/><TextBlock x:Name="RestartLabel" Text="Jetzt neu starten" VerticalAlignment="Center"/></StackPanel></Button>

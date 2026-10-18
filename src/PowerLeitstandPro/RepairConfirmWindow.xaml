@@ -39,7 +39,7 @@
                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1.3"
                 CornerRadius="7" SnapsToDevicePixels="True">
           <Grid>
-            <Border Background="{StaticResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
+            <Border Background="{DynamicResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Grid>
         </Border>
@@ -52,21 +52,23 @@
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style x:Key="CancelButtonStyle" TargetType="Button" BasedOn="{StaticResource DialogButton}">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="{DynamicResource DialogDangerBackground}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource DialogDangerBorder}"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-        <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}"
-                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1.3"
-                CornerRadius="7" SnapsToDevicePixels="True">
-          <Grid>
-            <Border Background="{StaticResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Grid>
+        <Border x:Name="RedCancelFrame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="1.3" CornerRadius="7" TextElement.Foreground="#FF7B8E">
+          <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
         <ControlTemplate.Triggers>
           <Trigger Property="IsMouseOver" Value="True">
-            <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource DialogDangerBackground}"/>
+            <Setter TargetName="RedCancelFrame" Property="Background" Value="{DynamicResource DialogDangerHover}"/>
+            <Setter TargetName="RedCancelFrame" Property="TextElement.Foreground" Value="White"/>
+            <Setter TargetName="RedCancelFrame" Property="Effect"><Setter.Value><DropShadowEffect Color="#FF2448" ShadowDepth="0" BlurRadius="14" Opacity="0.8"/></Setter.Value></Setter>
           </Trigger>
-          <Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.8"/></Trigger>
+          <Trigger Property="IsPressed" Value="True"><Setter TargetName="RedCancelFrame" Property="Opacity" Value="0.75"/></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="RedCancelFrame" Property="BorderThickness" Value="2"/></Trigger>
+          <Trigger Property="IsEnabled" Value="False"><Setter TargetName="RedCancelFrame" Property="Opacity" Value="0.5"/></Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
@@ -78,7 +80,7 @@
                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1.3"
                 CornerRadius="7" SnapsToDevicePixels="True">
           <Grid>
-            <Border Background="{StaticResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
+            <Border Background="{DynamicResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Grid>
         </Border>
@@ -91,7 +93,7 @@
       </ControlTemplate></Setter.Value></Setter>
     </Style>
   </Window.Resources>
-  <Border Background="{DynamicResource DialogSurface}" BorderBrush="{DynamicResource DialogBorder}"
+  <Border x:Name="DialogFrame" Background="{DynamicResource DialogSurface}" BorderBrush="{DynamicResource DialogBorder}"
           BorderThickness="1.5" CornerRadius="11" Padding="14">
     <Grid>
       <Grid.RowDefinitions>
@@ -102,10 +104,10 @@
         <RowDefinition Height="12"/>
         <RowDefinition Height="33"/>
       </Grid.RowDefinitions>
-      <Path Grid.RowSpan="6" Data="M 0 0 L 38 0 M 0 0 L 38 38"
-            Stroke="{DynamicResource DialogBorder}" StrokeThickness="1" Opacity="0.5"
-            Width="38" Height="38" HorizontalAlignment="Right" VerticalAlignment="Top"
-            IsHitTestVisible="False"/>
+      <Grid x:Name="DialogStripes" Grid.RowSpan="6" Width="78" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False" ClipToBounds="True">
+        <Path Data="M 59,0 L 78,0 L 78,20 L 53,45 L 14,45 Z" Fill="{DynamicResource DialogBorder}" Opacity="0.10"/>
+        <Path Data="M 49,0 L 4,45 M 68,0 L 23,45" Stroke="{DynamicResource DialogBorder}" StrokeThickness="0.7" Opacity="0.55"/>
+      </Grid>
       <Grid Grid.Row="0" MouseLeftButtonDown="DragDialog">
         <Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Grid Width="33" Height="33" HorizontalAlignment="Left" VerticalAlignment="Center">
@@ -144,10 +146,10 @@
       <Grid Grid.Row="5">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Button x:Name="StartButton" Grid.Column="0" Height="33" Margin="0,0,5,0"
-                Style="{StaticResource PrimaryButton}" Click="StartDialog" IsDefault="True">
+                Style="{StaticResource DialogButton}" Click="StartDialog" IsDefault="True">
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-            <Path Data="M 3,2 L 17,10 L 3,18 Z" Stroke="White"
-                  StrokeThickness="1.5" Fill="White"
+            <Path Data="M 3,2 L 17,10 L 3,18 Z" Stroke="{DynamicResource DialogText}"
+                  StrokeThickness="1.5" Fill="{DynamicResource DialogText}"
                   Width="14" Height="15" Stretch="Uniform" Margin="0,0,7,0"/>
             <TextBlock x:Name="StartCaption" Text="Reparatur starten" VerticalAlignment="Center"/>
           </StackPanel>
@@ -155,7 +157,7 @@
         <Button x:Name="CancelButton" Grid.Column="1" Height="33" Margin="5,0,0,0"
                 Style="{StaticResource CancelButtonStyle}" Click="CancelDialog" IsCancel="True">
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-            <Path Data="M 3,3 L 16,16 M 16,3 L 3,16" Stroke="{DynamicResource DialogDangerBorder}"
+            <Path Data="M 3,3 L 16,16 M 16,3 L 3,16" Stroke="#FF4B4B"
                   StrokeThickness="2" Width="14" Height="14" Stretch="Uniform" Margin="0,0,7,0"/>
             <TextBlock x:Name="CancelCaption" Text="Abbrechen" VerticalAlignment="Center"/>
           </StackPanel>

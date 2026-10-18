@@ -16,6 +16,7 @@ public partial class RepairConfirmWindow : Window
     internal RepairConfirmWindow(string command, ThemePalette palette, bool english)
     {
         InitializeComponent();
+        ClassicCancelAppearance.RegisterDialog(this, palette);
         _english = english;
         var keys = new[] { "DialogBackground", "DialogText", "DialogSubtleText",
             "DialogAccent", "DialogBorder", "DialogButtonBackground", "DialogHover" };
@@ -35,11 +36,15 @@ public partial class RepairConfirmWindow : Window
         var lightSurface = (surface.R * 299 + surface.G * 587 + surface.B * 114) / 1000 > 150;
         Resources["DialogDangerBackground"] = Solid(lightSurface ? "#98283F" : "#6A1F32");
         Resources["DialogDangerBorder"] = Solid(lightSurface ? "#A91F3D" : "#FF5A74");
+        Resources["DialogDangerHover"] = Solid(lightSurface ? "#B93550" : "#98283F");
+        DialogAppearance.ApplySurface(this, DialogFrame, palette);
+        DialogAppearance.ApplyRedButton(CancelButton, (Style)FindResource("CancelButtonStyle"));
         Background = (Brush)Resources["DialogBackground"];
         FontFamily = new FontFamily(palette.FontFamily);
         DialogIcon.Source = new BitmapImage(new Uri(
             $"/{typeof(RepairConfirmWindow).Assembly.GetName().Name};component/Assets/icons/{palette.IconSet}/settings.png", UriKind.Relative));
-        DialogHeader.Text = english ? "Windows repair" : "Windows-Reparatur";
+        DialogHeader.Text = (english ? "Windows repair" : "Windows-Reparatur") +
+            (command.StartsWith("DISM", StringComparison.Ordinal) ? " · DISM" : " · SFC");
         CommandText.Text = command;
         QuestionText.Text = english
             ? $"{(command.StartsWith("DISM", StringComparison.Ordinal) ? "Run DISM" : "Run SFC")} as administrator? Windows files may be repaired."

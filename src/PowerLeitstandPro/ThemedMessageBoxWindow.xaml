@@ -21,7 +21,7 @@
         <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}"
                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1.3"
                 CornerRadius="7" SnapsToDevicePixels="True">
-          <Grid><Border Background="{StaticResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
+          <Grid><Border Background="{DynamicResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Grid>
         </Border>
@@ -38,7 +38,7 @@
                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1.3"
                 CornerRadius="7" SnapsToDevicePixels="True">
           <Grid>
-            <Border Background="{StaticResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
+            <Border Background="{DynamicResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Grid>
         </Border>
@@ -58,7 +58,7 @@
         <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}"
                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1.3"
                 CornerRadius="7" SnapsToDevicePixels="True">
-          <Grid><Border Background="{StaticResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
+          <Grid><Border Background="{DynamicResource DialogSheen}" CornerRadius="6" IsHitTestVisible="False"/>
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Grid>
         </Border>
@@ -68,12 +68,37 @@
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
+    <Style x:Key="ReferenceCancelButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="{DynamicResource DialogDangerBackground}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource DialogDangerBorder}"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+        <Border x:Name="RedCancelFrame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="1.3" CornerRadius="7" TextElement.Foreground="#FF7B8E">
+          <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsMouseOver" Value="True">
+            <Setter TargetName="RedCancelFrame" Property="Background" Value="{DynamicResource DialogDangerHover}"/>
+            <Setter TargetName="RedCancelFrame" Property="TextElement.Foreground" Value="White"/>
+            <Setter TargetName="RedCancelFrame" Property="Effect"><Setter.Value><DropShadowEffect Color="#FF2448" ShadowDepth="0" BlurRadius="14" Opacity="0.8"/></Setter.Value></Setter>
+          </Trigger>
+          <Trigger Property="IsPressed" Value="True"><Setter TargetName="RedCancelFrame" Property="Opacity" Value="0.75"/></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="RedCancelFrame" Property="BorderThickness" Value="2"/></Trigger>
+          <Trigger Property="IsEnabled" Value="False"><Setter TargetName="RedCancelFrame" Property="Opacity" Value="0.5"/></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
   </Window.Resources>
-  <Border Background="{DynamicResource DialogSurface}" BorderBrush="{DynamicResource DialogBorder}"
+  <Border x:Name="DialogFrame" Background="{DynamicResource DialogSurface}" BorderBrush="{DynamicResource DialogBorder}"
           BorderThickness="1.5" Padding="14" CornerRadius="11">
     <Grid>
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="12"/><RowDefinition Height="33"/></Grid.RowDefinitions>
-      <Path Grid.RowSpan="4" Data="M 0 0 L 38 0 M 0 0 L 38 38" Stroke="{DynamicResource DialogBorder}" StrokeThickness="1" Opacity="0.55" HorizontalAlignment="Right" VerticalAlignment="Top" Width="38" Height="38" IsHitTestVisible="False"/>
+      <Path x:Name="LegacyCorner" Grid.RowSpan="4" Data="M 0 0 L 38 0 M 0 0 L 38 38" Stroke="{DynamicResource DialogBorder}" StrokeThickness="1" Opacity="0.55" HorizontalAlignment="Right" VerticalAlignment="Top" Width="38" Height="38" IsHitTestVisible="False"/>
+      <Grid x:Name="DialogStripes" Grid.RowSpan="4" Width="78" Height="45" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False" ClipToBounds="True" Visibility="Collapsed">
+        <Path Data="M 59,0 L 78,0 L 78,20 L 53,45 L 14,45 Z" Fill="{DynamicResource DialogBorder}" Opacity="0.10"/>
+        <Path Data="M 49,0 L 4,45 M 68,0 L 23,45" Stroke="{DynamicResource DialogBorder}" StrokeThickness="0.7" Opacity="0.55"/>
+      </Grid>
       <Grid Grid.Row="0" MouseLeftButtonDown="DragDialog">
         <Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Grid Width="33" Height="33" VerticalAlignment="Center" HorizontalAlignment="Left">

@@ -14,6 +14,10 @@ internal sealed record ThemePalette(
     internal string HeaderSubtle => HeaderSubtleOverride ?? Colors[6];
     internal string FooterText => FooterTextOverride ?? Colors[6];
 
+    internal static string NormalizeName(string? name) => name is
+        "Standard" or "Neon Blau" or "Neon Pink" or "Neon Grün" or "Linux Mint" or "Classic" or "Dark"
+        ? name : "Standard";
+
     internal static ThemePalette For(string name) => name switch
     {
         "Neon Blau" => new(
@@ -31,21 +35,11 @@ internal sealed record ThemePalette(
              "#BCE8D6", "#48EFB3", "#308E72", "#0B5E48", "#168466"],
             ["#5A2D38", "#F2758C", "#0B7351", "#17594D", "#294034", "#E7CB72"],
             "#57E8A4", "#3CF6A4", 0.60, "Segoe UI"),
-        "Retro" => new(
-            ["#151A12", "#303A24", "#232C1C", "#20291B", "#151D13", "#E7EED8",
-             "#B8C9A3", "#B8D589", "#718A5F", "#3B5130", "#50643D"],
-            ["#5D3031", "#C78178", "#33543B", "#364D42", "#433A2D", "#DFC173"],
-            "#A8D989", null, 0, "Consolas"),
         "Linux Mint" => new(
             ["#B9C7BC", "#CAD7CC", "#AABBB0", "#D3E0D5", "#E2EBE4", "#23372B",
              "#415E4B", "#265C3F", "#87A791", "#B4D0BA", "#A2C2A9"],
             ["#AA4655", "#8B3440", "#2C6952", "#345F60", "#82545A", "#735C2A"],
             "#286946", null, 0, "Segoe UI", FooterTextOverride: "#23372B"),
-        "Graphit" => new(
-            ["#22262B", "#343A41", "#292E34", "#30363D", "#242A31", "#F3F5F7",
-             "#C4CBD2", "#BEC9D4", "#656F78", "#454E58", "#5C6874"],
-            ["#653840", "#B67682", "#355648", "#394B5E", "#48413D", "#D5B773"],
-            "#8DD1A0", null, 0, "Segoe UI"),
         "Classic" => new(
             ["#9ABCEB", "#2869D3", "#2360B8", "#D5E5FA", "#E9F2FF", "#10245A",
              "#355580", "#15489E", "#6192D2", "#AFC9EE", "#C3D9F5"],
@@ -59,8 +53,8 @@ internal sealed record ThemePalette(
             ["#6B3040", "#D97C91", "#2C604F", "#384F68", "#453B3C", "#D1B16A"],
             "#75C996", null, 0, "Segoe UI"),
         _ => new(
-            ["#061B2E", "#11314C", "#0B2B45", "#0E2A43", "#061B30", "#F5FAFF",
-             "#CCE1F0", "#67C8FF", "#448FBA", "#174466", "#276184"],
+            ["#04162B", "#061C36", "#061B34", "#062846", "#04182F", "#F7FBFF",
+             "#CBDCF3", "#13C9FF", "#1597D1", "#0D3E6B", "#126196"],
             ["#62283C", "#F06B8B", "#176963", "#174A70", "#252B3A", "#BF9B54"],
             "#29CDA3", null, 0, "Segoe UI")
     };

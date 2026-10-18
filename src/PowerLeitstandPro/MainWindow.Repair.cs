@@ -28,7 +28,11 @@ public partial class MainWindow
             foreach (var line in File.ReadLines(RepairLogFilePath)
                          .Where(line => !string.IsNullOrWhiteSpace(line) &&
                                         !RepairProgressParser.TryReadPercent(line, out _)).TakeLast(500).Reverse())
-                RepairLogBox.Items.Add(RepairLogEntry.Parse(line));
+            {
+                var entry = RepairLogEntry.Parse(line);
+                RepairLogBox.Items.Add(entry);
+                _repairLogEntries.Add(ToCompactRepairLogEntry(entry));
+            }
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
@@ -40,8 +44,7 @@ public partial class MainWindow
             _repairCommand?.StartsWith("DISM", StringComparison.Ordinal) == true ? "DISM" :
             _repairCommand?.StartsWith("SFC", StringComparison.Ordinal) == true ? "SFC" : "SYSTEM",
             level, line.Replace('\r', ' ').Replace('\n', ' '));
-        RepairLogBox.Items.Insert(0, entry);
-        while (RepairLogBox.Items.Count > 500) RepairLogBox.Items.RemoveAt(RepairLogBox.Items.Count - 1);
+        AddRepairLogEntry(entry);
         try
         {
             Directory.CreateDirectory(_logDirectory);
@@ -49,6 +52,22 @@ public partial class MainWindow
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+    }
+
+    private static CompactLogEntry ToCompactRepairLogEntry(RepairLogEntry entry) =>
+        new(entry.Timestamp.Length >= 16 ? entry.Timestamp.Substring(11, 5) : entry.Timestamp, entry.Message)
+        {
+            Detail = entry.ToLine(),
+            FullTime = entry.Timestamp.Length >= 19 ? entry.Timestamp.Substring(11, 8) : entry.Timestamp,
+            Category = $"{entry.Phase} · {entry.Level}"
+        };
+
+    private void AddRepairLogEntry(RepairLogEntry entry)
+    {
+        RepairLogBox.Items.Insert(0, entry);
+        _repairLogEntries.Insert(0, ToCompactRepairLogEntry(entry));
+        while (RepairLogBox.Items.Count > 500) RepairLogBox.Items.RemoveAt(RepairLogBox.Items.Count - 1);
+        while (_repairLogEntries.Count > 500) _repairLogEntries.RemoveAt(_repairLogEntries.Count - 1);
     }
 
     private void StartDismRepair(object sender, RoutedEventArgs e) => _ = StartRepairAsync("dism");
@@ -66,6 +85,7 @@ public partial class MainWindow
 
         _repairCancellation = new CancellationTokenSource();
         _repairRunning = true;
+        UpdateCompactLogActionState();
         _repairPercent = 0;
         _repairCommand = command;
         _repairOutput.Clear();
@@ -82,6 +102,7 @@ public partial class MainWindow
         _repairClock.Start();
         UpdateRepairTime();
         RepairProgress.Value = 0;
+        UpdateRepairProgressAnimation();
         RepairProgressLabel.Text = _english ? $"{command} is starting…" : $"{command} wird gestartet…";
         RepairResult.Text = "";
         RepairCancelButton.IsEnabled = false; // Erst nach Verbindung mit dem Administrator-Hilfsprozess.
@@ -108,6 +129,7 @@ public partial class MainWindow
                             if (percent > _repairPercent) _repairTimeEstimator.Add(_repairWatch.Elapsed, percent);
                             _repairPercent = Math.Max(_repairPercent, percent);
                             RepairProgress.Value = _repairPercent;
+                            UpdateRepairProgressAnimation();
                             RepairProgressLabel.Text = $"{command}: {_repairPercent:0.#} %";
                             UpdateRepairTime();
                             UpdateRepairStatus();
@@ -198,6 +220,8 @@ public partial class MainWindow
             _repairWatch.Stop();
             RepairCancelButton.IsEnabled = false;
             _repairRunning = false;
+            UpdateRepairProgressAnimation();
+            UpdateCompactLogActionState();
             UpdateRepairTime();
             ClearRepairLogButton.IsEnabled = true;
             _repairCancellation?.Dispose();
@@ -269,6 +293,7 @@ public partial class MainWindow
         {
             if (File.Exists(RepairLogFilePath)) File.Delete(RepairLogFilePath);
             RepairLogBox.Items.Clear();
+            _repairLogEntries.Clear();
             Log(_english ? "Repair log deleted." : "Reparaturprotokoll gelöscht.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

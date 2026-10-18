@@ -13,10 +13,12 @@
     <Compile Include="../../src/PowerLeitstandPro/RepairLogEntry.cs" Link="RepairLogEntry.cs" />
     <Compile Include="../../src/PowerLeitstandPro/RepairTimeEstimator.cs" Link="RepairTimeEstimator.cs" />
     <Compile Include="../../src/PowerLeitstandPro/RepairProtocol.cs" Link="RepairProtocol.cs" />
+    <Compile Include="../../src/PowerLeitstandPro/RepairProcessLifetime.cs" Link="RepairProcessLifetime.cs" />
     <Compile Include="../../src/PowerLeitstandPro/RepairResultSummary.cs" Link="RepairResultSummary.cs" />
     <Compile Include="../../src/PowerLeitstandPro/RepairOutputEncoding.cs" Link="RepairOutputEncoding.cs" />
     <Compile Include="../../src/PowerLeitstandPro/LocalUserManager.cs" Link="LocalUserManager.cs" />
     <Compile Include="../../src/PowerLeitstandPro/WindowPlacementMath.cs" Link="WindowPlacementMath.cs" />
+    <Compile Include="../../src/PowerLeitstandPro/WindowSizeMath.cs" Link="WindowSizeMath.cs" />
     <Compile Include="../../src/PowerLeitstandPro/ProjectLinks.cs" Link="ProjectLinks.cs" />
     <Compile Include="../../src/PowerLeitstandPro/ReleaseAssetSelector.cs" Link="ReleaseAssetSelector.cs" />
   </ItemGroup>

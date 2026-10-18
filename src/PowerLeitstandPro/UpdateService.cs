@@ -14,7 +14,7 @@ internal static class UpdateService
     private static HttpClient CreateClient()
     {
         var client = new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("PowerLeitstand-PRO/1.1.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("PowerLeitstand-PRO/1.1.1");
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         return client;
     }
@@ -90,6 +90,9 @@ internal static class UpdateService
                     try
                     {
                         Process.Start(new ProcessStartInfo(target) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(target)! });
+                        // Use the installed target, never this temporary update helper.
+                        var autoStart = AutoStartService.Current.Check(target);
+                        if (autoStart.Error is not null) Trace.TraceWarning("Autostart nach Update: " + autoStart.Error);
                     }
                     catch
                     {

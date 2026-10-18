@@ -14,6 +14,20 @@ internal static class WindowPlacementService
     private const uint NoZOrder = 0x0004;
     private const uint NoActivate = 0x0010;
 
+    internal static System.Windows.Rect GetCursorWorkAreaInDips(Window window)
+    {
+        var position = Forms.Cursor.Position;
+        var area = Forms.Screen.FromPoint(position).WorkingArea;
+        var monitor = MonitorFromPoint(position, 2);
+        if (monitor != IntPtr.Zero && GetDpiForMonitor(monitor, 0, out var dpiX, out var dpiY) == 0 && dpiX > 0 && dpiY > 0)
+            return new System.Windows.Rect(area.Left * 96.0 / dpiX, area.Top * 96.0 / dpiY,
+                area.Width * 96.0 / dpiX, area.Height * 96.0 / dpiY);
+
+        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(window);
+        return new System.Windows.Rect(area.Left / dpi.DpiScaleX, area.Top / dpi.DpiScaleY,
+            area.Width / dpi.DpiScaleX, area.Height / dpi.DpiScaleY);
+    }
+
     internal static void ApplyOnStartup(Window window, AppSettings settings)
     {
         if (!TryGetBounds(window, out var bounds)) return;
@@ -73,4 +87,10 @@ internal static class WindowPlacementService
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetWindowPos(IntPtr handle, IntPtr after, int x, int y,
         int width, int height, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(Point point, uint flags);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint dpiX, out uint dpiY);
 }

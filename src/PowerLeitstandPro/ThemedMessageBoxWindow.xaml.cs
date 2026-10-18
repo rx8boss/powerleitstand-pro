@@ -7,6 +7,9 @@ using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
 using Application = System.Windows.Application;
 using FontFamily = System.Windows.Media.FontFamily;
+using Brushes = System.Windows.Media.Brushes;
+using Point = System.Windows.Point;
+using Border = System.Windows.Controls.Border;
 
 namespace PowerControlProWpf;
 
@@ -46,16 +49,21 @@ internal static class ThemedMessageBox
 public partial class ThemedMessageBoxWindow : Window
 {
     private readonly MessageBoxButton _buttons;
+    private readonly ThemePalette _palette;
     internal MessageBoxResult Result { get; private set; }
 
     internal ThemedMessageBoxWindow(string message, string title, MessageBoxButton buttons,
         MessageBoxImage icon, ThemePalette palette, bool english)
     {
         InitializeComponent();
+        _palette = palette;
+        ClassicCancelAppearance.RegisterDialog(this, palette);
         _buttons = buttons;
         Result = buttons == MessageBoxButton.OK ? MessageBoxResult.OK : MessageBoxResult.No;
         var lower = message.ToLowerInvariant();
         var deleting = lower.Contains("löschen") || lower.Contains("delete") || lower.Contains("clear");
+        var logDeletion = buttons == MessageBoxButton.YesNo && deleting &&
+            (lower.Contains("protokoll") || lower.Contains("log"));
         var stoppingRepair = lower.Contains("laufende windows-reparatur abbrechen") ||
                              lower.Contains("stop this running windows repair");
         var action = icon == MessageBoxImage.Question
@@ -120,6 +128,14 @@ public partial class ThemedMessageBoxWindow : Window
             _ => palette.Ready
         });
         FontFamily = new FontFamily(palette.FontFamily);
+        if (action is not null) ApplyReferenceDesign(action);
+        else if (logDeletion || stoppingRepair)
+        {
+            var warningBrush = Resources["DialogIconBrush"];
+            ApplyReferenceDesign("repair");
+            Resources["DialogIconBrush"] = warningBrush;
+            DialogStripes.Height = 30;
+        }
 
         if (buttons == MessageBoxButton.OK)
         {
@@ -161,6 +177,8 @@ public partial class ThemedMessageBoxWindow : Window
             }
             CancelButton.IsDefault = true;
             CancelButton.IsCancel = true;
+            if (action is not null || logDeletion) ApplyRedCancel(english);
+            if (stoppingRepair) DialogAppearance.ApplyRedButton(ConfirmButton, (Style)FindResource("ReferenceCancelButton"));
         }
         else
         {
@@ -170,6 +188,7 @@ public partial class ThemedMessageBoxWindow : Window
 
     internal void ConfigureElevationPrompt(bool english)
     {
+        ApplyReferenceDesign("admin");
         Width = 430;
         DialogTitle.Text = english ? "Administrator rights required" : "Administratorrechte erforderlich";
         WarningTriangle.Visibility = Visibility.Collapsed;
@@ -183,11 +202,24 @@ public partial class ThemedMessageBoxWindow : Window
         ConfirmButton.Content = CreateActionContent(english ? "Restart as administrator" : "Als Administrator neu starten",
             "shield", (Brush)Resources["DialogIconBrush"]);
         ConfirmButton.FontSize = 12;
-        CancelButton.Content = CreateActionContent("OK", "confirm", (Brush)Resources["DialogIconBrush"]);
-        CancelButton.Style = (Style)FindResource("DialogButton");
+        ApplyRedCancel(english);
         System.Windows.Automation.AutomationProperties.SetName(ConfirmButton,
             english ? "Restart as administrator" : "Als Administrator neu starten");
-        System.Windows.Automation.AutomationProperties.SetName(CancelButton, "OK");
+        System.Windows.Automation.AutomationProperties.SetName(CancelButton, english ? "Cancel" : "Abbrechen");
+    }
+
+    private void ApplyReferenceDesign(string kind)
+    {
+        DialogAppearance.ApplySurface(this, DialogFrame, _palette);
+        SetBrush("DialogIconBrush", kind == "shutdown" ? _palette.Actions[1] : kind == "restart" ? _palette.Ready : _palette.Colors[7]);
+        LegacyCorner.Visibility = Visibility.Collapsed;
+        DialogStripes.Visibility = Visibility.Visible;
+    }
+
+    private void ApplyRedCancel(bool english)
+    {
+        CancelButton.Content = CreateActionContent(english ? "Cancel" : "Abbrechen", "cancel", Brushes.White);
+        DialogAppearance.ApplyRedButton(CancelButton, (Style)FindResource("ReferenceCancelButton"));
     }
 
     private static Geometry IconGeometry(string kind) => Geometry.Parse(kind switch
@@ -208,7 +240,7 @@ public partial class ThemedMessageBoxWindow : Window
         var icon = new System.Windows.Shapes.Path
         {
             Data = IconGeometry(kind),
-            Stroke = iconBrush,
+            Stroke = kind == "cancel" ? new SolidColorBrush(Color.FromRgb(255, 75, 75)) : iconBrush,
             StrokeThickness = 1.7,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,

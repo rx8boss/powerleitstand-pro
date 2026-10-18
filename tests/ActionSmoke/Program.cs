@@ -2,6 +2,37 @@ using PowerControlProWpf;
 using System.Text.Json;
 using System.Text;
 using System.Drawing;
+using System.Diagnostics;
+
+if (args is ["--repair-wait-test", var delay])
+{
+    await Task.Delay(int.Parse(delay));
+    return;
+}
+
+foreach (var outcome in new[] { "success", "cancelled", "failure" })
+{
+    var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
+    if (string.Equals(Path.GetFileNameWithoutExtension(Environment.ProcessPath), "dotnet", StringComparison.OrdinalIgnoreCase))
+        start.ArgumentList.Add(System.Reflection.Assembly.GetExecutingAssembly().Location);
+    start.ArgumentList.Add("--repair-wait-test");
+    start.ArgumentList.Add("500");
+    using var child = Process.Start(start)!;
+    var operation = RepairProcessLifetime.RunUntilExitedAsync(child, () => outcome switch
+    {
+        "cancelled" => Task.FromCanceled(new CancellationToken(true)),
+        "failure" => Task.FromException(new IOException("simulated broken repair connection")),
+        _ => Task.CompletedTask
+    });
+    await Task.Delay(60);
+    if (!child.HasExited && operation.IsCompleted)
+        throw new InvalidOperationException("Repair lifetime returned while its process was still running.");
+    try { await operation; }
+    catch (OperationCanceledException) when (outcome == "cancelled") { }
+    catch (IOException) when (outcome == "failure") { }
+    if (!child.HasExited) throw new InvalidOperationException("Repair lifetime did not wait for process exit.");
+}
+Console.WriteLine("PASS repair process lifetime: success, cancellation and connection failure wait for real process exit (harmless test child)");
 
 static string ReleaseJson(string tag, params string[] files) => JsonSerializer.Serialize(new
 {
@@ -58,6 +89,21 @@ if (WindowPlacementMath.RestoreOrCenter(primary, screens, null, null, null, 900,
     WindowPlacementMath.RestoreOrCenter(primary, screens, "MISSING", 2000, 100, 900, 640) != new Point(510, 200))
     throw new Exception("Window placement center, restore or monitor fallback failed.");
 Console.WriteLine("PASS window placement: center, restore, clamp and missing monitor");
+
+foreach (var (workWidth, workHeight, expectedSize) in new (double, double, (int, double, double))[]
+{
+    (1920, 1040, (3, 1200, 760)),
+    (1536, 770, (2, 1050, 670)),
+    (1000, 700, (1, 900, 650)),
+    (920, 690, (0, 860, 620)),
+    (1092, 582, (0, 860, 558))
+})
+{
+    var actual = WindowSizeMath.SelectAutomatic(workWidth, workHeight);
+    if (actual != expectedSize || actual.Width > workWidth - 24 || actual.Height > workHeight - 24)
+        throw new Exception($"Unexpected automatic window size for {workWidth}x{workHeight}: {actual}.");
+}
+Console.WriteLine("PASS automatic window sizes: large, medium, compact and scrollable fallback");
 
 foreach (var (name, valid) in new (string, bool)[]
 {
@@ -206,7 +252,7 @@ catch (ArgumentOutOfRangeException)
 var themes = new[]
 {
     "Standard", "Neon Blau", "Neon Pink", "Neon Grün",
-    "Retro", "Linux Mint", "Graphit", "Classic", "Dark"
+    "Linux Mint", "Classic", "Dark"
 };
 foreach (var theme in themes)
 {

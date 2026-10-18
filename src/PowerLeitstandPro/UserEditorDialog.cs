@@ -59,6 +59,7 @@ internal sealed class UserEditorDialog : Window
     internal UserEditorDialog(MainWindow owner, UserEntry? user)
     {
         Owner = owner;
+        ClassicCancelAppearance.RegisterDialog(this, owner.CurrentThemeName == "Classic");
         Resources.MergedDictionaries.Add(owner.Resources);
         Icon = owner.Icon;
         _creating = user is null;
@@ -272,7 +273,8 @@ internal sealed class UserEditorDialog : Window
     private static StackPanel ButtonContent(string icon, string label, Brush iconBrush, Brush textBrush, double iconSize, double fontSize)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        content.Children.Add(IconPath(icon, iconSize, iconBrush, false, new Thickness(0, 0, 7, 0)));
+        content.Children.Add(IconPath(icon, iconSize, icon == Cross
+            ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 75, 75)) : iconBrush, false, new Thickness(0, 0, 7, 0)));
         content.Children.Add(new TextBlock { Text = label, Foreground = textBrush, FontSize = fontSize, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         return content;
     }

@@ -64,7 +64,6 @@ public partial class App : System.Windows.Application
         {
             if (_mainWindow?.WindowState == WindowState.Minimized)
             {
-                if (_mainWindow.IsVisible) UiSoundService.PlayMinimize();
                 _mainWindow.Dispatcher.BeginInvoke(() =>
                 {
                     if (_mainWindow?.WindowState != WindowState.Minimized) return;

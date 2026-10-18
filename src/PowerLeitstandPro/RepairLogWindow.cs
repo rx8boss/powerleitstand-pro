@@ -93,7 +93,7 @@ internal sealed class RepairLogWindow : Window
         close.Content = new System.Windows.Shapes.Path
         {
             Data = Geometry.Parse("M 3,3 L 16,16 M 16,3 L 3,16"),
-            Stroke = System.Windows.Media.Brushes.White,
+            Stroke = Solid("#FF4B4B"),
             StrokeThickness = 2, Width = 13, Height = 13, Stretch = Stretch.Uniform
         };
         close.Click += (_, _) => Close();
@@ -175,7 +175,7 @@ internal sealed class RepairLogWindow : Window
         doneContent.Children.Add(new System.Windows.Shapes.Path
         {
             Data = Geometry.Parse("M 3,3 L 16,16 M 16,3 L 3,16"),
-            Stroke = accent, StrokeThickness = 1.8, Width = 14, Height = 14,
+            Stroke = Solid("#FF4B4B"), StrokeThickness = 1.8, Width = 14, Height = 14,
             Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 7, 0)
         });
         doneContent.Children.Add(new TextBlock { Text = english ? "Close" : "Schließen", VerticalAlignment = VerticalAlignment.Center });

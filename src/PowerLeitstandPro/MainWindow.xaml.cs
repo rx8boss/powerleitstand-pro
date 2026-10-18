@@ -1,4 +1,5 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Media;
@@ -28,8 +29,18 @@ namespace PowerControlProWpf;
 
 public partial class MainWindow : Window
 {
-    private System.Windows.Style? _compactUserRowStyle;
+    private sealed record CompactLogEntry(string Time, string Message)
+    {
+        public string? Detail { get; init; }
+        public string? FullTime { get; init; }
+        public string Category { get; init; } = "EREIGNIS";
+        public string DisplayTime => FullTime ?? Time;
+        public string Tooltip => Detail ?? Message;
+    }
+    private readonly ObservableCollection<CompactLogEntry> _eventLogEntries = new();
+    private readonly ObservableCollection<CompactLogEntry> _repairLogEntries = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly DispatcherTimer _noticeAutoCloseTimer = new() { Interval = TimeSpan.FromSeconds(7) };
     private int _seconds = 300;
     private DateTimeOffset _timerDeadline;
     private int _nextWarningSecond = 10;
@@ -46,7 +57,14 @@ public partial class MainWindow : Window
     private readonly Dictionary<TextBlock, double> _baseTextSizes = new();
     private readonly Dictionary<Button, double> _baseButtonSizes = new();
     private readonly Dictionary<Image, (double Width, double Height)> _baseImageSizes = new();
+    private readonly Dictionary<UIElement, (int Row, int Column, int Span)> _originalHomePositions = new();
+    private sealed record ReferenceCardDecoration(FrameworkElement Content, Grid Stripes, FrameworkElement LowerBoundary);
+    private readonly Dictionary<Border, ReferenceCardDecoration> _referenceCardDecorations = new();
+    private Grid _userReferenceStripes = null!;
+    private Grid _repairReferenceStripes = null!;
     private readonly AppSettings _settings = AppSettings.Load();
+    private int _effectiveSizeIndex = 3;
+    private ScrollViewer? _compactScrollHost;
     private readonly DispatcherTimer _placementSaveTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
     internal bool SkipSavedPlacementForTests { get; set; }
     private bool _currentUserIsAdministrator;
@@ -55,7 +73,6 @@ public partial class MainWindow : Window
     private bool _updateCheckFailedConnection;
     private int _updateCheckSequence;
     private enum UpdateCheckState { Checking, Current, Available, Failed }
-    private const string AutoStartKey = "PowerControlProWpf";
     private readonly string _logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Power Control PRO", "logs");
     private readonly object _logLock = new();
     private string LogFilePath => Path.Combine(_logDirectory, "events.log");
@@ -69,19 +86,43 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        CrossButtonAppearance.Initialize();
         InitializeComponent();
+        StandardLogPreview.ItemsSource = _eventLogEntries;
+        _eventLogEntries.CollectionChanged += (_, _) => UpdateCompactLogEmptyState();
+        _repairLogEntries.CollectionChanged += (_, _) => UpdateCompactLogEmptyState();
+        InitializeReferenceCardDecorations();
+        InitializeExpandedLog();
+        InitializeLiveDiagnostics();
+        LayoutUpdated += (_, _) => { UpdateReferenceCardDecorations(); UpdateOptionsViewport(); };
+        Closed += (_, _) => { StopRepairProgressAnimation(); StopNeonPresentation(); };
         InstalledVersionText.Text = $"v{typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "1.1.0"} · WPF";
         _timer.Tick += TimerTick;
+        _noticeAutoCloseTimer.Tick += (_, _) => CloseSettingsNotice(this, new RoutedEventArgs());
+        PreviewMouseDown += CloseNoticeOnOutsideClick;
+        Deactivated += (_, _) => { if (SettingsNoticePopup.IsOpen) CloseSettingsNotice(this, new RoutedEventArgs()); };
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape && SettingsNoticePopup.IsOpen)
+            {
+                CloseSettingsNotice(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
+        };
         _placementSaveTimer.Tick += (_, _) => { _placementSaveTimer.Stop(); PersistWindowPosition(); };
         SourceInitialized += (_, _) =>
         {
             if (SkipSavedPlacementForTests) return;
-            try { WindowPlacementService.ApplyOnStartup(this, _settings); }
+            try
+            {
+                ApplySize();
+                WindowPlacementService.CenterOnCursorScreen(this);
+            }
             catch (Exception exception) { Log("Fensterposition konnte nicht gesetzt werden: " + exception.Message); }
         };
         LocationChanged += (_, _) =>
         {
-            if (SkipSavedPlacementForTests || !IsLoaded || WindowState != WindowState.Normal) return;
+            if (SkipSavedPlacementForTests || _isWindowDragging || !IsLoaded || WindowState != WindowState.Normal) return;
             _placementSaveTimer.Stop();
             _placementSaveTimer.Start();
         };
@@ -92,11 +133,11 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(ShowPendingRepairSummary);
         };
         LoadSettings();
-        LoadAutoStart();
         ApplyLanguage();
-        Loaded += (_, _) => { ApplyTheme(SelectedTheme()); ApplyLayoutScale(); };
+        Loaded += (_, _) => { ApplyTheme(SelectedTheme()); ApplySize(); };
         LoadPersistedLog();
         LoadPersistedRepairLog();
+        LoadAutoStart();
         Log("PowerLeitstand PRO WPF gestartet.");
         LoadUsers(null, null!);
     }
@@ -141,7 +182,7 @@ public partial class MainWindow : Window
 
     private void SaveSettings()
     {
-        if (!IsLoaded) return;
+        if (!IsLoaded || SkipSavedPlacementForTests) return;
         _settings.Language = _english ? "en" : "de";
         _settings.Theme = SelectedTheme();
         _settings.SizeIndex = SizeBox.SelectedIndex;
@@ -187,8 +228,13 @@ public partial class MainWindow : Window
             UpdateCheckState.Failed => "WarningBrush",
             _ => "AccentBrush"
         };
-        UpdateNoticeIcon.SetResourceReference(System.Windows.Shapes.Path.StrokeProperty, updateColor);
-        UpdateNoticeButton.SetResourceReference(Button.BorderBrushProperty, updateColor);
+        UpdateNoticeIcon.SetResourceReference(System.Windows.Shapes.Path.StrokeProperty, state switch
+        {
+            UpdateCheckState.Current => "HeaderBellCurrentBrush",
+            UpdateCheckState.Available => "HeaderBellAvailableBrush",
+            UpdateCheckState.Failed => "HeaderBellWarningBrush",
+            _ => "HeaderBellCheckingBrush"
+        });
         CheckUpdatesButton.SetResourceReference(Button.BorderBrushProperty, updateColor);
         CheckUpdatesButton.SetResourceReference(Button.BackgroundProperty, state switch
         {
@@ -204,29 +250,8 @@ public partial class MainWindow : Window
             UpdateCheckState.Failed => _english ? "Update check failed · try again" : "Update-Prüfung fehlgeschlagen · erneut versuchen",
             _ => _english ? "Update check in progress" : "Update-Prüfung läuft"
         };
-        UpdateNoticeButton.ToolTip = state switch
-        {
-            UpdateCheckState.Current => _english ? "Version is up to date" : "Version ist aktuell",
-            UpdateCheckState.Available => _english ? $"Update {_availableUpdate?.Version} available" : $"Update {_availableUpdate?.Version} verfügbar",
-            UpdateCheckState.Failed => _updateCheckFailedConnection
-                ? (_english ? "No connection for update check" : "Keine Verbindung für die Update-Prüfung")
-                : (_english ? "Update check failed" : "Update-Prüfung fehlgeschlagen"),
-            _ => _english ? "Checking for updates" : "Updates werden geprüft"
-        };
+        UpdateNoticeButton.ToolTip = _english ? "Show bell status" : "Glocken-Status anzeigen";
         System.Windows.Automation.AutomationProperties.SetName(UpdateNoticeButton, UpdateNoticeButton.ToolTip.ToString()!);
-        FooterUpdateStatus.Text = state switch
-        {
-            UpdateCheckState.Current => _english ? "Up to date" : "Aktuell",
-            UpdateCheckState.Available => _english ? $"Update {_availableUpdate?.Version}" : $"Update {_availableUpdate?.Version}",
-            UpdateCheckState.Failed => _updateCheckFailedConnection
-                ? (_english ? "No connection" : "Keine Verbindung")
-                : (_english ? "Check failed" : "Prüfung fehlgeschlagen"),
-            _ => _english ? "Checking…" : "Prüfung läuft"
-        };
-        FooterUpdateStatus.SetResourceReference(TextBlock.ForegroundProperty,
-            state == UpdateCheckState.Current ? "ReadyBrush" :
-            state == UpdateCheckState.Available ? "DangerBorderBrush" :
-            state == UpdateCheckState.Failed ? "WarningBrush" : "FooterTextBrush");
         UpdateStatus.Visibility = state == UpdateCheckState.Checking || SettingsNoticePanel.Visibility == Visibility.Visible
             ? Visibility.Collapsed : Visibility.Visible;
         UpdateStatus.Text = state switch
@@ -238,43 +263,45 @@ public partial class MainWindow : Window
                 : (_english ? "The update check could not be completed." : "Die Update-Prüfung konnte nicht abgeschlossen werden."),
             _ => _english ? "Checking GitHub releases…" : "GitHub-Releases werden geprüft…"
         };
-        SettingsNoticeIcon.SetResourceReference(System.Windows.Shapes.Path.StrokeProperty, updateColor);
         NoticeCurrentLabel.Text = _english ? "Up to date" : "Aktuell";
         NoticeConnectionLabel.Text = state == UpdateCheckState.Failed && !_updateCheckFailedConnection
             ? (_english ? "Check failed" : "Prüfung fehlgeschlagen")
             : (_english ? "No connection" : "Keine Verbindung");
         NoticeAvailableLabel.Text = _english ? "Update available" : "Update verfügbar";
-        foreach (var (row, active) in new[]
-        {
-            (NoticeCurrentRow, state == UpdateCheckState.Current),
-            (NoticeConnectionRow, state == UpdateCheckState.Failed),
-            (NoticeAvailableRow, state == UpdateCheckState.Available)
-        })
-        {
-            row.BorderThickness = new Thickness(active ? 1.8 : 1.3);
-            row.Opacity = active ? 1 : 0.82;
-        }
-        SettingsNoticeDetail.Visibility = state is UpdateCheckState.Available or UpdateCheckState.Checking
-            ? Visibility.Visible : Visibility.Collapsed;
-        SettingsNoticeDetail.Text = state switch
-        {
-            UpdateCheckState.Available => (_english ? "Available: v" : "Verfügbar: v") + _availableUpdate?.Version,
-            UpdateCheckState.Checking => _english ? "Checking…" : "Prüfung läuft…",
-            _ => string.Empty
-        };
-        SettingsNoticeInstalled.Text = (_english ? "Installed: v" : "Installiert: v") +
-            (typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "1.1.0");
     }
 
     internal void OpenUpdateNotice(object s, RoutedEventArgs e)
     {
-        SetSettingsOverlay(showOptions: false, showNotice: true);
+        if (SettingsNoticePopup.IsOpen)
+        {
+            CloseSettingsNotice(this, new RoutedEventArgs());
+            return;
+        }
+
+        SetSettingsOverlay(showOptions: false, showNotice: false);
+        SettingsNoticePopup.IsOpen = true;
+        _noticeAutoCloseTimer.Stop();
+        _noticeAutoCloseTimer.Start();
     }
+
+    private void CloseNoticeOnOutsideClick(object sender, MouseButtonEventArgs e)
+    {
+        if (!SettingsNoticePopup.IsOpen || e.OriginalSource is not DependencyObject source || IsWithinVisual(source, UpdateNoticeButton)) return;
+        CloseSettingsNotice(sender, new RoutedEventArgs());
+    }
+
+    private static bool IsWithinVisual(DependencyObject source, DependencyObject ancestor) => IsInside(source, ancestor);
 
     private void CloseSettingsNotice(object s, RoutedEventArgs e)
     {
-        SetSettingsOverlay(showOptions: false, showNotice: false);
+        SettingsNoticePopup.IsOpen = false;
+        _noticeAutoCloseTimer.Stop();
     }
+
+    private void BellStatusPopupClosed(object? s, EventArgs e) => _noticeAutoCloseTimer.Stop();
+
+    private void CloseSettingsOverlay(object s, RoutedEventArgs e) =>
+        SetSettingsOverlay(showOptions: false, showNotice: false);
 
     private void OpenProjectOnGitHub(object s, RoutedEventArgs e)
     {
@@ -310,7 +337,6 @@ public partial class MainWindow : Window
             SetUpdateCheckState(UpdateCheckState.Available);
             if (MessageBox.Show(_english ? $"Download and install version {update.Version}? The app will restart." : $"Version {update.Version} herunterladen und installieren? Die App startet danach neu.", "PowerLeitstand PRO", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             UpdateStatus.Text = _english ? "Downloading and verifying SHA-256…" : "Download und SHA-256-Prüfung laufen…";
-            SettingsNoticeDetail.Text = _english ? "Download and SHA-256 verification are running. Do not close the app." : "Download und SHA-256-Prüfung laufen. Bitte die App nicht schließen.";
             await UpdateService.PrepareAndLaunchAsync(update, () => IsBusy);
             System.Windows.Application.Current.Shutdown();
         }
@@ -334,22 +360,65 @@ public partial class MainWindow : Window
 
     private void ApplySize()
     {
-        (Width, Height) = SizeBox.SelectedIndex switch { 0 => (860, 620), 1 => (900, 650), 2 => (1050, 760), _ => (1200, 870) };
+        if (SizeBox.SelectedIndex == 0)
+        {
+            var available = WindowPlacementService.GetCursorWorkAreaInDips(this);
+            var choice = WindowSizeMath.SelectAutomatic(available.Width, available.Height);
+            _effectiveSizeIndex = choice.Index;
+            MinWidth = Math.Min(860, choice.Width);
+            MinHeight = Math.Min(620, choice.Height);
+            (Width, Height) = (choice.Width, choice.Height);
+            ConfigureCompactScrolling(choice.Width < 860 || choice.Height < 620);
+        }
+        else
+        {
+            _effectiveSizeIndex = Math.Clamp(SizeBox.SelectedIndex - 1, 0, 3);
+            (Width, Height) = _effectiveSizeIndex switch { 0 => (860, 620), 1 => (900, 650), 2 => (1050, 670), _ => (1200, 760) };
+            MinWidth = 860;
+            MinHeight = 620;
+            ConfigureCompactScrolling(false);
+        }
         if (IsLoaded) ApplyLayoutScale();
+    }
+
+    private void ConfigureCompactScrolling(bool enabled)
+    {
+        if (enabled && _compactScrollHost is null)
+        {
+            Content = null;
+            Root.MinWidth = 860;
+            Root.MinHeight = 620;
+            _compactScrollHost = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = Root
+            };
+            Content = _compactScrollHost;
+        }
+        else if (!enabled && _compactScrollHost is not null)
+        {
+            _compactScrollHost.Content = null;
+            Content = Root;
+            _compactScrollHost = null;
+            Root.MinWidth = 0;
+            Root.MinHeight = 0;
+        }
     }
 
     private void ApplyLayoutScale()
     {
         // Re-layout the controls at their final size. A Viewbox/ScaleTransform would raster-scale the glyphs.
-        var factor = SizeBox.SelectedIndex switch { 2 => 1050.0 / 900, 3 => 1200.0 / 900, _ => 1.0 };
-        var compact = SizeBox.SelectedIndex == 0;
+        var factor = _effectiveSizeIndex switch { 2 => 1050.0 / 900, 3 => 1200.0 / 900, _ => 1.0 };
+        var compact = _effectiveSizeIndex == 0;
         Root.RowDefinitions[0].Height = new GridLength(90 * factor);
-        Root.RowDefinitions[2].Height = new GridLength(44 * factor);
-        Root.RowDefinitions[3].Height = new GridLength(12 * factor);
+        Root.RowDefinitions[2].Height = new GridLength(36);
+        Root.RowDefinitions[3].Height = new GridLength(6);
+        PageStatusBarRow.Height = new GridLength(105);
         HeaderLayout.ColumnDefinitions[0].Width = new GridLength(245 * factor);
         HeaderLayout.ColumnDefinitions[2].Width = new GridLength(205 * factor);
-        FooterLayout.ColumnDefinitions[0].Width = new GridLength(190 * factor);
-        FooterLayout.ColumnDefinitions[2].Width = new GridLength(210 * factor);
+        FooterLayout.ColumnDefinitions[0].Width = new GridLength(175);
+        FooterLayout.ColumnDefinitions[2].Width = new GridLength(175);
 
         foreach (var textBlock in FindVisualChildren<TextBlock>(Root))
         {
@@ -364,7 +433,7 @@ public partial class MainWindow : Window
             if (!_baseButtonSizes.TryGetValue(button, out var baseSize))
                 _baseButtonSizes[button] = baseSize = button.FontSize;
             button.FontSize = Math.Round(baseSize * factor);
-            if (ReferenceEquals(button.Style, Resources["HeaderButton"]) || ReferenceEquals(button.Style, Resources["CloseButtonStyle"]))
+            if (ReferenceEquals(button.Style, Resources["HeaderButton"]) || ReferenceEquals(button.Style, Resources["HeaderNoticeButton"]) || ReferenceEquals(button.Style, Resources["CloseButtonStyle"]) || ReferenceEquals(button.Style, Resources["PageArrowButton"]))
             {
                 var isPageArrow = ReferenceEquals(button, PagePrevious) || ReferenceEquals(button, PageNext);
                 button.Width = (isPageArrow ? 28 : 42) * factor;
@@ -372,8 +441,8 @@ public partial class MainWindow : Window
             }
         }
         PageIndicator.Width = 36 * factor;
-        AdminRightsBadge.Width = 132 * factor;
-        AdminRightsBadge.Height = 32 * factor;
+        AdminRightsBadge.Width = 125 * factor;
+        AdminRightsBadge.Height = 31 * factor;
         foreach (var icon in FindVisualChildren<Image>(Root))
         {
             if (IsInside(icon, SettingsPanel) || IsInside(icon, SettingsNoticePanel)) continue;
@@ -382,6 +451,10 @@ public partial class MainWindow : Window
             icon.Width = baseSize.Width * factor;
             icon.Height = baseSize.Height * factor;
         }
+        BrandLogo.Width = BrandLogo.Height = 34;
+        FooterBoltIcon.Width = FooterBoltIcon.Height = 13;
+        GitHubProjectButton.FontSize = 9;
+        FooterBrandLabel.FontSize = InstalledVersionText.FontSize = 9;
 
         foreach (var button in new[] { ShutdownButton, RestartButton, LogoutButton, LockButton, TimerShutdown, TimerLock, TimerRestart })
             button.MinHeight = (compact ? 62 : 67) * factor;
@@ -398,7 +471,9 @@ public partial class MainWindow : Window
         LogBox.FontSize = 11 * factor;
         UserLogBox.FontSize = Math.Round(13 * factor);
         RepairLogBox.FontSize = Math.Round(14 * factor);
-        UserList.FontSize = Math.Round((compact ? 11 : 12) * factor);
+        UserList.FontSize = Math.Round((compact ? 9 : 10) * factor);
+        UserList.Resources["UserTableHeaderHeight"] = 25 * factor;
+        UserList.Resources["UserTableRowHeight"] = compact ? 24.0 : 25 * factor;
         foreach (var sub in new[] { UsersSub, StatusSub, UserStatusHeaderSub, UserLogHeaderSub,
                      RepairHeaderSub, RepairStatusHeaderSub, RepairLogSub, UserStatusSub, RepairStatusSub })
             sub.FontSize = Math.Round(13 * factor);
@@ -428,18 +503,7 @@ public partial class MainWindow : Window
         ShowRepairProtocolButton.FontSize = Math.Round(12 * factor);
         UpdateRepairProtocolButtonLabel();
         UserList.Height = double.NaN;
-        var standardUserRowStyle = (System.Windows.Style)UserList.Resources["UserListRowStyle"];
-        if (compact)
-        {
-            _compactUserRowStyle ??= new System.Windows.Style(typeof(System.Windows.Controls.ListViewItem), standardUserRowStyle);
-            if (_compactUserRowStyle.Setters.Count == 0)
-                _compactUserRowStyle.Setters.Add(new Setter(FrameworkElement.HeightProperty, 24.0));
-            UserList.ItemContainerStyle = _compactUserRowStyle;
-        }
-        else
-        {
-            UserList.ItemContainerStyle = standardUserRowStyle;
-        }
+        UserList.ItemContainerStyle = (System.Windows.Style)UserList.Resources["UserListRowStyle"];
         CreateUserButton.Width = EditUserButton.Width = 164 * factor;
         CreateUserButton.Height = EditUserButton.Height = RefreshUsersButton.Height = 40 * factor;
         RefreshUsersButton.Width = 132 * factor;
@@ -454,25 +518,338 @@ public partial class MainWindow : Window
             }
         }
         SizeUserColumns();
-        TimerSub.Width = SizeBox.SelectedIndex == 0 ? 105 : 124 * factor;
+        TimerSub.Width = _effectiveSizeIndex == 0 ? 105 : 124 * factor;
+        StandardTimePicker.Height = compact ? 42 : 48;
+        StandardTimePicker.Margin = new Thickness(0, compact ? 5 : 7, 0, 0);
+        TimerActionRow.Margin = new Thickness(0, compact ? 5 : 7, 0, 0);
         if (TimerValue.Parent is StackPanel timerValueStack && timerValueStack.Parent is Border timerPicker && timerPicker.Parent is Grid timerHeader)
             timerHeader.ColumnDefinitions[1].Width = new GridLength(225 * factor);
         foreach (var card in FindVisualChildren<Border>(Root))
         {
-            if (ReferenceEquals(card.Style, Resources["Card"])) card.Padding = new Thickness((compact ? 12 : 14) * factor);
+            if (ReferenceEquals(card.Style, Resources["Card"])) SetCardPadding(card, new Thickness((compact ? 12 : 14) * factor));
         }
+        ApplyHomeLayout(SelectedTheme());
+    }
+
+    // All palettes share the approved composition; colors and icons remain independent.
+    // All existing controls are moved, so their event handlers and state remain intact.
+    private void ApplyHomeLayout(string theme)
+    {
+        if (HomePage is null || SizeBox is null || ThemeBox is null) return;
+        if (_originalHomePositions.Count == 0)
+            foreach (UIElement element in HomePage.Children)
+                _originalHomePositions[element] = (Grid.GetRow(element), Grid.GetColumn(element), Grid.GetColumnSpan(element));
+
+        var standard = true;
+        if (standard)
+        {
+            UserList.FontSize = _effectiveSizeIndex switch { 2 => 14, 3 => 15, _ => 13 };
+            UserList.Resources["UserTableHeaderHeight"] = _effectiveSizeIndex switch { 2 => 32.0, 3 => 34.0, _ => 30.0 };
+            UserList.Resources["UserTableRowHeight"] = _effectiveSizeIndex switch { 0 => 32.0, 1 => 34.0, 2 => 37.0, _ => 40.0 };
+        }
+        else
+        {
+            var tableFactor = _effectiveSizeIndex switch { 2 => 1050.0 / 900, 3 => 1200.0 / 900, _ => 1.0 };
+            UserList.FontSize = Math.Round((_effectiveSizeIndex == 0 ? 9 : 10) * tableFactor);
+            UserList.Resources["UserTableHeaderHeight"] = 25 * tableFactor;
+            UserList.Resources["UserTableRowHeight"] = _effectiveSizeIndex == 0 ? 24.0 : 25 * tableFactor;
+        }
+        Root.SetResourceReference(System.Windows.Controls.Panel.BackgroundProperty,
+            standard ? "StandardReferenceAppBrush" : "AppBrush");
+        foreach (var card in new[] { ImmediateCardSurface, TimerCardSurface, RepairCardSurface })
+            card.SetResourceReference(Border.BackgroundProperty,
+                standard ? "StandardReferenceCardBrush" : "CardSurfaceBrush");
+        ImmediateReferenceStripes.Visibility = TimerReferenceStripes.Visibility =
+            standard ? Visibility.Visible : Visibility.Collapsed;
+        _userReferenceStripes.Visibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        _repairReferenceStripes.Visibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        UserCardCorner.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
+        RepairCardCorner.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
+        StandardStatusLogBar.Visibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        PageStatusBarRow.Height = standard
+            ? new GridLength(105)
+            : new GridLength(0);
+        UserLegacyDetails.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
+        RepairLegacyDetails.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
+        RepairPage.RowDefinitions[0].Height = new GridLength(standard ? 1 : 1.04, GridUnitType.Star);
+        RepairPage.RowDefinitions[1].Height = standard ? new GridLength(0) : new GridLength(0.96, GridUnitType.Star);
+        RepairProgress.Height = standard ? (_effectiveSizeIndex <= 1 ? 13 : 15)
+            : 11 * (_effectiveSizeIndex switch { 2 => 1050.0 / 900, 3 => 1200.0 / 900, _ => 1.0 });
+        UserPage.RowDefinitions[0].Height = standard ? new GridLength(1, GridUnitType.Star) : new GridLength(1.04, GridUnitType.Star);
+        UserPage.RowDefinitions[1].Height = standard ? new GridLength(0) : new GridLength(0.96, GridUnitType.Star);
+        UserCardSurface.SetResourceReference(Border.BackgroundProperty,
+            standard ? "StandardReferenceCardBrush" : "CardSurfaceBrush");
+        StandardStatusColumn.Width = new GridLength(standard && _effectiveSizeIndex >= 2 ? 2.1 : 2.8, GridUnitType.Star);
+        StandardLogHeaderColumn.Width = new GridLength(standard && _effectiveSizeIndex >= 2 ? 124 : 110);
+        StandardLogPreview.FontSize = standard && _effectiveSizeIndex >= 2 ? 11 : 10;
+        StandardLogEmptyState.FontSize = StandardLogPreview.FontSize;
+        UpdateStandardMetricLabels();
+        foreach (var oldCardPart in new UIElement[] { StatusCardGlow, StatusCardSurface, StatusCardCorner,
+                     LogCardGlow, LogCardSurface, LogCardCorner })
+            oldCardPart.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
+        var factor = _effectiveSizeIndex switch { 2 => 1050.0 / 900, 3 => 1200.0 / 900, _ => 1.0 };
+        var compact = _effectiveSizeIndex == 0;
+
+        foreach (var (element, position) in _originalHomePositions)
+        {
+            Grid.SetRow(element, standard ? (position.Row == 0 ? position.Column : 2) : position.Row);
+            Grid.SetColumn(element, standard && position.Row == 0 ? 0 : position.Column);
+            Grid.SetColumnSpan(element, standard && position.Row == 0 ? 2 : position.Span);
+        }
+
+        if (standard)
+        {
+            HomePage.RowDefinitions[0].Height = new GridLength(0.72, GridUnitType.Star);
+            HomePage.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
+            HomePage.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
+            HomePage.ColumnDefinitions[1].Width = new GridLength(1, GridUnitType.Star);
+        }
+        else
+        {
+            HomePage.RowDefinitions[0].Height = new GridLength(1.04, GridUnitType.Star);
+            HomePage.RowDefinitions[1].Height = new GridLength(0.96, GridUnitType.Star);
+            if (HomePage.RowDefinitions.Count == 3) HomePage.RowDefinitions.RemoveAt(2);
+            HomePage.ColumnDefinitions[0].Width = new GridLength(0.94, GridUnitType.Star);
+            HomePage.ColumnDefinitions[1].Width = new GridLength(1.06, GridUnitType.Star);
+        }
+
+        if (ShutdownButton.Parent is System.Windows.Controls.Primitives.UniformGrid immediateActions)
+        {
+            immediateActions.Columns = standard ? 4 : 2;
+            immediateActions.Margin = standard ? new Thickness(0, 3 * factor, 0, 0) : new Thickness(0, 10, 0, 0);
+        }
+        TimerActionRow.ColumnDefinitions[0].Width = new GridLength(standard ? 1 : 1.2, GridUnitType.Star);
+        TimerHeader.Margin = new Thickness(standard ? 9 * factor : 0, 0, 0, 0);
+        TimerCardCorner.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
+        TimerReferenceTopGap.Visibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        TimerReferenceCorner.Visibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        TimerPickerBorder.SetResourceReference(Border.BackgroundProperty,
+            standard ? "StandardActionButtonBrush" : "ButtonBrush");
+        TimerPickerBorder.SetResourceReference(Border.BorderBrushProperty,
+            standard ? "AccentBrush" : "InputBorderBrush");
+        TimerPickerBorder.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
+        StandardTimePicker.Visibility = Visibility.Collapsed;
+        CompactStandardTimePicker.Visibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        TimerPickerBorder.MinHeight = 0;
+        if (TimerValue.Parent is StackPanel valueStack && valueStack.Parent is Border picker && picker.Parent is Grid timerHeader)
+        {
+            timerHeader.ColumnDefinitions[0].Width = standard ? new GridLength(250 * factor) : new GridLength(1, GridUnitType.Star);
+            timerHeader.ColumnDefinitions[1].Width = standard ? new GridLength(1, GridUnitType.Star) : new GridLength(225 * factor);
+            timerHeader.ColumnDefinitions[2].Width = standard ? new GridLength(410) : new GridLength(0);
+            timerHeader.ColumnDefinitions[3].Width = standard ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        }
+        TimerSub.Width = standard ? 190 * factor : (compact ? 105 : 124 * factor);
+        LogBox.Height = standard ? double.NaN : (compact ? 112 : 120) * factor;
+        LogBox.Margin = standard ? new Thickness(0, 3 * factor, 0, 0) : new Thickness(0, 5, 0, 0);
+        LogSub.Visibility = StatusSub.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
+        ImmediateSub.FontSize = (standard ? (compact ? 10 : 11) : 12) * factor;
+        foreach (var title in new[] { StatusTitle, LogSub.Parent is StackPanel logTitleStack ? logTitleStack.Children.OfType<TextBlock>().First() : StatusTitle })
+            title.FontSize = (standard ? 18 : 20) * factor;
+        foreach (var header in new[] { (StatusTitle.Parent as FrameworkElement)?.Parent, (LogSub.Parent as FrameworkElement)?.Parent }.OfType<StackPanel>())
+            if (header.Children.OfType<Image>().FirstOrDefault() is Image icon)
+                icon.Width = icon.Height = (standard ? 26 : 34) * factor;
+        foreach (var button in new[] { RefreshLogButton, ClearLogButton, OpenLogButton })
+            button.Height = (standard ? (compact ? 24 : 28) : (compact ? 33 : 35)) * factor;
+        foreach (var button in new[] { TimerShutdown, TimerLock, TimerRestart })
+            if (button.Content is Grid buttonContent)
+                buttonContent.ColumnDefinitions[0].Width = new GridLength(standard ? 42 * factor : 34);
+        foreach (var step in new[] { TimerMinusMin, TimerPlusMin, TimerMinusHourButton, TimerPlusHourButton })
+        {
+            step.Style = (Style)FindResource(standard ? "StandardTimerStepButton" : "TimerStepButton");
+            step.Padding = standard ? new Thickness(2, 2, 2, 2) : new Thickness(2, 4, 2, 4);
+        }
+        TimerShutdown.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty,
+            standard ? "StandardActionDangerBrush" : "DangerBrush");
+        TimerShutdown.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty,
+            standard ? "StandardActionDangerBorderBrush" : "DangerBorderBrush");
+        TimerLock.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty,
+            standard ? "StandardActionButtonBrush" : "LockBrush");
+        TimerRestart.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty,
+            standard ? "StandardActionButtonBrush" : "ButtonBrush");
+
+        foreach (var border in HomePage.Children.OfType<Border>())
+            if (ReferenceEquals(border.Style, Resources["Card"]))
+                SetCardPadding(border, new Thickness((standard ? (compact ? 7 : 8) : (compact ? 12 : 14)) * factor));
+
+        foreach (var action in new[] { ShutdownButton, RestartButton, LogoutButton, LockButton,
+                     TimerShutdown, TimerLock, TimerRestart })
+        {
+            action.Tag = standard ? "Reference" : null;
+            action.MinHeight = (standard ? (compact ? 50 : 54) : (compact ? 62 : 67)) * factor;
+            if (action == ShutdownButton || action == RestartButton || action == LogoutButton || action == LockButton)
+            {
+                action.HorizontalContentAlignment = _effectiveSizeIndex == 0 || standard && _effectiveSizeIndex == 1
+                    ? System.Windows.HorizontalAlignment.Center : System.Windows.HorizontalAlignment.Left;
+                action.Padding = standard && compact ? new Thickness(7, 2, 7, 2) : new Thickness(11, 7, 11, 7);
+            }
+        }
+        ImmediateIconImage.Visibility = theme == "Standard" ? Visibility.Collapsed : Visibility.Visible;
+        ImmediateIconGlyph.Visibility = theme == "Standard" ? Visibility.Visible : Visibility.Collapsed;
+        ImmediateIconGlyph.Width = ImmediateIconGlyph.Height = 34 * factor;
+        ImmediateReferenceCorner.Visibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        ImmediateReferenceTopGap.Visibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        ImmediateCardCorner.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
+        ImmediateHeader.Margin = new Thickness(standard ? 9 * factor : 0, 0, 0, 0);
+        ImmediateSub.Margin = new Thickness((standard ? 50 : 35) * factor, 2 * factor, 0, 0);
+        foreach (var label in new[] { ShutdownLabel, RestartLabel, LogoutLabel, LockLabel })
+            label.FontSize = standard && _effectiveSizeIndex <= 1 ? 13 : 15 * factor;
+        ShutdownButton.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty,
+            standard ? "StandardActionDangerBrush" : "DangerBrush");
+        ShutdownButton.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty,
+            standard ? "StandardActionDangerBorderBrush" : "DangerBorderBrush");
+        foreach (var action in new[] { RestartButton, LogoutButton, LockButton })
+        {
+            action.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty,
+                standard ? "StandardActionButtonBrush" : action == LogoutButton ? "SuccessBrush" : action == LockButton ? "LockBrush" : "ButtonBrush");
+            action.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, "AccentBrush");
+        }
+        LogoutSub.Width = standard && _effectiveSizeIndex >= 2 ? double.NaN : 118;
+        LogoutSub.TextWrapping = standard && _effectiveSizeIndex >= 2 ? TextWrapping.NoWrap : TextWrapping.Wrap;
+        AbortTimerButton.MinHeight = standard && _effectiveSizeIndex == 3
+            ? 82
+            : (standard ? 56 : 48) * factor;
+        AbortTimerButton.Margin = standard ? new Thickness(3, 3, 3, 3) : new Thickness(3, 8, 3, 3);
+
+        if (StatusBadge.Parent is Grid statusRow && statusRow.Parent is Border statusPanel)
+        {
+            statusRow.Height = (standard ? (compact ? 40 : 44) : 72) * factor;
+            statusRow.ColumnDefinitions[0].Width = new GridLength((standard ? 48 : 64) * factor);
+            statusPanel.Padding = new Thickness(standard ? 5 * factor : 10);
+            statusPanel.Margin = standard ? new Thickness(0, 5 * factor, 0, 0) : new Thickness(0, 12, 0, 0);
+            StatusBadge.Width = StatusBadge.Height = (standard ? (compact ? 34 : 38) : 54) * factor;
+            StatusBadge.CornerRadius = new CornerRadius(StatusBadge.Width / 2);
+            StatusSymbol.FontSize = (standard ? 26 : 36) * factor;
+            StatusText.FontSize = (standard ? 16 : 20) * factor;
+            StatusDetail.FontSize = (standard ? 10 : 12) * factor;
+        }
+        Root.RowDefinitions[0].Height = new GridLength(standard && _effectiveSizeIndex >= 2 ? 75 : standard ? 90 : 90 * factor);
+        Root.RowDefinitions[2].Height = new GridLength(36);
+        HeaderLayout.ColumnDefinitions[2].Width = new GridLength((standard ? 305 : 205) * factor);
+        HeaderIcon.Width = HeaderIcon.Height = (standard && _effectiveSizeIndex >= 2 ? 30 : standard ? 36 : 48) * factor;
+        TitleText.FontSize = TitleProText.FontSize = (standard && _effectiveSizeIndex >= 2 ? 20 : standard ? 23 : 29) * factor;
+        MottoText.FontSize = (standard && _effectiveSizeIndex >= 2 ? 9 : 11) * factor;
+        SettingsHeaderButton.Style = (Style)Resources[standard ? "HeaderNoticeButton" : "HeaderButton"];
+        SettingsHeaderButton.Width = (standard ? 95 : 42) * factor;
+        SettingsHeaderImage.Visibility = theme == "Standard" ? Visibility.Collapsed : Visibility.Visible;
+        SettingsHeaderGlyph.Visibility = theme == "Standard" ? Visibility.Visible : Visibility.Collapsed;
+        SettingsHeaderLabel.FontSize = (standard ? 9.5 : 11) * factor;
+        UpdateNoticeButton.Width = 42 * factor;
+        SettingsHeaderLabel.Visibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        HeaderActionsBorder.Background = standard ? Brushes.Transparent : (Brush)Resources["InputBrush"];
+        HeaderActionsBorder.BorderThickness = new Thickness(standard ? 0 : 1);
+        HeaderActionsBorder.Padding = new Thickness(standard ? 0 : 3);
+        HeaderActionsSeparator.Visibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        HeaderActionsSeparator.Height = 22 * factor;
+        HeaderActionsSeparator.Margin = new Thickness(10 * factor, 0, 10 * factor, 0);
+        HeaderMinimizeButton.Style = (Style)Resources[standard ? "HeaderNoticeButton" : "HeaderButton"];
+        HeaderCloseButton.Style = (Style)Resources["CloseButtonStyle"];
+        HeaderMinimizeButton.Width = HeaderCloseButton.Width = (standard ? 28 : 42) * factor;
+        HeaderMinimizeButton.Margin = new Thickness(0, 0, (standard ? 10 : 5) * factor, 0);
+        HeaderCloseButton.FontSize = (standard ? 19 : 20) * factor;
+        if (SettingsHeaderButton.Parent is StackPanel headerActions)
+        {
+            headerActions.Children.Remove(SettingsHeaderButton);
+            headerActions.Children.Insert(standard ? 0 : 1, SettingsHeaderButton);
+        }
+        ApplyClassicCancelTheme(theme);
+    }
+
+    private void InitializeReferenceCardDecorations()
+    {
+        // Keep decoration in its own layer, independent of the content padding.
+        _userReferenceStripes = CreateReferenceStripes("UserReferenceStripes");
+        _repairReferenceStripes = CreateReferenceStripes("RepairReferenceStripes");
+        AddReferenceCardLayer(ImmediateCardSurface, ImmediateReferenceStripes, ShutdownButton);
+        AddReferenceCardLayer(TimerCardSurface, TimerReferenceStripes, TimerShutdown);
+        AddReferenceCardLayer(UserCardSurface, _userReferenceStripes, UserList);
+        AddReferenceCardLayer(RepairCardSurface, _repairReferenceStripes, RepairActionRow);
+    }
+
+    private Grid CreateReferenceStripes(string name)
+    {
+        var stripes = new Grid { Name = name };
+        foreach (var path in ImmediateReferenceStripes.Children.OfType<System.Windows.Shapes.Path>())
+            stripes.Children.Add(new System.Windows.Shapes.Path
+            {
+                Data = path.Data.Clone(), Fill = path.Fill, Stroke = path.Stroke,
+                StrokeThickness = path.StrokeThickness, Opacity = path.Opacity
+            });
+        RegisterName(name, stripes);
+        return stripes;
+    }
+
+    private void AddReferenceCardLayer(Border card, Grid stripes, FrameworkElement lowerBoundary)
+    {
+        var content = (FrameworkElement)card.Child;
+        if (stripes.Parent is Grid oldParent) oldParent.Children.Remove(stripes);
+        var padding = card.Padding;
+        card.Child = null;
+        card.Padding = new Thickness(0);
+        content.Margin = padding;
+        var layer = new Grid { ClipToBounds = true };
+        stripes.Width = 120;
+        stripes.Height = 75;
+        stripes.Margin = new Thickness(0, 1, 1, 0);
+        stripes.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
+        stripes.VerticalAlignment = System.Windows.VerticalAlignment.Top;
+        stripes.IsHitTestVisible = false;
+        stripes.ClipToBounds = true;
+        stripes.Visibility = Visibility.Collapsed;
+        layer.Children.Add(stripes);
+        layer.Children.Add(content);
+        card.Child = layer;
+        _referenceCardDecorations.Add(card, new(content, stripes, lowerBoundary));
+    }
+
+    private void SetCardPadding(Border card, Thickness padding)
+    {
+        if (_referenceCardDecorations.TryGetValue(card, out var decoration))
+        {
+            card.Padding = new Thickness(0);
+            decoration.Content.Margin = padding;
+        }
+        else card.Padding = padding;
+    }
+
+    private void UpdateReferenceCardDecorations()
+    {
+        foreach (var (card, decoration) in _referenceCardDecorations)
+        {
+            if (decoration.Stripes.Visibility != Visibility.Visible)
+            {
+                card.ClearValue(UIElement.ClipProperty);
+                continue;
+            }
+            if (!card.IsVisible || card.ActualWidth <= 0 || card.ActualHeight <= 0) continue;
+            var rect = new Rect(0, 0, card.ActualWidth, card.ActualHeight);
+            var radius = card.CornerRadius.TopLeft;
+            if (card.Clip is not RectangleGeometry clip || clip.Rect != rect || clip.RadiusX != radius || clip.RadiusY != radius)
+                card.Clip = new RectangleGeometry(rect, radius, radius);
+            var limit = decoration.LowerBoundary.TranslatePoint(new System.Windows.Point(0, 0), card).Y;
+            var height = Math.Min(75, Math.Max(24, limit - 3));
+            if (Math.Abs(decoration.Stripes.Height - height) > 0.1)
+                decoration.Stripes.Height = height;
+        }
+        UpdateRepairProgressAnimation();
     }
 
     private static bool IsInside(DependencyObject child, DependencyObject ancestor)
     {
-        for (var current = child; current is not null; current = VisualTreeHelper.GetParent(current))
+        for (var current = child; current is not null; current = InputParent(current))
             if (ReferenceEquals(current, ancestor)) return true;
         return false;
     }
 
+    private static DependencyObject? InputParent(DependencyObject element) => element switch
+    {
+        ContentElement content => ContentOperations.GetParent(content) ?? (content as FrameworkContentElement)?.Parent,
+        Visual or System.Windows.Media.Media3D.Visual3D => VisualTreeHelper.GetParent(element),
+        _ => LogicalTreeHelper.GetParent(element)
+    };
+
     private void UpdateRepairProtocolButtonLabel()
     {
-        ShowRepairProtocolLabel.Text = SizeBox.SelectedIndex == 0
+        ShowRepairProtocolLabel.Text = _effectiveSizeIndex == 0
             ? (_english ? "View result" : "Protokoll anzeigen")
             : (_english ? "View repair result" : "Reparaturprotokoll anzeigen");
         ShowRepairProtocolButton.ToolTip = _english ? "Show the last repair result" : "Auswertung der letzten Reparatur anzeigen";
@@ -482,6 +859,8 @@ public partial class MainWindow : Window
     {
         var entry = $"[{DateTime.Now:dd.MM.yyyy, HH:mm:ss}] {text}";
         AddLogEntry(entry);
+        if (StandardLogPreview.Items.Count > 0)
+            StandardLogPreview.ScrollIntoView(StandardLogPreview.Items[0]);
         try
         {
             lock (_logLock)
@@ -496,12 +875,89 @@ public partial class MainWindow : Window
         }
     }
 
+    private void UpdateStandardMetricLabels()
+    {
+        UpdateLiveDiagnosticsLabels();
+    }
+
     private void AddLogEntry(string entry)
     {
         LogBox.Items.Insert(0, entry);
         UserLogBox.Items.Insert(0, entry);
+        _eventLogEntries.Insert(0, ToCompactLogEntry(entry));
         while (LogBox.Items.Count > 1000) LogBox.Items.RemoveAt(LogBox.Items.Count - 1);
         while (UserLogBox.Items.Count > 1000) UserLogBox.Items.RemoveAt(UserLogBox.Items.Count - 1);
+        while (_eventLogEntries.Count > 1000) _eventLogEntries.RemoveAt(_eventLogEntries.Count - 1);
+    }
+
+    private static CompactLogEntry ToCompactLogEntry(string entry)
+    {
+        var end = entry.IndexOf(']');
+        if (!entry.StartsWith('[') || end < 0) return new CompactLogEntry("", entry);
+        var stamp = entry[1..end];
+        var time = stamp[(stamp.LastIndexOf(',') + 1)..].Trim();
+        return new CompactLogEntry(time.Length > 5 ? time[..5] : time, entry[(end + 1)..].Trim())
+            { FullTime = time, Detail = entry };
+    }
+
+    private void UpdateCompactLogContext()
+    {
+        var repair = _pageIndex == 2;
+        StandardLogPreview.ItemsSource = repair ? _repairLogEntries : _eventLogEntries;
+        StandardLogPreview.ToolTip = repair ? (_english ? "Repair log" : "Reparaturprotokoll")
+            : (_english ? "Event log" : "Ereignisprotokoll");
+        var refresh = repair ? (_english ? "Refresh repair log" : "Reparaturprotokoll aktualisieren")
+            : (_english ? "Refresh log" : "Protokoll aktualisieren");
+        var clear = repair ? (_english ? "Delete repair log" : "Reparaturprotokoll löschen")
+            : (_english ? "Clear log" : "Protokoll löschen");
+        var open = repair ? (_english ? "Open repair log folder" : "Ordner des Reparaturprotokolls öffnen")
+            : (_english ? "Open log folder" : "Protokollordner öffnen");
+        foreach (var (button, label) in new[] { (StandardRefreshIconButton, refresh), (StandardClearIconButton, clear), (StandardOpenIconButton, open) })
+        {
+            button.ToolTip = label;
+            System.Windows.Automation.AutomationProperties.SetName(button, label);
+        }
+        UpdateCompactLogActionState();
+        UpdateCompactLogEmptyState();
+        UpdateExpandedLogContext();
+    }
+
+    private void UpdateCompactLogActionState()
+    {
+        var canChangeLog = _pageIndex != 2 || !_repairRunning;
+        StandardRefreshIconButton.IsEnabled = StandardClearIconButton.IsEnabled = canChangeLog;
+        StandardRefreshLogMenuItem.IsEnabled = StandardClearLogMenuItem.IsEnabled = canChangeLog;
+    }
+
+    private void UpdateCompactLogEmptyState()
+    {
+        var empty = (_pageIndex == 2 ? _repairLogEntries : _eventLogEntries).Count == 0;
+        StandardLogPreview.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+        StandardLogEmptyState.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        StandardLogEmptyState.Text = _pageIndex == 2
+            ? (_english ? "No repair log available yet." : "Noch kein Reparaturprotokoll vorhanden.")
+            : (_english ? "No events available yet." : "Noch keine Ereignisse vorhanden.");
+    }
+
+    private void RefreshCompactLog(object sender, RoutedEventArgs e)
+    {
+        if (_pageIndex != 2) { RefreshLog(sender, e); return; }
+        if (_repairRunning) return;
+        RepairLogBox.Items.Clear();
+        _repairLogEntries.Clear();
+        LoadPersistedRepairLog();
+    }
+
+    private void ClearCompactLog(object sender, RoutedEventArgs e)
+    {
+        if (_pageIndex == 2) ClearRepairLog(sender, e);
+        else ClearLog(sender, e);
+    }
+
+    private void OpenCompactLog(object sender, RoutedEventArgs e)
+    {
+        if (_pageIndex == 2) OpenRepairLog(sender, e);
+        else OpenLog(sender, e);
     }
 
     private void LoadPersistedLog()
@@ -513,6 +969,8 @@ public partial class MainWindow : Window
                 if (!File.Exists(LogFilePath)) return;
                 foreach (var entry in File.ReadLines(LogFilePath).Where(line => !string.IsNullOrWhiteSpace(line)).TakeLast(1000).Reverse())
                     AddLogEntry(entry);
+                if (StandardLogPreview.Items.Count > 0)
+                    StandardLogPreview.ScrollIntoView(StandardLogPreview.Items[0]);
             }
         }
         catch
@@ -525,6 +983,7 @@ public partial class MainWindow : Window
     {
         LogBox.Items.Clear();
         UserLogBox.Items.Clear();
+        _eventLogEntries.Clear();
         LoadPersistedLog();
     }
 
@@ -636,6 +1095,7 @@ public partial class MainWindow : Window
     {
         (System.Windows.Application.Current as App)?.UpdateTrayTimerState(IsBusy);
         RepairDismButton.IsEnabled = RepairSfcButton.IsEnabled = !IsBusy;
+        CreateUserButton.IsEnabled = AdminRightsBadge.IsEnabled = !_repairRunning;
         AbortTimerButton.IsEnabled = active;
         ShutdownButton.IsEnabled = RestartButton.IsEnabled = LogoutButton.IsEnabled = LockButton.IsEnabled = !IsBusy;
         TimerShutdown.IsEnabled = TimerLock.IsEnabled = TimerRestart.IsEnabled = !IsBusy;
@@ -691,6 +1151,7 @@ public partial class MainWindow : Window
         PageIndicator.Text = $"{_pageIndex + 1} / 3";
         PagePrevious.IsEnabled = _pageIndex > 0;
         PageNext.IsEnabled = _pageIndex < 2;
+        UpdateCompactLogContext();
     }
 
     internal void ShowRepairPage()
@@ -711,21 +1172,37 @@ public partial class MainWindow : Window
 
     private void ToggleSettings(object s, RoutedEventArgs e)
     {
+        if (_expandedLogOpen) SetExpandedLogOpen(false, false);
         SetSettingsOverlay(showOptions: SettingsPanel.Visibility != Visibility.Visible, showNotice: false);
     }
 
     private void SetSettingsOverlay(bool showOptions, bool showNotice)
     {
+        if (showOptions) LoadAutoStart();
+        if (!showNotice && SettingsNoticePopup.IsOpen) CloseSettingsNotice(this, new RoutedEventArgs());
         SettingsShell.Visibility = SettingsPanel.Visibility = showOptions ? Visibility.Visible : Visibility.Collapsed;
-        SettingsNoticePanel.Visibility = showNotice ? Visibility.Visible : Visibility.Collapsed;
-        SettingsBackdrop.Visibility = showOptions || showNotice ? Visibility.Visible : Visibility.Collapsed;
+        SettingsBackdrop.Visibility = showOptions ? Visibility.Visible : Visibility.Collapsed;
+        UpdateNeonOverlayVisibility();
         UpdateStatus.Visibility = showOptions && _updateCheckState != UpdateCheckState.Checking
             ? Visibility.Visible : Visibility.Collapsed;
-        HomePage.IsEnabled = UserPage.IsEnabled = RepairPage.IsEnabled = PageNavigation.IsEnabled = !(showOptions || showNotice);
+        var pageInputEnabled = !showOptions;
+        HomePage.IsHitTestVisible = UserPage.IsHitTestVisible = RepairPage.IsHitTestVisible = PageNavigation.IsHitTestVisible = pageInputEnabled;
     }
     private void Minimize(object s, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void CloseApp(object s, RoutedEventArgs e) => Close();
-    private void DragWindow(object s, MouseButtonEventArgs e) { if (e.LeftButton == MouseButtonState.Pressed) DragMove(); }
+    private void ShowStandardLogMenu(object s, RoutedEventArgs e)
+    {
+        if (StandardLogMenuButton.ContextMenu is not { } menu) return;
+        menu.PlacementTarget = StandardLogMenuButton;
+        menu.IsOpen = true;
+    }
+    private void DragWindow(object s, MouseButtonEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed) return;
+        BeginWindowDragPresentation();
+        try { DragMove(); }
+        finally { EndWindowDragPresentation(); }
+    }
     private void ClearLog(object s, RoutedEventArgs e)
     {
         if (MessageBox.Show(_english ? "Do you want to permanently delete the event log?" : "Möchten Sie das Ereignisprotokoll unwiderruflich löschen?", _english ? "Delete event log?" : "Ereignisprotokoll löschen?", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
@@ -737,6 +1214,7 @@ public partial class MainWindow : Window
         }
         LogBox.Items.Clear();
         UserLogBox.Items.Clear();
+        _eventLogEntries.Clear();
         Log(_english ? "Event log cleared." : "Ereignisprotokoll gelöscht.");
     }
 
@@ -776,6 +1254,7 @@ public partial class MainWindow : Window
         TitleText.Text = "PowerLeitstand";
         UpdatePageNavigation();
         MottoText.Text = _english ? "Control Windows · Schedule actions · Repair the system" : "Windows steuern · Aktionen planen · System reparieren";
+        SettingsHeaderLabel.Text = _english ? "Settings" : "Einstellungen";
         ImmediateTitle.Text = _english ? "Immediate" : "Sofort"; ImmediateSub.Text = _english ? "Direct system actions" : "Direkte Systemaktionen";
         ShutdownLabel.Text = TimerShutdownLabel.Text = _english ? "Shut down" : "Herunterfahren"; ShutdownSub.Text = _english ? "Turn off PC" : "PC ausschalten";
         RestartLabel.Text = TimerRestartLabel.Text = _english ? "Restart" : "Neustart"; RestartSub.Text = _english ? "Restart PC" : "PC neu starten";
@@ -795,6 +1274,20 @@ public partial class MainWindow : Window
             SetTimerState(false);
         }
         LogSub.Text = UserLogHeaderSub.Text = _english ? "Event log" : "Ereignisprotokoll"; RefreshLogLabel.Text = _english ? "Refresh" : "Aktualisieren"; ClearLogLabel.Text = _english ? "Clear" : "Löschen"; OpenLogLabel.Text = _english ? "Open folder" : "Ordner öffnen";
+        StandardWindowsLabel.Text = _diagnosticsSnapshot.Pc?.Windows ?? "Windows";
+        UpdateStandardMetricLabels();
+        if (_diagnosticsKind is not null) RefreshDiagnosticsHover();
+        StandardLogMenuButton.ToolTip = _english ? "Log actions" : "Log-Aktionen";
+        StandardRefreshIconButton.ToolTip = _english ? "Refresh log" : "Protokoll aktualisieren";
+        StandardClearIconButton.ToolTip = _english ? "Clear log" : "Protokoll löschen";
+        StandardOpenIconButton.ToolTip = _english ? "Open log folder" : "Protokollordner öffnen";
+        System.Windows.Automation.AutomationProperties.SetName(StandardRefreshIconButton, StandardRefreshIconButton.ToolTip.ToString()!);
+        System.Windows.Automation.AutomationProperties.SetName(StandardClearIconButton, StandardClearIconButton.ToolTip.ToString()!);
+        System.Windows.Automation.AutomationProperties.SetName(StandardOpenIconButton, StandardOpenIconButton.ToolTip.ToString()!);
+        StandardRefreshLogMenuItem.Header = RefreshLogLabel.Text;
+        StandardClearLogMenuItem.Header = ClearLogLabel.Text;
+        StandardOpenLogMenuItem.Header = OpenLogLabel.Text;
+        UpdateCompactLogContext();
         UsersTitle.Text = _english ? "User overview" : "Benutzerübersicht"; UsersSub.Text = _english ? "Local Windows users" : "Lokale Windows-Benutzer"; RefreshUsersLabel.Text = _english ? "Refresh" : "Aktualisieren"; CreateUserLabel.Text = _english ? "Create user" : "Benutzer erstellen"; EditUserLabel.Text = _english ? "Edit user" : "Benutzer bearbeiten";
         CreateUserButton.ToolTip = _english ? "Create a local user" : "Lokalen Benutzer erstellen";
         EditUserButton.ToolTip = _english ? "Edit selected user" : "Ausgewählten Benutzer bearbeiten";
@@ -845,15 +1338,15 @@ public partial class MainWindow : Window
             ? "Manual launches only; Windows autostart does not request UAC."
             : "Nur bei manuellem Start; Windows-Autostart bleibt ohne UAC-Abfrage.";
         SettingsNoticeHeading.Text = _english ? "Bell status" : "Glocken-Status";
-        SettingsNoticeClose.ToolTip = _english ? "Close notice" : "Hinweis schließen";
+        UpdateNoticeButton.ToolTip = _english ? "Show bell status" : "Glocken-Status anzeigen";
+        System.Windows.Automation.AutomationProperties.SetName(UpdateNoticeButton, UpdateNoticeButton.ToolTip.ToString()!);
         GitHubProjectButton.ToolTip = _english ? "Open GitHub project" : "GitHub-Projekt öffnen";
-        SetComboContents(SizeBox, _english ? new[] { "Small · 860 × 620", "Standard · 900 × 650", "Large · 1050 × 760", "Very large · 1200 × 870" } : new[] { "Klein · 860 × 620", "Standard · 900 × 650", "Groß · 1050 × 760", "Sehr groß · 1200 × 870" });
+        SetComboContents(SizeBox, _english ? new[] { "Automatic", "Compact · 860 × 620", "Standard · 900 × 650", "Extended · 1050 × 670", "Large · 1200 × 760" } : new[] { "Automatisch", "Kompakt · 860 × 620", "Standard · 900 × 650", "Erweitert · 1050 × 670", "Groß · 1200 × 760" });
         SetComboContents(WarningSoundBox, _english
             ? new[] { "Alarm", "Beep", "Chime", "Siren", "Double tone", "Triple tone", "Gong", "Signal", "Urgent", "Digital", "System alert", "System warning" }
             : new[] { "Alarm", "Piep", "Glockenspiel", "Sirene", "Doppelton", "Dreifachton", "Gong", "Signal", "Dringend", "Digital", "System-Alarm", "System-Warnung" });
         foreach (var item in ThemeBox.Items.OfType<ComboBoxItem>())
         {
-            if (ThemeId(item) == "Graphit") item.Content = _english ? "Graphite" : "Graphit";
             if (ThemeId(item) == "Classic") item.Content = "Windows Classic";
         }
         TimerValue.Text = TimerLabel();
@@ -868,40 +1361,30 @@ public partial class MainWindow : Window
             if (box.Items[index] is ComboBoxItem item) item.Content = values[index];
     }
 
-    private void LoadAutoStart()
+    private void LoadAutoStart(bool repair = true)
     {
-        using var key = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", writable: false);
-        var command = key?.GetValue(AutoStartKey) as string;
-        AutoStart.IsChecked = command is not null;
-        var currentExecutable = Environment.ProcessPath;
-        if (command is not null && !command.Contains("--tray", StringComparison.OrdinalIgnoreCase) &&
-            !string.IsNullOrWhiteSpace(currentExecutable) &&
-            command.Trim().Equals($"\"{currentExecutable}\"", StringComparison.OrdinalIgnoreCase))
-        {
-            try
-            {
-                using var writable = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", writable: true);
-                writable?.SetValue(AutoStartKey, command + " --tray");
-            }
-            catch (Exception exception) when (exception is UnauthorizedAccessException or IOException or System.Security.SecurityException)
-            {
-                Log((_english ? "Autostart could not be updated: " : "Autostart konnte nicht angepasst werden: ") + exception.Message);
-            }
-        }
+        var status = AutoStartService.Current.Check(AutoStartService.CurrentExecutable, repair);
+        AutoStart.IsChecked = status.Enabled == true;
+        AutoStart.ToolTip = status.Error is not null
+            ? (_english ? "Autostart could not be verified: " : "Autostart konnte nicht bestätigt werden: ") + status.Error
+            : status.Enabled == true ? status.Command : _english ? "Autostart disabled" : "Autostart deaktiviert";
+        if (status.Updated) Log(_english ? "Autostart updated to the current program file." : "Autostart auf die aktuelle Programmdatei angepasst.");
+        if (status.Error is not null) Log((_english ? "Autostart check failed: " : "Autostart-Prüfung fehlgeschlagen: ") + status.Error);
     }
 
     private void ToggleAutoStart(object s, RoutedEventArgs e)
     {
-        using var key = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", writable: true);
-        if (key is null) { MessageBox.Show(_english ? "Windows autostart could not be opened." : "Der Windows-Autostart konnte nicht geöffnet werden.", "Autostart", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        if (AutoStart.IsChecked == true)
+        var enabled = AutoStart.IsChecked == true;
+        var status = AutoStartService.Current.SetEnabled(enabled, AutoStartService.CurrentExecutable);
+        LoadAutoStart(repair: false);
+        if (status.Error is not null)
         {
-            var path = Environment.ProcessPath;
-            if (string.IsNullOrWhiteSpace(path)) return;
-            key.SetValue(AutoStartKey, $"\"{path}\" --tray");
-            Log(_english ? "Windows autostart enabled." : "Windows-Autostart aktiviert.");
+            MessageBox.Show((_english ? "Autostart could not be changed: " : "Autostart konnte nicht geändert werden: ") + status.Error,
+                "Autostart", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
-        else { key.DeleteValue(AutoStartKey, false); Log(_english ? "Windows autostart disabled." : "Windows-Autostart deaktiviert."); }
+        Log(enabled ? _english ? "Windows autostart enabled." : "Windows-Autostart aktiviert."
+            : _english ? "Windows autostart disabled." : "Windows-Autostart deaktiviert.");
     }
 
     private void ThemeChanged(object s, SelectionChangedEventArgs e)
@@ -909,12 +1392,14 @@ public partial class MainWindow : Window
         if (!IsLoaded || ThemeBox.SelectedItem is not ComboBoxItem item) return;
         var name = ThemeId(item);
         ApplyTheme(name);
+        ApplyLayoutScale();
         SaveSettings();
         Log(_english ? $"Design changed: {name}" : $"Design geändert: {name}");
     }
 
     private void ApplyTheme(string name)
     {
+        name = ThemePalette.NormalizeName(name);
         var palette = ThemePalette.For(name);
         var colors = palette.Colors;
         var keys = new[] { "AppBrush", "HeaderBrush", "FooterBrush", "CardBrush", "InputBrush", "TextBrush", "SubtleTextBrush", "AccentBrush", "InputBorderBrush", "ButtonBrush", "HoverBrush" };
@@ -935,17 +1420,48 @@ public partial class MainWindow : Window
         var actionKeys = new[] { "DangerBrush", "DangerBorderBrush", "SuccessBrush", "LockBrush", "CancelBrush", "WarningBrush" };
         for (var index = 0; index < actionKeys.Length; index++) Resources[actionKeys[index]] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(actionColors[index]));
         Resources["ReadyBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(palette.Ready));
+        // Header colours need contrast against Classic's royal blue, independently
+        // of the darker status colours used on its light content panels.
+        foreach (var (key, source, classic) in new[]
+        {
+            ("HeaderBellCurrentBrush", "ReadyBrush", "#80F0AE"),
+            ("HeaderBellWarningBrush", "WarningBrush", "#FFD56A"),
+            ("HeaderBellAvailableBrush", "DangerBorderBrush", "#FF91A3"),
+            ("HeaderBellCheckingBrush", "AccentBrush", "#EAF3FF")
+        })
+            Resources[key] = name == "Classic"
+                ? new SolidColorBrush((Color)ColorConverter.ConvertFromString(classic)) : Resources[source];
+        UpdateAdminBadgeBrush(IsAdmin(), name);
         Resources["NoticeCurrentSurfaceBrush"] = new SolidColorBrush(BlendColor(card, (Color)ColorConverter.ConvertFromString(palette.Ready), 0.46));
         Resources["NoticeConnectionSurfaceBrush"] = new SolidColorBrush(BlendColor(card, (Color)ColorConverter.ConvertFromString(actionColors[5]), 0.46));
         Resources["NoticeAvailableSurfaceBrush"] = new SolidColorBrush(BlendColor(card, (Color)ColorConverter.ConvertFromString(actionColors[1]), 0.46));
         Resources["UpdateCheckCurrentBrush"] = new SolidColorBrush(BlendColor(button, (Color)ColorConverter.ConvertFromString(palette.Ready), 0.34));
         Resources["UpdateCheckFailedBrush"] = new SolidColorBrush(BlendColor(button, (Color)ColorConverter.ConvertFromString(actionColors[5]), 0.34));
         Resources["UpdateCheckAvailableBrush"] = new SolidColorBrush(BlendColor(button, (Color)ColorConverter.ConvertFromString(actionColors[1]), 0.34));
-        Resources["CardBorderBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(palette.IsNeon ? colors[7] : colors[8]));
+        Resources["CardBorderBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(name == "Standard" || palette.IsNeon ? colors[7] : colors[8]));
         Resources["ActionTextBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F8FBFF"));
         Resources["DefaultActionTextBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
             name is "Classic" or "Linux Mint" ? colors[5] : "#F8FBFF"));
         Resources["SelectionBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colors[10]));
+        var standardUserTable = name == "Standard";
+        Resources["UserStatusDisabledBrush"] = standardUserTable
+            ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF4D78"))
+            : Resources["DangerBorderBrush"];
+        Resources["UserStatusActiveBrush"] = standardUserTable
+            ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#00CCAE"))
+            : Resources["ReadyBrush"];
+        Resources["UserTableLineBrush"] = standardUserTable
+            ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#145982"))
+            : Resources["InputBorderBrush"];
+        Resources["UserTableHeaderBrush"] = standardUserTable
+            ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0A3152"))
+            : Resources["CardSurfaceBrush"];
+        Resources["UserTableSelectedBrush"] = standardUserTable
+            ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#164F7A"))
+            : Resources["SelectionBrush"];
+        Resources["UserTableSelectedBorderBrush"] = standardUserTable
+            ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#2788CC"))
+            : Resources["AccentBrush"];
         var glowHex = palette.Glow ?? (name == "Standard" ? colors[7] : null);
         var glowColor = glowHex is null ? Colors.Transparent : (Color)ColorConverter.ConvertFromString(glowHex);
         var glowOpacity = name == "Standard" ? 0.23 : palette.GlowOpacity;
@@ -962,6 +1478,12 @@ public partial class MainWindow : Window
         SettingsPanel.CornerRadius = new CornerRadius(name == "Classic" ? 8 : 12);
         SettingsHalo.CornerRadius = SettingsPanel.CornerRadius;
         SwitchIconSet(palette.IconSet);
+        ApplyReferencePalette(name, palette);
+        ApplyHomeLayout(name);
+        ApplyPageNavigationTheme(name);
+        ApplyClassicCancelTheme(name);
+        ConfigureNeonPresentation(palette);
+        if (_diagnosticsKind is not null) RefreshDiagnosticsHover();
         (System.Windows.Application.Current as App)?.UpdateTrayPresentation(name, _english);
     }
 
@@ -1067,15 +1589,32 @@ public partial class MainWindow : Window
         var elevated = IsAdmin();
         CurrentUserRole.Text = _currentUserIsAdministrator || elevated ? "Administrator" : (_english ? "Standard user" : "Standardbenutzer");
         CurrentUserRole.SetResourceReference(TextBlock.ForegroundProperty, _currentUserIsAdministrator || elevated ? "ReadyBrush" : "AccentBrush");
+        UpdateAdminBadgeAppearance(elevated, SelectedTheme());
+    }
+
+    private void UpdateAdminBadgeAppearance(bool elevated, string theme)
+    {
         AdminRightsStatus.Text = elevated
-            ? _english ? "Admin active" : "Admin aktiv"
-            : _english ? "No admin rights" : "Ohne Adminrechte";
+            ? _english ? "Admin start" : "Mit Admin-Start"
+            : _english ? "No admin start" : "Ohne Admin-Start";
         AdminRightsBadge.ToolTip = elevated
             ? _english ? "The app is running with administrator rights." : "Die App wurde mit Administratorrechten gestartet."
             : _english ? "The app is not running with administrator rights." : "Die App wurde nicht als Administrator gestartet.";
-        AdminRightsBadge.SetResourceReference(Button.BorderBrushProperty, elevated ? "ReadyBrush" : "WarningBrush");
-        AdminRightsIcon.SetResourceReference(System.Windows.Shapes.Path.StrokeProperty, elevated ? "ReadyBrush" : "WarningBrush");
-        AdminRightsStatus.SetResourceReference(TextBlock.ForegroundProperty, elevated ? "ReadyBrush" : "WarningBrush");
+        UpdateAdminBadgeBrush(elevated, theme);
+    }
+
+    private void UpdateAdminBadgeBrush(bool elevated, string theme)
+    {
+        if (theme == "Classic")
+        {
+            Resources["AdminBadgeBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(elevated ? "#9BF3B5" : "#D5E8FF"));
+            AdminRightsBadge.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(elevated ? "#164A67" : "#17498E"));
+            return;
+        }
+        AdminRightsBadge.SetResourceReference(Button.BackgroundProperty, "InputBrush");
+        Resources["AdminBadgeBrush"] = theme == "Standard"
+            ? new SolidColorBrush((Color)ColorConverter.ConvertFromString(elevated ? "#36D99B" : "#FFB315"))
+            : Resources[elevated ? "ReadyBrush" : "WarningBrush"];
     }
 
     private void UserSelectionChanged(object s, SelectionChangedEventArgs e) => EditUserButton.IsEnabled = UserList.SelectedItem is UserEntry;
@@ -1086,14 +1625,15 @@ public partial class MainWindow : Window
     {
         if (UserList.View is not GridView columns || columns.Columns.Count != 4 || UserList.ActualWidth < 400) return;
         var width = UserList.ActualWidth - 20;
-        columns.Columns[0].Width = Math.Round(width * 0.23);
-        columns.Columns[1].Width = Math.Round(width * 0.20);
-        columns.Columns[2].Width = Math.Round(width * 0.38);
-        columns.Columns[3].Width = Math.Max(90, width - columns.Columns[0].Width - columns.Columns[1].Width - columns.Columns[2].Width);
+        columns.Columns[0].Width = Math.Round(width * 0.16);
+        columns.Columns[1].Width = Math.Round(width * 0.215);
+        columns.Columns[2].Width = Math.Round(width * 0.465);
+        columns.Columns[3].Width = width - columns.Columns[0].Width - columns.Columns[1].Width - columns.Columns[2].Width;
     }
 
     private async void CreateUser(object s, RoutedEventArgs e)
     {
+        if (_repairRunning) return;
         if (!RequireUserAdmin()) return;
         var dialog = new UserEditorDialog(this, null);
         if (dialog.ShowDialog() != true || dialog.Values is not { } values) return;
@@ -1101,6 +1641,7 @@ public partial class MainWindow : Window
         if (values.WithoutPassword)
             createQuestion += _english ? " This account will have no password. Windows security policy may reject it." : " Dieses Konto hat kein Kennwort. Die Windows-Sicherheitsrichtlinie kann das ablehnen.";
         if (MessageBox.Show(createQuestion, "PowerLeitstand PRO", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        if (_repairRunning) return;
         try
         {
             await Task.Run(() => LocalUserManager.Create(values.Name, values.Password, values.FullName, values.Description, values.WithoutPassword, values.Enabled, values.Administrator));
@@ -1194,6 +1735,7 @@ public partial class MainWindow : Window
 
     private void OpenAdminStatus(object s, RoutedEventArgs e)
     {
+        if (_repairRunning) return;
         if (IsAdmin())
         {
             MessageBox.Show(_english ? "The app is running with administrator rights." : "Die App läuft mit Administratorrechten.",
@@ -1212,6 +1754,7 @@ public partial class MainWindow : Window
 
     private void RequestElevation(bool openUsersPage)
     {
+        if (_repairRunning) return;
         if (!ThemedMessageBox.ShowElevationPrompt(this)) return;
         if (IsBusy)
         {
@@ -1352,6 +1895,7 @@ internal sealed class PasswordResetDialog : Window
 
     private PasswordResetDialog(Window owner, string username, bool english)
     {
+        ClassicCancelAppearance.RegisterDialog(this, (owner as MainWindow)?.CurrentThemeName == "Classic");
         _english = english;
         Owner = owner;
         Resources.MergedDictionaries.Add(owner.Resources);
@@ -1512,7 +2056,7 @@ internal sealed class PasswordResetDialog : Window
         actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
         actions.ColumnDefinitions.Add(new ColumnDefinition());
         var cancel = ActionButton(owner, "M 2,2 L 18,18 M 18,2 L 2,18", english ? "Cancel" : "Abbrechen",
-            danger, dangerBorder, Brushes.White, Brushes.White);
+            danger, dangerBorder, new SolidColorBrush(Color.FromRgb(255, 75, 75)), Brushes.White);
         cancel.IsCancel = true;
         cancel.Click += (_, _) => DialogResult = false;
         actions.Children.Add(cancel);

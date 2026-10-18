@@ -9,7 +9,6 @@ internal static class UiSoundService
     internal static bool MuteForTests { get; set; }
 
     internal static void PlayAdminWarning() => Play("warnings/beep.wav");
-    internal static void PlayMinimize() => Play("clicks/soft.wav");
 
     private static void Play(string resourceName)
     {
