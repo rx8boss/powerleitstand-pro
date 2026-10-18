@@ -1,9 +1,9 @@
-## Updateverwaltung und vier Sicherungen – lokale Version 1.1.3
+## Updateverwaltung und vier Sicherungen – veröffentlicht als 1.1.3
 
 - [x] Zweisprachiges vollständiges Changelog: je 21 Änderungen auf Deutsch und Englisch, sprachabhängige Anzeige für GitHub-Versionen und lokale Sicherungen.
 - [x] Gemeinsame Versionsquelle, wiederholbare Prüfung von Projekt-/EXE-Version und vorbereiteten Release-Texten; optionaler Abgleich von GitHub-Tag, Text und Asset-Prüfsumme.
 - [x] Sprachprüfung der drei Seiten, Optionen und Hauptdialoge; ergänzte Tooltips, Designnamen und eigene Fehlermeldungen. Originalausgaben von Windows und historischen Protokollen bleiben erhalten.
-- [ ] Freigabe der Testversion und gesonderte Freigabe für GitHub-Veröffentlichung; Ablauf unter `docs/release-checklist.md`.
+- [x] Nutzerfreigabe erhalten und Version 1.1.3 am 18.10.2026 veröffentlicht; Ablauf unter `docs/release-checklist.md`.
 
 - [x] Freigegebene Updateübersicht mit GitHub-Versionsliste und vollständigen scrollbaren Versionshinweisen umgesetzt.
 - [x] Wiederherstellungsauswahl im selben Fenster, Sicherungsprüfung und bestätigte Einzellöschung umgesetzt.
@@ -11,7 +11,7 @@
 - [x] Gleichzeitiges Lesen der Sicherungsdateien blockiert deren Löschung nicht mehr; Zugriffskonflikt aus dem Oberflächentest behoben.
 - [x] Vor Versionswechseln geprüfte Sicherung in AppData; maximal vier Einträge, keine zusätzliche Desktop-Backup-Datei.
 - [x] Produktversion auf ausdrücklichen Nutzerwunsch 1.1.3; kompakte Hinweise pro Veröffentlichung in den Releaseablauf aufgenommen.
-- [ ] Nutzerabnahme der lokalen EXE. Ein GitHub-Release erfolgt erst nach gesonderter Freigabe.
+- [x] Veröffentlichung ausdrücklich freigegeben. Öffentlicher Download, Versionsnummer, zweisprachiger Text und SHA-256 geprüft; CodeQL erfolgreich. Nachweis: `docs/releases/v1.1.3-verification.md`.
 
 Details: `docs/update-manager-v1.1.3.md`.
 
