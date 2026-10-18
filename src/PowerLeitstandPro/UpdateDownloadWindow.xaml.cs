@@ -40,7 +40,13 @@ public partial class UpdateDownloadWindow : Window
         PhaseText.Text = english ? "Preparing download …" : "Download wird vorbereitet …";
         HintText.Text = english ? "The file will be verified. The app will then restart." : "Anschließend wird die Datei geprüft. Danach startet die App neu.";
         CancelCaption.Text = english ? "Cancel" : "Abbrechen";
+        System.Windows.Automation.AutomationProperties.SetName(HeaderCloseButton, english ? "Cancel download" : "Download abbrechen");
         HeaderCloseButton.ToolTip = english ? "Cancel download" : "Download abbrechen";
+        if (update.SourceBackup is not null)
+        {
+            HeaderText.Text = english ? "Restore application backup" : "Programmsicherung wiederherstellen";
+            HintText.Text = english ? "The backup is verified and the current EXE is saved before replacement." : "Die Sicherung wird geprüft. Vor dem Austausch wird die aktuelle EXE gesichert.";
+        }
         ContentRendered += RunDownload;
         Closing += GuardClosing;
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { RequestCancellation(); e.Handled = true; } };

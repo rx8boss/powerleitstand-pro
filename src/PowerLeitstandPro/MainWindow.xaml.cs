@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
@@ -80,13 +80,24 @@ public partial class MainWindow : Window
     private string RepairLogFilePath => Path.Combine(_logDirectory, "repair.log");
     internal bool IsTimerActive => _timer.IsEnabled;
     internal bool IsBusy => _timer.IsEnabled || _repairRunning || _updateInProgress;
+    internal TraySnapshot GetTraySnapshot() => new(IsBusy, IsTimerActive, _repairRunning,
+        CountdownLabel(Math.Max(0, (int)Math.Ceiling((_timerDeadline - DateTimeOffset.UtcNow).TotalSeconds))),
+        _timerAction is null ? "" : TimerActionDispatcher.Label(_timerAction, _english));
+    internal void AbortTrayTimer() => AbortTimer(this, new RoutedEventArgs());
     internal bool IsEnglish => _english;
     internal string CurrentThemeName => SelectedTheme();
     internal string CurrentIconSet => ThemePalette.For(SelectedTheme()).IconSet;
     internal string CurrentFontFamily => ThemePalette.For(SelectedTheme()).FontFamily;
 
-    public MainWindow()
+    public MainWindow() : this(null) { }
+
+    internal MainWindow(string? testDirectory)
     {
+        if (testDirectory is not null)
+        {
+            SkipSavedPlacementForTests = true;
+            _logDirectory = Path.Combine(testDirectory, "Logs");
+        }
         CrossButtonAppearance.Initialize();
         InitializeComponent();
         StandardLogPreview.ItemsSource = _eventLogEntries;
@@ -97,7 +108,7 @@ public partial class MainWindow : Window
         InitializeLiveDiagnostics();
         LayoutUpdated += (_, _) => { UpdateReferenceCardDecorations(); UpdateOptionsViewport(); };
         Closed += (_, _) => { StopRepairProgressAnimation(); StopNeonPresentation(); };
-        InstalledVersionText.Text = $"v{typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "1.1.0"} · WPF";
+        InstalledVersionText.Text = $"v{AppVersion.Installed} · WPF";
         _timer.Tick += TimerTick;
         _noticeAutoCloseTimer.Tick += (_, _) => CloseSettingsNotice(this, new RoutedEventArgs());
         PreviewMouseDown += CloseNoticeOnOutsideClick;
@@ -119,7 +130,7 @@ public partial class MainWindow : Window
                 ApplySize();
                 WindowPlacementService.CenterOnCursorScreen(this);
             }
-            catch (Exception exception) { Log("Fensterposition konnte nicht gesetzt werden: " + exception.Message); }
+            catch (Exception exception) { Log((_english ? "Could not set window position: " : "Fensterposition konnte nicht gesetzt werden: ") + UiText.Error(exception, _english)); }
         };
         LocationChanged += (_, _) =>
         {
@@ -138,8 +149,8 @@ public partial class MainWindow : Window
         Loaded += (_, _) => { ApplyTheme(SelectedTheme()); ApplySize(); };
         LoadPersistedLog();
         LoadPersistedRepairLog();
-        LoadAutoStart();
-        Log("PowerLeitstand PRO WPF gestartet.");
+        if (testDirectory is null) LoadAutoStart();
+        Log(_english ? "PowerLeitstand PRO WPF started." : "PowerLeitstand PRO WPF gestartet.");
         LoadUsers(null, null!);
     }
 
@@ -152,7 +163,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            Log((_english ? "Could not center the window: " : "Fenster konnte nicht zentriert werden: ") + exception.Message);
+            Log((_english ? "Could not center the window: " : "Fenster konnte nicht zentriert werden: ") + UiText.Error(exception, _english));
         }
     }
 
@@ -162,7 +173,7 @@ public partial class MainWindow : Window
         try { _settings.Save(); }
         catch (Exception exception)
         {
-            Log((_english ? "Window position could not be saved: " : "Fensterposition konnte nicht gespeichert werden: ") + exception.Message);
+            Log((_english ? "Window position could not be saved: " : "Fensterposition konnte nicht gespeichert werden: ") + UiText.Error(exception, _english));
         }
     }
 
@@ -192,7 +203,7 @@ public partial class MainWindow : Window
         _settings.WarningVolume = (int)Math.Round(WarningVolume.Value);
         _settings.RequestAdministratorOnLaunch = RequestAdministratorOnLaunch.IsChecked == true;
         try { _settings.Save(); }
-        catch (Exception exception) { Log((_english ? "Settings could not be saved: " : "Einstellungen konnten nicht gespeichert werden: ") + exception.Message); }
+        catch (Exception exception) { Log((_english ? "Settings could not be saved: " : "Einstellungen konnten nicht gespeichert werden: ") + UiText.Error(exception, _english)); }
     }
 
     private void SaveSettingsChanged(object s, RoutedEventArgs e) => SaveSettings();
@@ -215,7 +226,7 @@ public partial class MainWindow : Window
             if (sequence != _updateCheckSequence) return;
             _updateCheckFailedConnection = exception is HttpRequestException or TaskCanceledException;
             SetUpdateCheckState(UpdateCheckState.Failed);
-            Log((_english ? "Background update check failed: " : "Update-Prüfung im Hintergrund fehlgeschlagen: ") + exception.Message);
+            Log((_english ? "Background update check failed: " : "Update-Prüfung im Hintergrund fehlgeschlagen: ") + UiText.Error(exception, _english));
         }
     }
 
@@ -309,12 +320,12 @@ public partial class MainWindow : Window
         try { Process.Start(new ProcessStartInfo(ProjectLinks.RepositoryUrl) { UseShellExecute = true }); }
         catch (Exception exception)
         {
-            MessageBox.Show((_english ? "The GitHub page could not be opened: " : "Die GitHub-Seite konnte nicht geöffnet werden: ") + exception.Message,
+            MessageBox.Show((_english ? "The GitHub page could not be opened: " : "Die GitHub-Seite konnte nicht geöffnet werden: ") + UiText.Error(exception, _english),
                 "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
-    private async void CheckUpdates(object s, RoutedEventArgs e)
+    private void CheckUpdates(object s, RoutedEventArgs e)
     {
         if (IsBusy)
         {
@@ -323,44 +334,38 @@ public partial class MainWindow : Window
         }
         CheckUpdatesButton.IsEnabled = false;
         ++_updateCheckSequence;
-        _updateCheckFailedConnection = false;
-        SetUpdateCheckState(UpdateCheckState.Checking);
-        UpdateStatus.Visibility = SettingsNoticePanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        _updateInProgress = true;
         try
         {
-            var update = await UpdateService.CheckAsync();
-            _availableUpdate = update;
-            if (update is null)
+            var manager = new UpdateManagerWindow(ThemePalette.For(SelectedTheme()), _english,
+                () => _timer.IsEnabled || _repairRunning) { Owner = this };
+            var install = manager.ShowDialog() == true;
+            if (manager.ReleaseLoadSucceeded)
             {
-                SetUpdateCheckState(UpdateCheckState.Current);
-                return;
+                var latest = manager.LatestRelease;
+                _availableUpdate = latest is not null && latest.Version > AppVersion.Installed ? latest : null;
+                _updateCheckFailedConnection = false;
+                SetUpdateCheckState(_availableUpdate is null ? UpdateCheckState.Current : UpdateCheckState.Available);
             }
-            SetUpdateCheckState(UpdateCheckState.Available);
-            if (MessageBox.Show(_english ? $"Download and install version {update.Version}? The app will restart." : $"Version {update.Version} herunterladen und installieren? Die App startet danach neu.", "PowerLeitstand PRO", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            _updateInProgress = true;
-            try
+            if (!install || manager.SelectedUpdate is not { } selected) return;
+            var download = new UpdateDownloadWindow(selected, ThemePalette.For(SelectedTheme()), _english,
+                () => _timer.IsEnabled || _repairRunning) { Owner = this };
+            var completed = download.ShowDialog() == true;
+            if (download.Failure is not null) throw download.Failure;
+            if (completed)
             {
-                var dialog = new UpdateDownloadWindow(update, ThemePalette.For(SelectedTheme()), _english,
-                    () => _timer.IsEnabled || _repairRunning) { Owner = this };
-                var completed = dialog.ShowDialog() == true;
-                if (dialog.Failure is not null) throw dialog.Failure;
-                if (completed)
-                {
-                    _updateInProgress = false;
-                    System.Windows.Application.Current.Shutdown();
-                }
-                else Log(_english ? "Update cancelled; existing program unchanged." : "Update abgebrochen; bisheriges Programm unverändert.");
+                _updateInProgress = false;
+                System.Windows.Application.Current.Shutdown();
             }
-            finally { _updateInProgress = false; }
+            else Log(_english ? "Version change cancelled; current program unchanged." : "Versionswechsel abgebrochen; bisheriges Programm unverändert.");
         }
         catch (Exception exception)
         {
-            _updateCheckFailedConnection = exception is HttpRequestException or TaskCanceledException;
-            SetUpdateCheckState(_availableUpdate is null ? UpdateCheckState.Failed : UpdateCheckState.Available);
-            Log((_english ? "Update failed: " : "Update fehlgeschlagen: ") + exception.Message);
-            MessageBox.Show((_english ? "The update could not be installed. The existing EXE is unchanged: " : "Das Update konnte nicht installiert werden. Die bisherige EXE bleibt erhalten: ") + exception.Message, "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
+            Log((_english ? "Version change failed: " : "Versionswechsel fehlgeschlagen: ") + UiText.Error(exception, _english));
+            MessageBox.Show((_english ? "The version change could not be completed: " : "Der Versionswechsel konnte nicht abgeschlossen werden: ") + UiText.Error(exception, _english),
+                "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally { CheckUpdatesButton.IsEnabled = true; }
+        finally { _updateInProgress = false; CheckUpdatesButton.IsEnabled = true; }
     }
     private void WarningSoundChanged(object s, SelectionChangedEventArgs e) => SaveSettings();
     private void WarningVolumeChanged(object s, RoutedPropertyChangedEventArgs<double> e)
@@ -903,14 +908,15 @@ public partial class MainWindow : Window
         while (_eventLogEntries.Count > 1000) _eventLogEntries.RemoveAt(_eventLogEntries.Count - 1);
     }
 
-    private static CompactLogEntry ToCompactLogEntry(string entry)
+    private CompactLogEntry ToCompactLogEntry(string entry)
     {
         var end = entry.IndexOf(']');
-        if (!entry.StartsWith('[') || end < 0) return new CompactLogEntry("", entry);
+        if (!entry.StartsWith('[') || end < 0) return new CompactLogEntry("", entry) { Category = _english ? "EVENT" : "EREIGNIS" };
         var stamp = entry[1..end];
         var time = stamp[(stamp.LastIndexOf(',') + 1)..].Trim();
         return new CompactLogEntry(time.Length > 5 ? time[..5] : time, entry[(end + 1)..].Trim())
-            { FullTime = time, Detail = entry };
+            { FullTime = time,
+            Category = _english ? "EVENT" : "EREIGNIS", Detail = entry };
     }
 
     private void UpdateCompactLogContext()
@@ -1039,8 +1045,8 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            Log((_english ? "Action failed: " : "Aktion fehlgeschlagen: ") + exception.Message);
-            MessageBox.Show((_english ? "Windows could not perform this action: " : "Windows konnte die Aktion nicht ausführen: ") + exception.Message, "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
+            Log((_english ? "Action failed: " : "Aktion fehlgeschlagen: ") + UiText.Error(exception, _english));
+            MessageBox.Show((_english ? "Windows could not perform this action: " : "Windows konnte die Aktion nicht ausführen: ") + UiText.Error(exception, _english), "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
     private void StartTimerShutdown(object s, RoutedEventArgs e) => StartTimer("shutdown");
@@ -1222,7 +1228,7 @@ public partial class MainWindow : Window
         try { lock (_logLock) { if (File.Exists(LogFilePath)) File.Delete(LogFilePath); } }
         catch (Exception exception)
         {
-            MessageBox.Show((_english ? "The log could not be cleared: " : "Das Protokoll konnte nicht gelöscht werden: ") + exception.Message, "Log PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show((_english ? "The log could not be cleared: " : "Das Protokoll konnte nicht gelöscht werden: ") + UiText.Error(exception, _english), "Log PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         LogBox.Items.Clear();
@@ -1254,7 +1260,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            MessageBox.Show((_english ? "The log folder could not be opened: " : "Der Protokollordner konnte nicht geöffnet werden: ") + exception.Message, "Log PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show((_english ? "The log folder could not be opened: " : "Der Protokollordner konnte nicht geöffnet werden: ") + UiText.Error(exception, _english), "Log PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -1263,19 +1269,34 @@ public partial class MainWindow : Window
 
     private void ApplyLanguage()
     {
+        HeaderMinimizeButton.ToolTip = _english ? "Minimize" : "Minimieren";
+        HeaderCloseButton.ToolTip = _english ? "Quit" : "Beenden";
+        System.Windows.Automation.AutomationProperties.SetName(PagePrevious, _english ? "Previous page" : "Vorherige Seite");
+        System.Windows.Automation.AutomationProperties.SetName(PageNext, _english ? "Next page" : "Nächste Seite");
+        if (SizeBox.Items[0] is ComboBoxItem automatic) automatic.ToolTip = _english ? "Up to 1200 × 760, fitted to the screen" : "Bis 1200 × 760, passend zum Bildschirm";
+        UpdateExpandedLogLabels();
+        if (RepairLogBox.Items.Count > 0)
+        {
+            var translated = RepairLogBox.Items.OfType<RepairLogEntry>().Select(entry => entry.WithLanguage(_english)).ToArray();
+            RepairLogBox.Items.Clear(); _repairLogEntries.Clear();
+            foreach (var entry in translated) { RepairLogBox.Items.Add(entry); _repairLogEntries.Add(ToCompactRepairLogEntry(entry)); }
+        }
         Title = "PowerLeitstand PRO";
         TitleText.Text = "PowerLeitstand";
         UpdatePageNavigation();
         MottoText.Text = _english ? "Control Windows · Schedule actions · Repair the system" : "Windows steuern · Aktionen planen · System reparieren";
         SettingsHeaderLabel.Text = _english ? "Settings" : "Einstellungen";
-        ImmediateTitle.Text = _english ? "Immediate" : "Sofort"; ImmediateSub.Text = _english ? "Direct system actions" : "Direkte Systemaktionen";
+        ImmediateTitle.Text = _english ? "Quick actions" : "Sofort"; ImmediateSub.Text = _english ? "Direct system actions" : "Direkte Systemaktionen";
         ShutdownLabel.Text = TimerShutdownLabel.Text = _english ? "Shut down" : "Herunterfahren"; ShutdownSub.Text = _english ? "Turn off PC" : "PC ausschalten";
         RestartLabel.Text = TimerRestartLabel.Text = _english ? "Restart" : "Neustart"; RestartSub.Text = _english ? "Restart PC" : "PC neu starten";
-        TimerLockLabel.Text = _english ? "Lock" : "Sperren"; TimerShutdownSub.Text = _english ? "Timer shutdown" : "Timer Herunterfahren"; TimerLockSub.Text = _english ? "Timer lock" : "Timer Sperren"; TimerRestartSub.Text = _english ? "Timer restart" : "Timer Neustart";
+        TimerLockLabel.Text = _english ? "Lock" : "Sperren"; TimerShutdownSub.Text = _english ? "Scheduled shutdown" : "Timer Herunterfahren"; TimerLockSub.Text = _english ? "Scheduled lock" : "Timer Sperren"; TimerRestartSub.Text = _english ? "Scheduled restart" : "Timer Neustart";
         LogoutLabel.Text = _english ? "Sign out" : "Abmelden"; LogoutSub.Text = _english ? "Sign out current user" : "Aktuellen Benutzer abmelden";
         LockLabel.Text = _english ? "Lock" : "Sperren"; LockSub.Text = _english ? "Lock Windows" : "Windows sperren";
-        TimerTitle.Text = "Timer"; TimerSub.Text = _english ? "Automatic action after time" : "Automatische Aktion nach Zeit"; AbortLabel.Text = _english ? "Cancel timer" : "Timer abbrechen"; AbortHint.Text = _english ? "Stop the scheduled action" : "Geplante Aktion stoppen";
-        TimerMinusMin.Content = _english ? "−1 min" : "−1 Min"; TimerPlusMin.Content = _english ? "+1 min" : "+1 Min"; TimerMinusHourButton.Content = _english ? "−1 hr" : "−1 Std"; TimerPlusHourButton.Content = _english ? "+1 hr" : "+1 Std";
+        TimerTitle.Text = "Timer"; TimerSub.Text = _english ? "Run an action after a delay" : "Automatische Aktion nach Zeit"; AbortLabel.Text = _english ? "Cancel timer" : "Timer abbrechen"; AbortHint.Text = _english ? "Stop the scheduled action" : "Geplante Aktion stoppen";
+        foreach (var button in new[] { TimerMinusMin, CompactTimerMinusMinute, StandardTimerMinusMinute }) button.Content = _english ? "−1 min" : "−1 Min";
+        foreach (var button in new[] { TimerPlusMin, CompactTimerPlusMinute, StandardTimerPlusMinute }) button.Content = _english ? "+1 min" : "+1 Min";
+        foreach (var button in new[] { TimerMinusHourButton, CompactTimerMinusHour, StandardTimerMinusHour }) button.Content = _english ? "−1 hr" : "−1 Std";
+        foreach (var button in new[] { TimerPlusHourButton, CompactTimerPlusHour, StandardTimerPlusHour }) button.Content = _english ? "+1 hr" : "+1 Std";
         StatusTitle.Text = UserStatusTitle.Text = RepairStatusTitle.Text = "Status"; StatusSub.Text = UserStatusHeaderSub.Text = RepairStatusHeaderSub.Text = _english ? "System information" : "System-Informationen";
         if (_timer.IsEnabled)
         {
@@ -1306,7 +1327,7 @@ public partial class MainWindow : Window
         EditUserButton.ToolTip = _english ? "Edit selected user" : "Ausgewählten Benutzer bearbeiten";
         RefreshUsersButton.ToolTip = _english ? "Refresh user list" : "Benutzerliste aktualisieren";
         UpdateTitle.Text = _english ? "Updates" : "Updates";
-        CheckUpdatesLabel.Text = _english ? "Check for updates" : "Nach Updates suchen";
+        CheckUpdatesLabel.Text = _english ? "Updates …" : "Updates …";
         RepairTitle.Text = _english ? "Windows repair" : "Windows-Reparatur";
         RepairHeaderSub.Text = _english ? "Check and repair system files" : "Systemdateien prüfen und reparieren";
         RepairExplanation.Text = _english
@@ -1336,7 +1357,7 @@ public partial class MainWindow : Window
         else RepairProgressLabel.Text = _english ? "Ready. Select a repair." : "Bereit. Reparatur auswählen.";
         UpdateRepairStatus();
         UserNameColumn.Header = _english ? "User" : "Benutzer"; UserRoleColumn.Header = _english ? "Type" : "Typ"; UserDescriptionColumn.Header = _english ? "Description" : "Beschreibung"; UserStateColumn.Header = _english ? "Status" : "Status";
-        SettingsTitle.Text = _english ? "Options" : "Optionen"; SettingsSub.Text = _english ? "Application settings" : "Einstellungen der Anwendung"; LanguageTitle.Text = _english ? "Language" : "Sprache"; ThemeTitle.Text = _english ? "Design" : "Design"; SizeTitle.Text = _english ? "App size" : "App-Größe";
+        SettingsTitle.Text = _english ? "Options" : "Optionen"; SettingsSub.Text = _english ? "Application settings" : "Einstellungen der Anwendung"; LanguageTitle.Text = _english ? "Language" : "Sprache"; ThemeTitle.Text = _english ? "Design" : "Design"; SizeTitle.Text = _english ? "Window size" : "App-Größe";
         foreach (var (button, selected) in new[] { (GermanButton, !_english), (EnglishButton, _english) })
         {
             button.SetResourceReference(Button.BackgroundProperty, selected ? "ButtonBrush" : "InputBrush");
@@ -1360,7 +1381,15 @@ public partial class MainWindow : Window
             : new[] { "Alarm", "Piep", "Glockenspiel", "Sirene", "Doppelton", "Dreifachton", "Gong", "Signal", "Dringend", "Digital", "System-Alarm", "System-Warnung" });
         foreach (var item in ThemeBox.Items.OfType<ComboBoxItem>())
         {
-            if (ThemeId(item) == "Classic") item.Content = "Windows Classic";
+            var id = ThemeId(item);
+            item.Tag = id;
+            item.Content = id switch
+            {
+                "Classic" => "Windows Classic",
+                "Neon Blau" => _english ? "Neon Blue" : "Neon Blau",
+                "Neon Grün" => _english ? "Neon Green" : "Neon Grün",
+                _ => id
+            };
         }
         TimerValue.Text = TimerLabel();
         UpdateCurrentUserLabel();
@@ -1379,10 +1408,10 @@ public partial class MainWindow : Window
         var status = AutoStartService.Current.Check(AutoStartService.CurrentExecutable, repair);
         AutoStart.IsChecked = status.Enabled == true;
         AutoStart.ToolTip = status.Error is not null
-            ? (_english ? "Autostart could not be verified: " : "Autostart konnte nicht bestätigt werden: ") + status.Error
+            ? (_english ? "Autostart could not be verified: " : "Autostart konnte nicht bestätigt werden: ") + UiText.Translate(status.Error!, _english)
             : status.Enabled == true ? status.Command : _english ? "Autostart disabled" : "Autostart deaktiviert";
         if (status.Updated) Log(_english ? "Autostart updated to the current program file." : "Autostart auf die aktuelle Programmdatei angepasst.");
-        if (status.Error is not null) Log((_english ? "Autostart check failed: " : "Autostart-Prüfung fehlgeschlagen: ") + status.Error);
+        if (status.Error is not null) Log((_english ? "Autostart check failed: " : "Autostart-Prüfung fehlgeschlagen: ") + UiText.Translate(status.Error!, _english));
     }
 
     private void ToggleAutoStart(object s, RoutedEventArgs e)
@@ -1392,7 +1421,7 @@ public partial class MainWindow : Window
         LoadAutoStart(repair: false);
         if (status.Error is not null)
         {
-            MessageBox.Show((_english ? "Autostart could not be changed: " : "Autostart konnte nicht geändert werden: ") + status.Error,
+            MessageBox.Show((_english ? "Autostart could not be changed: " : "Autostart konnte nicht geändert werden: ") + UiText.Translate(status.Error!, _english),
                 "Autostart", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -1569,7 +1598,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            Log((_english ? "Warning sound failed: " : "Warnton fehlgeschlagen: ") + exception.Message);
+            Log((_english ? "Warning sound failed: " : "Warnton fehlgeschlagen: ") + UiText.Error(exception, _english));
             return false;
         }
     }
@@ -1587,8 +1616,8 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            Log((_english ? "User overview failed: " : "Benutzerübersicht fehlgeschlagen: ") + exception.Message);
-            MessageBox.Show((_english ? "Local users could not be loaded: " : "Lokale Benutzer konnten nicht geladen werden: ") + exception.Message, "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Log((_english ? "User overview failed: " : "Benutzerübersicht fehlgeschlagen: ") + UiText.Error(exception, _english));
+            MessageBox.Show((_english ? "Local users could not be loaded: " : "Lokale Benutzer konnten nicht geladen werden: ") + UiText.Error(exception, _english), "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally { RefreshUsersButton.IsEnabled = true; }
     }
@@ -1608,8 +1637,8 @@ public partial class MainWindow : Window
     private void UpdateAdminBadgeAppearance(bool elevated, string theme)
     {
         AdminRightsStatus.Text = elevated
-            ? _english ? "Admin start" : "Mit Admin-Start"
-            : _english ? "No admin start" : "Ohne Admin-Start";
+            ? _english ? "With admin" : "Mit Admin-Start"
+            : _english ? "Without admin" : "Ohne Admin-Start";
         AdminRightsBadge.ToolTip = elevated
             ? _english ? "The app is running with administrator rights." : "Die App wurde mit Administratorrechten gestartet."
             : _english ? "The app is not running with administrator rights." : "Die App wurde nicht als Administrator gestartet.";
@@ -1784,7 +1813,7 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             MessageBox.Show((_english ? "The app could not be restarted as administrator: "
-                                      : "Die App konnte nicht als Administrator neu gestartet werden: ") + exception.Message,
+                                      : "Die App konnte nicht als Administrator neu gestartet werden: ") + UiText.Error(exception, _english),
                 "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -1796,8 +1825,8 @@ public partial class MainWindow : Window
 
     private void UserEditError(string name, Exception exception)
     {
-        Log((_english ? "Account management failed for " : "Kontoverwaltung fehlgeschlagen für ") + name + ": " + exception.Message);
-        MessageBox.Show((_english ? "Windows could not complete the account change. The account may have been partially changed: " : "Windows konnte die Kontoänderung nicht vollständig ausführen. Das Konto kann teilweise geändert worden sein: ") + exception.Message, "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
+        Log((_english ? "Account management failed for " : "Kontoverwaltung fehlgeschlagen für ") + name + ": " + UiText.Error(exception, _english));
+        MessageBox.Show((_english ? "Windows could not complete the account change. The account may have been partially changed: " : "Windows konnte die Kontoänderung nicht vollständig ausführen. Das Konto kann teilweise geändert worden sein: ") + UiText.Error(exception, _english), "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
         LoadUsers(null, null!);
     }
 
@@ -1884,6 +1913,7 @@ public partial class MainWindow : Window
             {
                 case "shutdown": ShutdownNow(this, new RoutedEventArgs()); break;
                 case "restart": RestartNow(this, new RoutedEventArgs()); break;
+                case "logout": LogoutNow(this, new RoutedEventArgs()); break;
                 case "lock": LockNow(this, new RoutedEventArgs()); break;
             }
         });

@@ -1,3 +1,34 @@
+## Updateverwaltung und vier Sicherungen – lokale Version 1.1.3
+
+- [x] Zweisprachiges vollständiges Changelog: je 21 Änderungen auf Deutsch und Englisch, sprachabhängige Anzeige für GitHub-Versionen und lokale Sicherungen.
+- [x] Gemeinsame Versionsquelle, wiederholbare Prüfung von Projekt-/EXE-Version und vorbereiteten Release-Texten; optionaler Abgleich von GitHub-Tag, Text und Asset-Prüfsumme.
+- [x] Sprachprüfung der drei Seiten, Optionen und Hauptdialoge; ergänzte Tooltips, Designnamen und eigene Fehlermeldungen. Originalausgaben von Windows und historischen Protokollen bleiben erhalten.
+- [ ] Freigabe der Testversion und gesonderte Freigabe für GitHub-Veröffentlichung; Ablauf unter `docs/release-checklist.md`.
+
+- [x] Freigegebene Updateübersicht mit GitHub-Versionsliste und vollständigen scrollbaren Versionshinweisen umgesetzt.
+- [x] Wiederherstellungsauswahl im selben Fenster, Sicherungsprüfung und bestätigte Einzellöschung umgesetzt.
+- [x] Freigegebene kompakte Gestaltung: 620 × 480, echter Blitz, Änderungen per Button als dritte Ansicht; Auswahl bleibt beim Zurückgehen erhalten.
+- [x] Gleichzeitiges Lesen der Sicherungsdateien blockiert deren Löschung nicht mehr; Zugriffskonflikt aus dem Oberflächentest behoben.
+- [x] Vor Versionswechseln geprüfte Sicherung in AppData; maximal vier Einträge, keine zusätzliche Desktop-Backup-Datei.
+- [x] Produktversion auf ausdrücklichen Nutzerwunsch 1.1.3; kompakte Hinweise pro Veröffentlichung in den Releaseablauf aufgenommen.
+- [ ] Nutzerabnahme der lokalen EXE. Ein GitHub-Release erfolgt erst nach gesonderter Freigabe.
+
+Details: `docs/update-manager-v1.1.3.md`.
+
+## Update-Startkontrolle und Schnellzugriff – lokale Testversion v1.1.3
+
+- [x] Timerabbruch und Fenster zentrieren in v1.1.4 vom Nutzer als einwandfrei bestätigt (18.10.2026).
+- [x] Freigegebene Darstellungskorrektur für v1.1.5: Fenster-Icon mit Pfeil und deutlicher roter Beenden-Rahmen, auch bei gesperrtem Button sichtbar. Funktionen unverändert.
+
+- [x] Gemeldeten Menüabsturz untersucht: erneutes `Close` bei Fokusverlust während des Schließens. Schutz gegen Wiedereintritt und verzögerte Aktionsausführung für korrigierte Testversion v1.1.4 ergänzt. Nutzerabnahme der Korrektur steht aus.
+
+- [x] Update mit bestätigtem Fensterstart, Wiederherstellung bei Startfehler und Backup-Bereinigung umgesetzt und isoliert geprüft.
+- [x] Mehrfachstarts verhindern und bestehendes Fenster einblenden; Helfer und Administrator-Neustart berücksichtigt.
+- [x] Freigegebenes Schnellzugriffsmenü mit Systemaktionen und Timeranzeige umgesetzt; Timer-/Reparatur-/Updatesperren im Menü und Ausführungspfad.
+- [ ] Nutzerabnahme der lokalen Test-EXE und des tatsächlichen Menüs. Erst danach einen weiteren GitHub-Release planen.
+
+Details und Prüfgrenzen: `docs/update-tray-v1.1.3.md`.
+
 ## Update-Downloadfenster – Teststand 18.10.2026
 
 - [x] Freigegebene isolierte Vorschau als WPF-Dialog umgesetzt: echter Byte-/Prozentfortschritt, Laufbalken bei unbekannter Größe, sichtbare Prüfsumme und Neustartphase.

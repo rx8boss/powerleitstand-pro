@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup><Compile Include="../../src/PowerLeitstandPro/UiText.cs" Link="UiText.cs"/>
     <Compile Include="../../src/PowerLeitstandPro/PowerActionDispatcher.cs" Link="PowerActionDispatcher.cs" />
     <Compile Include="../../src/PowerLeitstandPro/TimerActionDispatcher.cs" Link="TimerActionDispatcher.cs" />
     <Compile Include="../../src/PowerLeitstandPro/ThemePalette.cs" Link="ThemePalette.cs" />
@@ -21,5 +21,6 @@
     <Compile Include="../../src/PowerLeitstandPro/WindowSizeMath.cs" Link="WindowSizeMath.cs" />
     <Compile Include="../../src/PowerLeitstandPro/ProjectLinks.cs" Link="ProjectLinks.cs" />
     <Compile Include="../../src/PowerLeitstandPro/ReleaseAssetSelector.cs" Link="ReleaseAssetSelector.cs" />
+    <Compile Include="../../src/PowerLeitstandPro/AppBackupStore.cs" Link="AppBackupStore.cs" />
   </ItemGroup>
 </Project>

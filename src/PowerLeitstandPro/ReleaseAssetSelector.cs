@@ -4,7 +4,11 @@ using System.Text.RegularExpressions;
 
 namespace PowerControlProWpf;
 
-internal sealed record AvailableUpdate(Version Version, string DownloadUrl, string Sha256);
+internal sealed record AvailableUpdate(Version Version, string DownloadUrl, string Sha256)
+{
+    internal string Notes { get; init; } = "";
+    internal AppBackup? SourceBackup { get; init; }
+}
 
 internal static class ReleaseAssetSelector
 {

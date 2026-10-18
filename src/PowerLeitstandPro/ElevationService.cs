@@ -28,6 +28,8 @@ internal static class ElevationService
             WorkingDirectory = Path.GetDirectoryName(executable)!
         };
         start.ArgumentList.Add("--elevation-attempted");
+        start.ArgumentList.Add("--instance-handoff");
+        start.ArgumentList.Add(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (openUsersPage) start.ArgumentList.Add("--page-users");
         try
         {

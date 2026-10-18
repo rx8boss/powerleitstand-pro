@@ -1,6 +1,6 @@
 # PowerLeitstand PRO · Windows (WPF)
 
-![PowerLeitstand PRO v1.1.2 – Hauptfenster](docs/screenshots/main-window.png)
+![PowerLeitstand PRO v1.1.3 – Hauptfenster](docs/screenshots/main-window.png)
 
 
 [![CodeQL · C#](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml/badge.svg)](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml)
@@ -25,6 +25,8 @@ Das Projekt wurde mit Unterstützung künstlicher Intelligenz, unter anderem Ope
 - Windows-Reparatur: DISM und SFC mit Fortschritt, Abbruch, Ergebniszusammenfassung und kopierbarem Befehl. Reparaturen benötigen Administratorrechte und starten den PC nicht automatisch neu.
 - Deutsch und Englisch, sieben Designs, vier App-Größen, Tray-Menü und optionaler Autostart.
 - Manuelle Update-Prüfung unter Optionen: GitHub-Release-Version prüfen, die einzige EXE im Release anhand des GitHub-SHA-256-Digests verifizieren und nach Zustimmung am bisherigen Ort austauschen. Laufende Timer oder Reparaturen blockieren das Update. Bei keiner oder mehreren EXEs wird nicht automatisch aktualisiert.
+- Kompakte Update- und Wiederherstellungsansicht mit Versionsauswahl, zweisprachigen Änderungen und bis zu vier geprüften Programmsicherungen in AppData. Einstellungen und Protokolle bleiben erhalten.
+- Schnellzugriff mit Timeranzeige, Timerabbruch, Fenster öffnen und Zentrieren; Schutz vor Mehrfachstarts.
 - Dauerhafte Ereignis- und Reparaturprotokolle unter `%LOCALAPPDATA%\Power Control PRO\logs`; Einstellungen unter `%LOCALAPPDATA%\Power Control PRO\settings.json`.
 
 **Wichtig:** Herunterfahren, Neustart, Abmelden und Sperren wirken auf den aktuellen PC. Vor einer Reparatur wichtige Daten sichern. DISM/SFC können länger dauern; ein Abbruch kann einen unvollständigen Reparaturzustand hinterlassen.
@@ -59,6 +61,8 @@ This project was created and further developed with AI assistance, including Ope
 - DISM and SFC repair with progress, cancellation, result summary and a copyable command. Administrator rights are required; the app does not restart Windows automatically after repair.
 - German and English, seven themes, four app sizes, tray menu and optional startup with Windows.
 - Manual update check in Options: compare the GitHub release version, verify the release's only EXE against its GitHub SHA-256 digest, and replace the EXE at its current location with consent. Active timers or repairs defer the update. No automatic update occurs if the release has zero or multiple EXEs.
+- Compact update and recovery views with version selection, bilingual release notes and up to four verified application backups in AppData. Settings and logs are preserved.
+- Quick access with timer status, cancellation, open and center window; single-instance protection.
 - Persistent event and repair logs in `%LOCALAPPDATA%\Power Control PRO\logs`; settings in `%LOCALAPPDATA%\Power Control PRO\settings.json`.
 
 **Caution:** Power actions affect the current PC. Back up important files before repair. DISM/SFC can take time, and cancelling may leave the repair incomplete.
@@ -77,7 +81,7 @@ The standalone `PowerLeitstand-PRO.exe` is placed in `publish\Windows-x64`; thes
 
 ## Vorschau / Preview
 
-Aktuelle WPF-Oberfläche in Version 1.1.2 (Standarddesign; Beispielwerte und Beispielprotokoll im Bild oben). / Current WPF interface in version 1.1.2 (default theme; sample metrics and logs in the image above).
+Aktuelle WPF-Oberfläche in Version 1.1.3 (Standarddesign; Diagnose-Platzhalter im Bild oben). / Current WPF interface in version 1.1.3 (default theme; diagnostic placeholders in the image above).
 
 
 ### Update-Download / Update download
@@ -85,3 +89,7 @@ Aktuelle WPF-Oberfläche in Version 1.1.2 (Standarddesign; Beispielwerte und Bei
 Sichtbarer Download mit Fortschritt, Datenmenge, Dateiprüfung und Abbruch. Der folgende echte WPF-Dialog zeigt Beispieldaten. / Visible download progress, transferred data, file verification and cancellation. This real WPF dialog shows sample data.
 
 ![PowerLeitstand PRO – Update-Download](docs/screenshots/update-dialog.png)
+
+### Versions- und Sprachprüfung / Version and language checks
+
+[Release-Ablauf / Release checklist](docs/release-checklist.md) · [Änderungen 1.1.3 / Changes in 1.1.3](docs/releases/v1.1.3.md)

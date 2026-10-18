@@ -2,6 +2,13 @@ namespace PowerControlProWpf;
 
 internal sealed record RepairLogEntry(string Timestamp, string Phase, string Level, string Message)
 {
+    public string DisplayLevel { get; init; } = Level;
+    public string DisplayMessage { get; init; } = Message;
+    internal RepairLogEntry WithLanguage(bool english) => this with
+    {
+        DisplayLevel = english ? Level switch { "FEHLER" => "ERROR", "ABBRUCH" => "CANCELLED", "ERFOLG" => "SUCCESS", "HINWEIS" => "NOTICE", _ => Level } : Level,
+        DisplayMessage = UiText.Translate(Message, english)
+    };
     internal string ToLine() => $"[{Timestamp}] [{Phase}] [{Level}] {Message}";
 
     internal static RepairLogEntry Parse(string line)

@@ -39,7 +39,8 @@ internal static class ThemedMessageBox
     {
         var main = owner as MainWindow ?? Application.Current?.MainWindow as MainWindow;
         var dialog = new ThemedMessageBoxWindow(message, title, buttons, icon,
-            ThemePalette.For(main?.CurrentThemeName ?? "Standard"), main?.IsEnglish ?? false);
+            owner is UpdateManagerWindow manager ? manager.CurrentPalette : ThemePalette.For(main?.CurrentThemeName ?? "Standard"),
+            owner is UpdateManagerWindow updateManager ? updateManager.IsEnglish : main?.IsEnglish ?? false);
         if (owner is { IsLoaded: true }) dialog.Owner = owner;
         dialog.ShowDialog();
         return dialog.Result;

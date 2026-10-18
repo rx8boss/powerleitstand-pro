@@ -135,7 +135,7 @@ internal sealed class RepairLogWindow : Window
                 Text = english ? "No repair entries are saved." : "Es sind keine Reparatureinträge gespeichert.",
                 FontSize = 14, Foreground = subtle
             });
-        foreach (var entry in entries)
+        foreach (var entry in entries.Select(e => e.WithLanguage(english)))
         {
             var levelColor = entry.Level switch
             {
@@ -156,13 +156,13 @@ internal sealed class RepairLogWindow : Window
             entryCard.Child = entryContent;
             var head = new TextBlock
             {
-                Text = $"{entry.Timestamp}   ·   {entry.Phase}   ·   {entry.Level}",
+                Text = $"{entry.Timestamp}   ·   {entry.Phase}   ·   {entry.DisplayLevel}",
                 FontSize = 13, FontWeight = FontWeights.SemiBold,
                 Foreground = levelColor
             };
             var message = new TextBlock
             {
-                Text = entry.Message, FontSize = 15, Foreground = Foreground,
+                Text = entry.DisplayMessage, FontSize = 15, Foreground = Foreground,
                 TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 5, 0, 0)
             };
             entryContent.Children.Add(head);

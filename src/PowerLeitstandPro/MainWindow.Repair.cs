@@ -29,7 +29,7 @@ public partial class MainWindow
                          .Where(line => !string.IsNullOrWhiteSpace(line) &&
                                         !RepairProgressParser.TryReadPercent(line, out _)).TakeLast(500).Reverse())
             {
-                var entry = RepairLogEntry.Parse(line);
+                var entry = RepairLogEntry.Parse(line).WithLanguage(_english);
                 RepairLogBox.Items.Add(entry);
                 _repairLogEntries.Add(ToCompactRepairLogEntry(entry));
             }
@@ -55,15 +55,16 @@ public partial class MainWindow
     }
 
     private static CompactLogEntry ToCompactRepairLogEntry(RepairLogEntry entry) =>
-        new(entry.Timestamp.Length >= 16 ? entry.Timestamp.Substring(11, 5) : entry.Timestamp, entry.Message)
+        new(entry.Timestamp.Length >= 16 ? entry.Timestamp.Substring(11, 5) : entry.Timestamp, entry.DisplayMessage)
         {
             Detail = entry.ToLine(),
             FullTime = entry.Timestamp.Length >= 19 ? entry.Timestamp.Substring(11, 8) : entry.Timestamp,
-            Category = $"{entry.Phase} · {entry.Level}"
+            Category = $"{entry.Phase} · {entry.DisplayLevel}"
         };
 
     private void AddRepairLogEntry(RepairLogEntry entry)
     {
+        entry = entry.WithLanguage(_english);
         RepairLogBox.Items.Insert(0, entry);
         _repairLogEntries.Insert(0, ToCompactRepairLogEntry(entry));
         while (RepairLogBox.Items.Count > 500) RepairLogBox.Items.RemoveAt(RepairLogBox.Items.Count - 1);
@@ -208,8 +209,8 @@ public partial class MainWindow
         {
             _lastRepairExitCode = -1;
             RepairProgressLabel.Text = _english ? "Repair failed or the connection was lost." : "Reparatur fehlgeschlagen oder Verbindung unterbrochen.";
-            RepairResult.Text = ex.Message;
-            AppendRepairLog($"{RepairProgressLabel.Text} {ex.Message}", "FEHLER");
+            RepairResult.Text = UiText.Error(ex, _english);
+            AppendRepairLog($"{RepairProgressLabel.Text} {UiText.Error(ex, _english)}", "FEHLER");
             Log(RepairProgressLabel.Text);
             if (_repairCancellation?.IsCancellationRequested != true)
                 NotifyRepairCompletion(false, RepairProgressLabel.Text);
@@ -298,7 +299,7 @@ public partial class MainWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, ex.Message, "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, UiText.Error(ex, _english), "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

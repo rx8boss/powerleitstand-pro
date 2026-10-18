@@ -140,6 +140,9 @@ public partial class MainWindow
 
     private void UpdateExpandedLogLabels()
     {
+        var close = (Button)_expandedLogPanel.FindName("Close");
+        close.ToolTip = _english ? "Close" : "Schließen";
+        System.Windows.Automation.AutomationProperties.SetName(close, _english ? "Close log view" : "Protokollansicht schließen");
         _expandedLogTitle.Text = _pageIndex == 2 ? (_english ? "Repair log" : "Reparaturprotokoll")
             : (_english ? "Event log" : "Ereignisprotokoll");
         _expandedLogCount.Text = _english ? $"{_expandedLogList.Items.Count} entries · newest first"
