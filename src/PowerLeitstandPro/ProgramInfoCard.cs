@@ -129,7 +129,12 @@ internal sealed partial class ProgramInfoCard
         _versionAction.Click += async (_, _) =>
         {
             if (_closed || !view.CanChooseProgramFile) return;
-            await ReinstallAsync();
+            if (!view.IsInstalled(entry.Id) && _singleEntryEvidence is null)
+            {
+                Close();
+                await view.InstallEntriesAsync([entry], newOnly: true);
+            }
+            else await ReinstallAsync();
         };
         _uninstallAction = Action(L("Deinstallieren …", "Uninstall …"), true); _uninstallAction.Name = "ProgramInfoUninstallAction";
         _uninstallAction.Width = 142; _uninstallAction.Height = _uninstallAction.MinHeight = 36; _uninstallAction.FontSize = 13;
@@ -278,6 +283,7 @@ internal sealed partial class ProgramInfoCard
             || ProgramVersions.IsNewer(_view.Inventory.Installed.GetValueOrDefault(_entry.Id), _confirmedOnline)));
     private bool SingleUpdateAvailable => _singleEntryCheckedUtc is not null && _singleEntryUpdates is { } check
         && ProgramInstallService.CheckedUpdateMatches(_entry, _resolvedPackage, check);
+    private bool TerminalStore => _entry.Id == "windows-terminal" && (_singleEntryEvidence?.Source == "Windows-App" || StoreKnown);
     private bool CanUpdate() => _singleEntryCheckedUtc is not null ? SingleUpdateAvailable
         : ProgramInstallService.CheckedUpdateMatches(_entry, _resolvedPackage, _view.Inventory);
     private void RefreshVersionPresentation()
@@ -315,17 +321,18 @@ internal sealed partial class ProgramInfoCard
             : L("Update installieren · bestätigte aktuelle Version", "Install update · verified current version");
         AutomationProperties.SetName(_updateAction, pending ? L("Programmstand erneut prüfen", "Check application state again") : publisher ? L("EA App zum Aktualisieren öffnen", "Open EA app to update") : L("Update installieren", "Install update"));
         _uninstallAction.Visibility = installed ? Visibility.Visible : Visibility.Collapsed;
-        _versionAction.Visibility = installed ? Visibility.Visible : Visibility.Collapsed;
-        _versionAction.Name = "ProgramInfoStatusReinstall";
-        var caption = TukuiStandalone && _resolvedPackage?.PortableUpdate is null ? L("Herstellerseite", "Publisher site") : L("Neu installieren", "Reinstall");
+        bool install = !installed && _singleEntryEvidence is null && _view.CanOfferNewInstall(_entry);
+        _versionAction.Visibility = installed || install ? Visibility.Visible : Visibility.Collapsed;
+        _versionAction.Name = install ? "ProgramInfoInstall" : "ProgramInfoStatusReinstall";
+        var caption = install ? L("Installieren", "Install") : TukuiStandalone && _resolvedPackage?.PortableUpdate is null ? L("Herstellerseite", "Publisher site") : L("Neu installieren", "Reinstall");
         _versionAction.Content = new TextBlock { Text = caption }; AutomationProperties.SetName(_versionAction, caption);
-        _versionAction.ToolTip = _view.Service is ProgramInstallService service
+        _versionAction.ToolTip = install ? L("Dieses Programm prüfen und installieren", "Check and install this application") : _view.Service is ProgramInstallService service
             ? ProgramInstallService.ReinstallExplanation(service.ReinstallCapability(_entry, _view.Inventory), _view.English)
             : L("Vorhandene Installationsquelle prüfen", "Check the existing installation source");
         _uninstallAction.ToolTip = L("Zugeordnete Installation anzeigen · Deinstallation separat bestätigen", "Show the matching installation · confirm uninstall separately");
         _versionAction.IsEnabled = _uninstallAction.IsEnabled = _view.CanChooseProgramFile && !_openingPublisher && !_singleEntryChecking;
         _updateAction.IsEnabled = _versionAction.IsEnabled && _metadataLoaded;
-        if (_view.Inventory.IsStale || _view.Inventory.UnverifiedInstalledIds?.Contains(_entry.Id) == true) _versionAction.IsEnabled = false;
+        if (!install && (_view.Inventory.IsStale || _view.Inventory.UnverifiedInstalledIds?.Contains(_entry.Id) == true)) _versionAction.IsEnabled = false;
     }
     private async Task ChooseProgramFileAsync(Button button)
     {
@@ -417,13 +424,15 @@ internal sealed partial class ProgramInfoCard
                     note.Visibility = Visibility.Visible;
                 }
             }
-            var package = ForDisplayedVariant(await _view.Service.ResolveAsync(_entry, _cancel.Token));
+            var package = ForDisplayedVariant(TerminalStore && _view.Service is ProgramInstallService terminalService
+                ? await terminalService.ResolveCheckedUpdateAsync(_entry, _view.Inventory, _cancel.Token)
+                : await _view.Service.ResolveAsync(_entry, _cancel.Token));
             if (_closed) return;
             if (package is null && _view.Service is ProgramInstallService manager && manager.ManagedProblem(_entry.Id) is { } problem)
             { _error.Text = UiText.Translate(problem, _view.English); _error.Visibility = Visibility.Visible; }
             _resolvedPackage = package;
             descriptionPackage = package;
-            var githubNotice = _view.Inventory.GitHubUpdates?.GetValueOrDefault(_entry.Id);
+            var githubNotice = TerminalStore ? null : _view.Inventory.GitHubUpdates?.GetValueOrDefault(_entry.Id);
             confirmed = ProgramVersions.ConfirmedVersion(githubNotice ?? package?.OnlineVersion ?? package?.Version);
             _confirmedOnline = confirmed;
             _view.Assets.RegisterIcon(_entry, package?.IconUrl, package?.IconWebsite); _ = _view.Assets.EnsureIconAsync(_entry);

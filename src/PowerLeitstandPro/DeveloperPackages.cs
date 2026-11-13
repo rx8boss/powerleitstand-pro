@@ -14,6 +14,12 @@ internal sealed record DeveloperPackage(string Id, string Version, string Descri
 internal sealed class MissingPSResourceGetException()
     : IOException("PSResourceGet fehlt. / PSResourceGet is missing.") { }
 
+internal sealed class BrokenPSResourceGetException(string manifest, string details)
+    : IOException("PowerShell/PSResourceGet: " + details)
+{
+    internal string Manifest { get; } = manifest;
+}
+
 internal sealed partial class DeveloperPackages
 {
     internal const string NuGetSource = "https://api.nuget.org/v3/index.json";
@@ -91,8 +97,15 @@ internal sealed partial class DeveloperPackages
     private const string Script = """
         $ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
         try {
-          if (!(Get-Module -ListAvailable Microsoft.PowerShell.PSResourceGet)) { exit 42 }
-          Import-Module Microsoft.PowerShell.PSResourceGet -ErrorAction Stop
+          $module = Get-Module -ListAvailable Microsoft.PowerShell.PSResourceGet | Select-Object -First 1
+          if (!$module) { exit 42 }
+          try {
+            Import-Module -Name $module.Path -ErrorAction Stop
+          } catch {
+            [Console]::Out.WriteLine('PL_MODULE_MANIFEST:' + $module.Path)
+            [Console]::Error.WriteLine($_.Exception.Message)
+            exit 43
+          }
           $prefix='Microsoft.PowerShell.PSResourceGet\'
           if($env:PL_PACKAGE_ACTION -ne 'installed') {
             $repo=Microsoft.PowerShell.PSResourceGet\Get-PSResourceRepository -Name PSGallery -ErrorAction Stop
@@ -124,6 +137,13 @@ internal sealed partial class DeveloperPackages
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(token); if (action != "install") limit.CancelAfter(TimeSpan.FromSeconds(40));
         var result = await _run(PowerShellCommand(action, id, version), action == "install" ? token : limit.Token);
         if (result.ExitCode == 42) throw new MissingPSResourceGetException();
+        if (result.ExitCode == 43)
+        {
+            var lines = result.Output.Split('\n', StringSplitOptions.TrimEntries);
+            const string marker = "PL_MODULE_MANIFEST:";
+            string manifest = lines.FirstOrDefault(line => line.StartsWith(marker, StringComparison.Ordinal))?[marker.Length..] ?? "";
+            throw new BrokenPSResourceGetException(manifest, string.Join("\n", lines.Where(line => !line.StartsWith(marker, StringComparison.Ordinal))).Trim());
+        }
         if (result.ExitCode != 0) throw new IOException("PowerShell/PSResourceGet: " + result.Output.Trim());
         var json = result.Output.Split('\n').LastOrDefault(l => l.StartsWith("PL_PACKAGES_JSON:", StringComparison.Ordinal));
         if (json is null) throw new IOException("Paketbestand nicht bestätigt. / Package inventory not verified.");

@@ -112,7 +112,11 @@ internal static class ProgramDestinationTests
                 var rect = start.TransformToAncestor(host).TransformBounds(new Rect(start.RenderSize));
                 Assert(rect.Right <= host.ActualWidth + 1 && rect.Bottom <= host.ActualHeight + 1 && rect.Top >= 0, "confirmation remains inside compact and large windows");
                 if (!english) Save(main, "Installationsort-" + size);
+                var shortcuts = UnifiedDialogAppearance.Children<System.Windows.Controls.CheckBox>(host).Where(x => x.Name == "ProgramDesktopShortcut").ToArray();
+                Assert(shortcuts.Length == 2 && shortcuts.All(x => x.IsChecked == false), "Each new installation has an opt-in shortcut");
+                shortcuts[0].IsChecked = true;
                 start.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Wait(dialog);
+                Assert(dialog.Result![0].DesktopShortcut && !dialog.Result[1].DesktopShortcut, "Desktop shortcut choice is independent per program");
                 Assert(dialog.Result![0].TargetPath == path.Text && dialog.Result[1].TargetPath is null, "each program retains its independent exact destination");
                 var updates = new ProgramInventory(true, new Dictionary<string, string?> { [vlc.Id] = "1.0", [firefox.Id] = "1.0" },
                     Updates: new Dictionary<string, string> { [vlc.Id] = "2.0", [firefox.Id] = "2.0" }, UpdateCheckComplete: true);
@@ -135,7 +139,7 @@ internal static class ProgramDestinationTests
                     var bounds = confirm.TransformToAncestor(host).TransformBounds(new Rect(confirm.RenderSize));
                     Assert(bounds.Bottom <= host.ActualHeight + 1 && bounds.Top >= 0, "update confirmation remains in compact/large window");
                     if (!english && selection == "single-update") Save(main, "Update-ohne-Pfad-" + size);
-                    var finish = selection == "cancel-update" ? UnifiedDialogAppearance.Children<Button>(host).Single(b => b.Content is TextBlock t && t.Text == (english ? "Cancel" : "Abbrechen")) : confirm;
+                    var finish = selection == "cancel-update" ? UnifiedDialogAppearance.Children<Button>(host).Single(b => b.Name == "ProgramSelectionCancel") : confirm;
                     finish.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Wait(updateDialog);
                     Assert(selection == "cancel-update" ? updateDialog.Result is null : updateDialog.Result!.Count == options.Length && updateDialog.Result.All(c => c.TargetPath is null),
                         "updates retain their installed location, new installs default to installer location, and cancellation stays available");

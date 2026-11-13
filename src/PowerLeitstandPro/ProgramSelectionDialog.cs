@@ -13,7 +13,7 @@ using Panel = System.Windows.Controls.Panel;
 
 namespace PowerControlProWpf;
 
-internal sealed record ProgramSelection(ProgramEntry Entry, ProgramPackage? Installer, PortablePackage? Portable = null, string? Parent = null, bool Reinstall = false, string? TargetPath = null, IReadOnlyList<ProgramPackage>? ReinstallOptions = null);
+internal sealed record ProgramSelection(ProgramEntry Entry, ProgramPackage? Installer, PortablePackage? Portable = null, string? Parent = null, bool Reinstall = false, string? TargetPath = null, IReadOnlyList<ProgramPackage>? ReinstallOptions = null, bool DesktopShortcut = false);
 
 internal static class ProgramSelectionDialog
 {
@@ -52,7 +52,7 @@ internal static class ProgramSelectionDialog
         var close = new Button { Content = new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L12,12 M12,0 L0,12"), Width = 11, Height = 11, Stretch = Stretch.Uniform, StrokeThickness = 1.5 } };
         UnifiedDialogAppearance.Button(owner, close, DialogButtonKind.Close); AutomationProperties.SetName(close, L("Schließen", "Close")); Grid.SetColumn(close, 2); header.Children.Add(close); layout.Children.Add(header);
         var rows = new StackPanel(); var chosen = options.Select(x => x with { Portable = null }).ToArray();
-        var start = Action(reinstalling ? L("↻ Neu installieren", "↻ Reinstall") : L("↓ Auswahl starten", "↓ Start selected")); start.Width = 156;
+        var start = Action(reinstalling ? L("↻ Neu installieren", "↻ Reinstall") : options.Count == 1 && !inventory.HasUpdate(options[0].Entry.Id) ? L("↓ Installieren", "↓ Install") : L("↓ Auswahl starten", "↓ Start selected")); start.Width = 156;
         var count = Text("", 10, true); count.VerticalAlignment = VerticalAlignment.Center;
         var targetChecks = new List<Func<bool>>();
         void Update()
@@ -63,7 +63,7 @@ internal static class ProgramSelectionDialog
                 ? ProgramPortable.Destination(x.Entry, x.Portable, x.Parent) : x.TargetPath).OfType<string>();
             bool overlap = ProgramInstallTargets.Overlapping(paths);
             if (overlap) count.Text = L("Bitte getrennte Programmordner wählen", "Choose separate application folders");
-            start.IsEnabled = chosen.All(x => x.Portable is null || x.Parent is not null) && targetChecks.All(check => check()) && !overlap;
+            start.IsEnabled = chosen.All(x => x.Portable is null ? x.Installer is not null : x.Parent is not null) && targetChecks.All(check => check()) && !overlap;
         }
         for (int n = 0; n < options.Count; n++)
         {
@@ -73,7 +73,7 @@ internal static class ProgramSelectionDialog
             heading.Children.Add(icon is null ? ProgramFallbackIcon.Create(26, "UnifiedAccent") : new Image { Source = icon, Width = 28, Height = 28, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left });
             var names = new StackPanel(); var name = Text(entry.Name, 15); name.FontWeight = FontWeights.SemiBold; names.Children.Add(name);
             var sourceLine = Text((inventory.Installed.TryGetValue(entry.Id, out var installed) ? installed + " → " : "")
-                + (option.Installer?.Version ?? L("Herstellerseite", "Publisher website")) + " · " + (option.Installer?.VersionSource ?? entry.Publisher), 10, true); names.Children.Add(sourceLine); var installerSource = sourceLine.Text;
+                + (option.Installer?.Version ?? L("Kein Installer bestätigt", "No installer verified")) + " · " + (option.Installer?.VersionSource ?? entry.Publisher), 10, true); names.Children.Add(sourceLine); var installerSource = sourceLine.Text;
             string ReinstallLabel(ProgramPackage package) => package.ManagedPackage is { } managed
                 ? managed.Manager + " · " + managed.Target.Id + " · " + (managed.Target.Scope == "User" ? L("Benutzer", "User") : L("Alle Benutzer", "All users")) + " · " + managed.Target.OldVersion + " → " + managed.Version
                 : (package.ReinstallProof?.SameVersion == true
@@ -132,7 +132,7 @@ internal static class ProgramSelectionDialog
                 {
                     var variants = new StackPanel { Orientation = Orientation.Horizontal, Margin = new(38, 9, 0, 0) };
                     string portableLabel = entry.Id == "vlc" ? "VLC ZIP" : "Portable";
-                    var installer = Action("✓ Installer"); installer.Tag = "installer"; var portable = Action(portableLabel); portable.Tag = "portable"; foreach (var button in new[] { installer, portable }) { button.Width = 112; button.Height = button.MinHeight = 29; button.FontSize = 11; button.Margin = new(0, 0, 7, 0); variants.Children.Add(button); }
+                    var installer = Action("✓ Installer"); installer.Tag = "installer"; installer.IsEnabled = option.Installer is not null; var portable = Action(portableLabel); portable.Tag = "portable"; foreach (var button in new[] { installer, portable }) { button.Width = 112; button.Height = button.MinHeight = 29; button.FontSize = 11; button.Margin = new(0, 0, 7, 0); variants.Children.Add(button); }
                     installer.BorderThickness = new(2); stack.Children.Add(variants);
                     var target = new Grid { Margin = new(38, 10, 0, 0), Visibility = Visibility.Collapsed }; target.ColumnDefinitions.Add(new()); target.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
                     var targetText = Text(L("Zielordner auswählen …", "Choose destination …"), 11, true); targetText.VerticalAlignment = VerticalAlignment.Center; target.Children.Add(targetText);
@@ -161,6 +161,22 @@ internal static class ProgramSelectionDialog
                     };
                 }
             }
+            if (!option.Reinstall && !inventory.Installed.ContainsKey(entry.Id) && !view.IsInstalled(entry.Id)
+                && (option.Installer is not null || option.Portable is not null))
+            {
+                var shortcut = new System.Windows.Controls.CheckBox
+                {
+                    Name = "ProgramDesktopShortcut", Content = L("Desktop-Verknüpfung erstellen", "Create desktop shortcut"),
+                    IsChecked = false, Margin = new(0, 8, 0, 0), Padding = new(4, 0, 0, 0)
+                };
+                shortcut.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, "UnifiedText");
+                shortcut.Checked += (_, _) => chosen[index] = chosen[index] with { DesktopShortcut = true };
+                shortcut.Unchecked += (_, _) => chosen[index] = chosen[index] with { DesktopShortcut = false };
+                var shortcutBox = new Border { Child = shortcut, BorderThickness = new(1), CornerRadius = new(7),
+                    Padding = new(10, 2, 10, 9), Margin = new(0, 8, 0, 0) };
+                shortcutBox.SetResourceReference(Border.BorderBrushProperty, "InputBorderBrush");
+                stack.Children.Add(shortcutBox);
+            }
             var frame = new Border { Child = stack, Padding = new(12), CornerRadius = new(8), BorderThickness = new(1), Margin = new(0, 0, 0, 9) };
             frame.SetResourceReference(Border.BackgroundProperty, "InputBrush"); frame.SetResourceReference(Border.BorderBrushProperty, "InputBorderBrush"); rows.Children.Add(frame);
         }
@@ -168,7 +184,7 @@ internal static class ProgramSelectionDialog
         var scroll = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, MaxHeight = view.Compact ? 350 : 450 };
         Grid.SetRow(scroll, 1); layout.Children.Add(scroll); DialogLayout.ScrollHint(scroll, english);
         var footer = new Grid { Margin = new(0, 16, 0, 0) }; footer.ColumnDefinitions.Add(new()); footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); footer.Children.Add(count);
-        var cancel = Action(L("Abbrechen", "Cancel"), true); cancel.Width = 112; cancel.Margin = new(8, 0, 8, 0); Grid.SetColumn(cancel, 1); footer.Children.Add(cancel); Grid.SetColumn(start, 2); footer.Children.Add(start); Grid.SetRow(footer, 2); layout.Children.Add(footer);
+        var cancel = Action(L("Abbrechen", "Cancel"), true); cancel.Name = "ProgramSelectionCancel"; cancel.Width = 112; cancel.Margin = new(8, 0, 8, 0); Grid.SetColumn(cancel, 1); footer.Children.Add(cancel); Grid.SetColumn(start, 2); footer.Children.Add(start); Grid.SetRow(footer, 2); layout.Children.Add(footer);
         card.Child = layout; layer.Children.Add(card);
         void Finish(IReadOnlyList<ProgramSelection>? selection)
         { if (completion.Task.IsCompleted) return; host.Children.Remove(layer); owner.PreviewKeyDown -= Key; owner.SizeChanged -= Resize; view.Unloaded -= Unloaded; view.SelectionOpen = false; completion.TrySetResult(selection); }

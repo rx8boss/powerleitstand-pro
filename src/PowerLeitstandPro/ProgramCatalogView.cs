@@ -281,7 +281,7 @@ internal sealed partial class ProgramCatalogView : UserControl
         var entries = ProgramCatalog.Entries.Where(x => (query.Length > 0 || _category == "all" || x.Categories.Contains(_category))
             && (query.Length == 0 || (x.Name + " " + x.Description(_english) + " " + x.Publisher + " " + x.PackageId).Contains(query, StringComparison.OrdinalIgnoreCase)));
         if (online) entries = entries.Concat(_results);
-        var ordered = entries.DistinctBy(x => x.PackageId ?? x.Id, StringComparer.OrdinalIgnoreCase).ToArray();
+        var ordered = entries.Where(e => IsInstalled(e.Id) || CanOfferNewInstall(e) || e.Id == "teamspeak").DistinctBy(x => x.PackageId ?? x.Id, StringComparer.OrdinalIgnoreCase).ToArray();
         string key = _english + ":" + _compact + ":" + _category + ":" + MostRecentlyInstalledId + ":" + string.Join("|", ordered.Select(e => e.Id + ":" + IsInstalled(e.Id) + ":" + IsManual(e.Id) + ":" + Selected.Contains(e.Id) + ":" + Inventory.HasUpdate(e.Id) + ":" + UpdateTarget(e.Id)));
         if (ReferenceEquals(_renderedInventory, Inventory) && _renderedKey == key)
         { FitTiles((_scroll.Parent as FrameworkElement)?.ActualHeight ?? 0); RefreshAvailability(); return; }
@@ -491,12 +491,15 @@ internal sealed partial class ProgramCatalogView : UserControl
     internal void RequestStop()
     { if (!IsWorking) return; if (DeveloperPane is not null) { DeveloperPane.Stop(); return; } OperationPanel?.StopRequested(); _stopping = true; _prepare?.Cancel(); (Service as IProgramCancelableUpdate)?.StopPortableDownload(); _phase = L("Stop angefordert · laufenden Vorgang zuerst beenden", "Stop requested · finish the current operation first"); RefreshAvailability(); }
     internal Task InstallAsync() => InstallEntriesAsync(KnownEntries.Where(x => Selected.Contains(x.Id) && (!IsInstalled(x.Id) || Inventory.HasUpdate(x.Id))).ToArray());
-    private Task InstallNewAsync() => InstallEntriesAsync(KnownEntries.Where(x => Selected.Contains(x.Id) && !IsInstalled(x.Id)).ToArray());
-    internal async Task InstallEntriesAsync(ProgramEntry[] entries, bool allowReinstall = false, bool updatesOnly = false, ProgramPackage? expectedUpdate = null)
+    internal bool CanOfferNewInstall(ProgramEntry entry) => entry.Id != "teamspeak" && (entry.PackageId is not null
+        || entry.Id == "mpv" && Inventory.Managers?.Any(manager => manager.Present && manager.Manager is "Scoop" or "Chocolatey") == true);
+
+    private Task InstallNewAsync() => InstallEntriesAsync(KnownEntries.Where(x => Selected.Contains(x.Id) && !IsInstalled(x.Id)).ToArray(), newOnly: true);
+    internal async Task InstallEntriesAsync(ProgramEntry[] entries, bool allowReinstall = false, bool updatesOnly = false, ProgramPackage? expectedUpdate = null, bool newOnly = false)
     {
         if (IsWorking || HostBusy() || _searching || _refreshing || SelectionOpen) return;
         bool singleUpdateRequested = !allowReinstall && entries.Length == 1;
-        bool scopedUpdates = !allowReinstall && Service is ProgramInstallService && entries.Length > 0
+        bool scopedUpdates = !newOnly && !allowReinstall && Service is ProgramInstallService && entries.Length > 0
             && (updatesOnly || entries.All(e => Inventory.Installed.ContainsKey(e.Id)));
         SelectionOpen = true; RefreshAvailability();
         try
@@ -508,7 +511,7 @@ internal sealed partial class ProgramCatalogView : UserControl
         finally { SelectionOpen = false; RefreshAvailability(); }
         entries = entries.Where(x => KnownEntries.Any(k => ReferenceEquals(k, x)) && (scopedUpdates ? Inventory.Installed.ContainsKey(x.Id) : allowReinstall
             ? IsInstalled(x.Id) && Service is ProgramInstallService api && api.CanReinstall(x, Inventory)
-            : !IsInstalled(x.Id) || Inventory.HasUpdate(x.Id))).DistinctBy(x => x.Id).ToArray();
+            : !IsInstalled(x.Id) || !newOnly && Inventory.HasUpdate(x.Id))).DistinctBy(x => x.Id).ToArray();
         if (entries.Length == 0) return;
         IsWorking = true; _stopping = false; CloseInfo(); WorkStateChanged?.Invoke(true); _prepare = new();
         ProgramOperationLog? activeLog = null;
@@ -544,6 +547,7 @@ internal sealed partial class ProgramCatalogView : UserControl
             var requestedUpdates = entries.Where(e => workInventory.HasUpdate(e.Id)).Select(e => e.Id).ToHashSet();
             var packages = new Dictionary<string, ProgramPackage?>();
             var reinstallOptions = new Dictionary<string, IReadOnlyList<ProgramPackage>>();
+            var unavailablePackages = new Dictionary<string, string>();
             foreach (var entry in entries)
             {
                 string? packageFailure = null;
@@ -587,6 +591,7 @@ internal sealed partial class ProgramCatalogView : UserControl
                         ? await managerService.ResolveCheckedUpdateAsync(entry, workInventory, _prepare.Token) : await Service.ResolveAsync(entry, _prepare.Token);
                     if (packages[entry.Id]?.ManagedPackage is { NeedsPreparation: true }) throw new System.IO.IOException(L("Paketquellen sind noch nicht bestätigt. Bitte erneut prüfen.", "Package sources are still unverified. Check again."));
                 }
+                if (packageFailure is not null) unavailablePackages[entry.Id] = packageFailure;
                 OperationPanel?.State(entry.Id, packageFailure ?? L("Bereit", "Ready"), false);
             }
             _prepare.Token.ThrowIfCancellationRequested();
@@ -611,7 +616,7 @@ internal sealed partial class ProgramCatalogView : UserControl
                 }));
                 foreach (var target in targets) packages[target.Id] = packages[target.Id]! with { TargetProof = target.Proof };
             }
-            var question = L("Diese Auswahl ausführen?\n\n", "Continue with this selection?\n\n") + string.Join("\n", entries.Select(x => x.Name + (allowReinstall && IsInstalled(x.Id) ? L(" · Neuinstallation", " · Reinstall") : requestedUpdates.Contains(x.Id) ? L(" · Update", " · Update") : L(" · Installation", " · Install")) + (packages[x.Id] is { } p ? " · " + ProgramInstallService.PackageSource(p, _english) + " " + (p.Version ?? "") : L(" · offizielle Webseite öffnen", " · open official website"))))
+            var question = L("Diese Auswahl ausführen?\n\n", "Continue with this selection?\n\n") + string.Join("\n", entries.Select(x => x.Name + (allowReinstall && IsInstalled(x.Id) ? L(" · Neuinstallation", " · Reinstall") : requestedUpdates.Contains(x.Id) ? L(" · Update", " · Update") : L(" · Installation", " · Install")) + (packages[x.Id] is { } p ? " · " + ProgramInstallService.PackageSource(p, _english) + " " + (p.Version ?? "") : L(" · kein Installer bestätigt", " · no installer verified"))))
                 + L("\n\nLizenzen und Administratorabfragen bleiben sichtbar. Bestätigte portable Updates ersetzen nur die Programmdatei und sichern die vorherige Datei unter AppData. Ein gestarteter Installer wird nicht gewaltsam beendet.", "\n\nLicense and administrator prompts remain visible. Verified portable updates replace only the executable and back up the previous file under AppData. A started installer will not be forcibly terminated.");
             IReadOnlyList<ProgramSelection>? choices;
             if (singleUpdateRequested && entries.Length == 1 && requestedUpdates.Contains(entries[0].Id)
@@ -632,12 +637,25 @@ internal sealed partial class ProgramCatalogView : UserControl
                     }
                     var managerOptions = !allowReinstall && workInventory.ManagedPackages?.GetValueOrDefault(entry.Id) is { } offeredManagers
                         ? offeredManagers.Where(p => p.IsUpdate).Select(p => p.Package()).ToArray() : null;
+                    if (packages[entry.Id] is null && portable is null)
+                    {
+                        ReportMissingInstaller(entry);
+                        continue;
+                    }
                     options.Add(new(entry, packages[entry.Id], portable, Reinstall: allowReinstall && IsInstalled(entry.Id), ReinstallOptions: reinstallOptions.GetValueOrDefault(entry.Id) ?? managerOptions));
                 }
+                if (options.Count == 0) return;
                 choices = await ProgramSelectionDialog.ShowAsync(this, options, PortableFolderSelector, workInventory);
             }
             if (choices is null) { selectionDismissed = true; _stopping = true; return; }
             if (_stopping) return;
+            void ReportMissingInstaller(ProgramEntry entry)
+            {
+                var reason = unavailablePackages.GetValueOrDefault(entry.Id)
+                    ?? L("Kein passender Installer bestätigt. Prüfe die Paketquelle und versuche es erneut.", "No matching installer was verified. Check the package source and try again.");
+                OperationPanel?.State(entry.Id, reason);
+                WriteLog?.Invoke(entry.Name + ": " + reason);
+            }
             if (Service is ProgramInstallService && choices.Any(c => c.Installer?.ManagedPackage?.Target.Scope == "Machine") && !ElevationService.IsElevated())
             {
                 string notice = L("Diese Paketauswahl benötigt Administratorrechte. Die App jetzt mit der Windows-Bestätigung neu starten? Anschließend bitte die gewünschte Auswahl erneut prüfen und bestätigen. Es wurde noch keine Programminstallation gestartet.", "This package selection needs administrator privileges. Restart the app with the Windows confirmation now? Afterwards, check and confirm the selection again. No application installation has started yet.");
@@ -671,6 +689,7 @@ internal sealed partial class ProgramCatalogView : UserControl
                         OperationPanel?.Step(entry.Id, new(ProgramStep.Finish, ProgramStepState.Active));
                         new ProgramPortableStore(Assets.PortableFile).Remember(entry.Id, executable);
                         RecordInstalled(entry.Id);
+                        if (choice.DesktopShortcut) CreateDesktopShortcut(entry, executable);
                         string configured = entry.Id == "vlc" ? L("ZIP eingerichtet", "ZIP configured") : L("Portable eingerichtet", "Portable configured");
                         WriteLog?.Invoke(entry.Name + ": " + configured + ": " + executable);
                         Selected.Remove(entry.Id); Inventory = await Service.InspectAsync(CancellationToken.None); OperationPanel?.Location(entry.Id, executable); OperationPanel?.State(entry.Id, configured); RenderTiles();
@@ -707,7 +726,7 @@ internal sealed partial class ProgramCatalogView : UserControl
                 if (update && !updateChoiceConfirmed)
                 { OperationPanel?.State(entry.Id, L("Updateversion geändert · erneut prüfen", "Update version changed · check again")); WriteLog?.Invoke(entry.Name + L(": Updateversion nicht mehr bestätigt; bitte erneut prüfen.", ": update version no longer confirmed; please check again.")); continue; }
                 if (choice.Installer is not { } package)
-                { OperationPanel?.State(entry.Id, L("Herstellerseite · selbst installieren", "Publisher website · install manually")); Service.OpenWebsite(entry); Selected.Remove(entry.Id); WriteLog?.Invoke(entry.Name + L(": Herstellerseite geöffnet; Installation nicht bestätigt.", ": manufacturer website opened; installation not confirmed.")); continue; }
+                { ReportMissingInstaller(entry); continue; }
                 if (update && Service is ProgramInstallService closing)
                 {
                     try
@@ -731,7 +750,7 @@ internal sealed partial class ProgramCatalogView : UserControl
                     catch (OperationCanceledException) when (_stopping) { OperationPanel?.State(entry.Id, L("Gestoppt", "Stopped")); break; }
                     catch (Exception error)
                     {
-                        string message = UiText.Error(error, _english); OperationPanel?.State(entry.Id, L("Programm schließen · siehe Protokoll", "Close application · see log"));
+                        string message = UiText.Error(error, _english); OperationPanel?.State(entry.Id, L("Schließen fehlgeschlagen · siehe Protokoll", "Could not close · see log"));
                         new ProgramOperationLog(entry.Name, L("Update vorbereiten", "Prepare update"), _english, WriteLog, WriteErrorLog).Error(message, "0x" + error.HResult.ToString("X8")); continue;
                     }
                 }
@@ -780,6 +799,9 @@ internal sealed partial class ProgramCatalogView : UserControl
                     ? workInventory.Evidence?.GetValueOrDefault(entry.Id) is { } proof && proof.Path == portableUpdate.Path
                         && ProgramPortableUpdates.SameVersion(ProgramPortableUpdates.FileVersion(entry.Id, portableUpdate.Path) ?? "", portableUpdate.Version)
                         && !workInventory.HasUpdate(entry.Id)
+                    : package.VersionSource is "msstore" or "terminal-msix"
+                    ? workInventory.StoreCheckComplete && workInventory.Evidence?.GetValueOrDefault(entry.Id) is { Source: "Windows-App", Version: { } storeVersion }
+                        && ProgramInstallService.CurrentEnough(storeVersion, package.Version!)
                     : package.ReinstallProof?.Installed.VlcCopy is not null && Service is ProgramInstallService vlcResult
                     ? vlcResult.ReinstallResultVerified(entry, package, workInventory)
                     : workInventory.Installed.TryGetValue(entry.Id, out var detected) && (reinstall
@@ -801,6 +823,12 @@ internal sealed partial class ProgramCatalogView : UserControl
                 {
                     if (package.ManagedPackage is not null) OperationPanel?.Step(entry.Id, new(ProgramStep.Install, ProgramStepState.Done));
                     if (!update) RecordInstalled(entry.Id);
+                    if (!update && !reinstall && choice.DesktopShortcut)
+                    {
+                        var proof = workInventory.Evidence?.GetValueOrDefault(entry.Id);
+                        CreateDesktopShortcut(entry, proof?.LocationEvidence?.Alternatives is { Count: > 0 } || proof?.ManagedCopies is { Count: > 1 }
+                            ? null : proof?.LocationEvidence?.Executable ?? proof?.Path);
+                    }
                     Selected.Remove(entry.Id); WriteLog?.Invoke(entry.Name + (reinstall ? L(": Neuinstallation bestätigt.", ": reinstallation verified.") : L(": Installation/Update bestätigt.", ": installation/update verified.")));
                 }
                 else if (code is 3010 or unchecked((int)0x8A150109) or unchecked((int)0x8A15010A) or unchecked((int)0x8A15010B)) WriteLog?.Invoke(entry.Name + L(": Neustart erforderlich; anschließend erneut prüfen.", ": restart required; check again afterwards."));
@@ -810,7 +838,7 @@ internal sealed partial class ProgramCatalogView : UserControl
                     : L("Zielversion nicht bestätigt; bitte erneut prüfen. Eintrag bleibt sichtbar.", "Target version not verified; please check again. Entry remains visible.")));
                 OperationPanel?.State(entry.Id, code == 0 && resultVerified
                     ? L("Bestätigt", "Verified") : code is 3010 or unchecked((int)0x8A150109) or unchecked((int)0x8A15010A) or unchecked((int)0x8A15010B)
-                    ? L("Neustart erforderlich", "Restart required") : L("Nicht bestätigt · siehe Protokoll", "Not verified · see log"));
+                    ? L("Neustart erforderlich", "Restart required") : (package.VersionSource is "msstore" or "terminal-msix") && code != 0 ? $"WinGet · 0x{code:X8}" : L("Nicht bestätigt · siehe Protokoll", "Not verified · see log"));
                 RenderTiles();
             }
         }

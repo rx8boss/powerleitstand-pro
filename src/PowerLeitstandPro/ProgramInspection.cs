@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 
@@ -13,6 +14,35 @@ internal sealed partial class ProgramInstallService
     private readonly bool _readStoreInventory;
     private readonly Func<CancellationToken, Task<ProgramStoreSnapshot>> _storeReader;
     private Dictionary<string, ProgramInstallation> _lastGoodStore = new();
+    internal const string TerminalStoreId = "9N0DX20HK701";
+    private ProcessStartInfo TerminalStoreCommand(bool upgrade)
+    {
+        var start = new ProcessStartInfo(_executable) { UseShellExecute = false, CreateNoWindow = true };
+        foreach (string arg in new[] { upgrade ? "upgrade" : "list", "--id", TerminalStoreId, "--exact", "--source", "msstore", "--disable-interactivity",
+            upgrade ? "--silent" : "--upgrade-available" })
+            start.ArgumentList.Add(arg);
+        return start;
+    }
+
+    internal static string? ReadTerminalStoreOffer(string output, string installedVersion)
+    {
+        var rows = System.Text.RegularExpressions.Regex.Matches(output,
+            @"(?im)^[^\r\n]*?[ \t]+" + TerminalStoreId + @"[ \t]+(?<old>\d+(?:\.\d+){1,3})[ \t]+(?<next>\d+(?:\.\d+){1,3})(?:[ \t]+msstore)?[ \t]*\r?$");
+        if (rows.Count != 1) return null;
+        string old = rows[0].Groups["old"].Value, next = rows[0].Groups["next"].Value;
+        return ProgramPortableUpdates.SameVersion(old, installedVersion) && ProgramVersions.IsNewer(installedVersion, next) ? next : null;
+    }
+
+    internal static bool TerminalMsixMatches(string manifest, string version)
+    {
+        string id = "Microsoft.WindowsTerminal";
+        string family = ProgramVersions.StoreFamilies["windows-terminal"];
+        string url = $"https://github.com/microsoft/terminal/releases/download/v{version}/{id}_{version}_8wekyb3d8bbwe.msixbundle";
+        return ProgramPortableUpdates.ManifestField(manifest, "PackageFamilyName") == family
+            && ProgramPortableUpdates.ManifestField(manifest, "InstallerType") == "msix"
+            && ProgramPortableUpdates.ManifestArtifact(manifest, id, version, url) is not null;
+    }
+
     internal void ClearTukuiPackage() => _portableUpdates.ClearTukuiPackage();
     internal async Task<ProgramPackage?> ResolveCheckedUpdateAsync(ProgramEntry entry, ProgramInventory inventory, CancellationToken token)
     {
@@ -23,6 +53,11 @@ internal sealed partial class ProgramInstallService
             return new(entry.PackageId ?? entry.Id, version, portable.Url, DateTime.UtcNow, VersionSource: "Publisher", PortableUpdate: portable);
         if (inventory.GitHubPackages?.GetValueOrDefault(entry.Id) is { } github && github.Version == version)
             return new(entry.Id, version, github.Url, DateTime.UtcNow, VersionSource: "GitHub", GitHubUpdate: github);
+        if (entry.Id == "windows-terminal" && inventory.StoreCheckComplete
+            && inventory.Evidence?.GetValueOrDefault(entry.Id) is { Source: "Windows-App" })
+            return inventory.TerminalMsixUpdate == version
+                ? new(entry.PackageId!, version, "", inventory.CheckedUtc ?? DateTime.UtcNow, VersionSource: "terminal-msix")
+                : new(TerminalStoreId, version, "", inventory.CheckedUtc ?? DateTime.UtcNow, VersionSource: "msstore");
         if (entry.PackageId is null || inventory.Evidence?.GetValueOrDefault(entry.Id) is not { WinGetCompatible: true }) return null;
         var package = await ResolveAsync(entry, token);
         if (package is { VersionSource: "WinGet" } && package.Version == version) return package.CanInstall ? package : null;
@@ -39,6 +74,12 @@ internal sealed partial class ProgramInstallService
         if (package.ManagedPackage is { } managed)
             return inventory.ManagedPackages?.GetValueOrDefault(entry.Id)?.Any(p => p == managed && p.IsUpdate) == true;
         if (version != inventory.Updates?.GetValueOrDefault(entry.Id)) return false;
+        if (package.VersionSource is "msstore" or "terminal-msix")
+            return entry.Id == "windows-terminal" && inventory.StoreCheckComplete
+                && (package.VersionSource == "msstore" ? package.Id == TerminalStoreId && inventory.TerminalMsixUpdate is null
+                    : package.Id == entry.PackageId && inventory.TerminalMsixUpdate == version)
+                && inventory.Evidence?.GetValueOrDefault(entry.Id) is { Source: "Windows-App", Version: { } installed }
+                && ProgramVersions.IsNewer(installed, version);
         return package.GitHubUpdate == inventory.GitHubPackages?.GetValueOrDefault(entry.Id)
             && package.PortableUpdate == inventory.PortableUpdates?.GetValueOrDefault(entry.Id)
             && inventory.ManagedPackages?.GetValueOrDefault(entry.Id)?.Any(p => p.IsUpdate) != true

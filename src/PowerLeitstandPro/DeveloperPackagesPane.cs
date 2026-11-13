@@ -36,6 +36,7 @@ internal sealed class DeveloperPackagesPane : UserControl
     private CancellationTokenSource? _cancel;
     private bool _busy, _installing, _stopRequested;
     private bool _setupReady;
+    private bool _powerShellRepair;
     private bool _inventoryReady;
     private bool _onlineResult;
     private string _manager = "PowerShell";
@@ -150,6 +151,7 @@ internal sealed class DeveloperPackagesPane : UserControl
     {
         _status.Text = L("Paketbestand wird gelesen …", "Reading package inventory …");
         _setupReady = false;
+        _powerShellRepair = false;
         if (_manager != "PowerShell")
             _setupReady = await Task.Run(() => _service.LocalSetupReady(_manager), token);
         _status.SetResourceReference(TextBlock.ForegroundProperty, "SubtleTextBrush"); _inventoryReady = false; _onlineResult = false;
@@ -219,7 +221,7 @@ internal sealed class DeveloperPackagesPane : UserControl
         _details.Children.Clear();
         var title = Text(package?.Id ?? _manager, 19); title.FontWeight = FontWeights.SemiBold; _details.Children.Add(title);
         void Add(string text, string brush = "TextBrush") { var t = Text(text, 11, brush); t.Margin = new(0, 9, 0, 0); _details.Children.Add(t); }
-        var setup = Action(_setupReady ? L("Erneut prüfen", "Check again") : (_manager == "PowerShell" ? "PSResourceGet" : _manager) + L(" einrichten", " setup"),
+        var setup = Action(_setupReady ? L("Erneut prüfen", "Check again") : (_manager == "PowerShell" ? "PSResourceGet" : _manager) + (_manager == "PowerShell" && _powerShellRepair ? L(" reparieren", " repair") : L(" einrichten", " setup")),
             _setupReady ? "check" : "install", "DeveloperManagerSetup");
         setup.Margin = new(0, 6, 0, 0);
         setup.Click += async (_, _) => { if (_setupReady) await LoadAsync(); else await SetupManagerAsync(); };
@@ -280,7 +282,11 @@ internal sealed class DeveloperPackagesPane : UserControl
     }
     private void Error(Exception e)
     {
-        _status.Text = e is MissingPSResourceGetException
+        _powerShellRepair = _manager == "PowerShell" && e is BrokenPSResourceGetException broken
+            && DeveloperPackages.ModuleRepairMatches(_service.SetupDetails("PowerShell").Target, broken.Manifest);
+        _status.Text = _powerShellRepair
+            ? L("PSResourceGet kann nicht geladen werden. Klicke auf „PSResourceGet reparieren“. Details im Protokoll.", "PSResourceGet could not load. Select “PSResourceGet repair”. See the log for details.")
+            : e is MissingPSResourceGetException
             ? L("PSResourceGet fehlt. Klicke auf „PSResourceGet einrichten“.", "PSResourceGet is missing. Select “PSResourceGet setup”.")
             : OnlineConnection.Message(e, _view.English);
         _status.SetResourceReference(TextBlock.ForegroundProperty, "DangerBorderBrush");
@@ -312,7 +318,8 @@ internal sealed class DeveloperPackagesPane : UserControl
             }
             catch (Exception e) { Error(e); return; }
         }
-        string question = name + L(" jetzt einrichten?\n\nQuelle: ", " — set up now?\n\nSource: ") + source
+        bool repair = !remove && manager == "PowerShell" && _powerShellRepair;
+        string question = name + (repair ? L(" jetzt reparieren?\n\nQuelle: ", " — repair now?\n\nSource: ") : L(" jetzt einrichten?\n\nQuelle: ", " — set up now?\n\nSource: ")) + source
             + L("\nZiel: ", "\nDestination: ") + target
             + (manager == "Chocolatey" ? L("\nWindows kann Administratorrechte anfordern.", "\nWindows may request administrator privileges.")
                 : L("\nEinrichtung für das aktuelle Windows-Konto.", "\nSetup for the current Windows account."));
@@ -499,9 +506,10 @@ internal sealed class DeveloperPackagesPane : UserControl
                     message.Text = L("Einrichtung wird vorbereitet …", "Preparing setup …");
                     await _service.SetupAsync(manager, cancel.Token, phase =>
                 {
-                    if (phase != "cleanup") UpdateSteps(phase switch { "download" => 1, "install" => 2, _ => 3 }, true);
+                    if (phase != "cleanup") UpdateSteps(phase switch { "check" => 0, "download" => 1, "install" => 2, _ => 3 }, true);
                     message.Text = phase switch
                     {
+                        "check" => L("Modul wird geprüft …", "Checking module …"),
                         "download" => L("Download läuft …", "Downloading …"),
                         "install" => L("Einrichtung läuft …", "Installing …"),
                         "cleanup" => L("Alter Chocolatey-MSI-Eintrag wird entfernt …", "Removing old Chocolatey MSI entry …"),
@@ -517,7 +525,7 @@ internal sealed class DeveloperPackagesPane : UserControl
                 _view.WriteLog?.Invoke(message.Text);
             }
             catch (OperationCanceledException) { message.Text = L("Einrichtung abgebrochen", "Setup cancelled"); }
-            catch (Exception e) { Error(e); message.Text = _status.Text; }
+            catch (Exception e) { Error(e); message.Text = OnlineConnection.Message(e, _view.English); }
             finally
             {
                 running = false; finished = true; progress.IsRunning = false;

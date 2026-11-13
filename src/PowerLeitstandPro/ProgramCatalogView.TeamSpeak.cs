@@ -22,6 +22,9 @@ internal sealed partial class ProgramCatalogView
             || (ConfirmForTests?.Invoke(question) ?? ThemedMessageBox.Show(Window.GetWindow(this), question, "TeamSpeak", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes); }
         finally { SelectionOpen = false; }
         if (!confirmed || !CanChooseProgramFile) return;
+        bool shortcut = request.Kind == TeamSpeakInstallKind.Install && ConfirmForTests is null
+            && ThemedMessageBox.Show(Window.GetWindow(this), L("Desktop-Verknüpfung für TeamSpeak erstellen?", "Create a TeamSpeak desktop shortcut?"),
+                "TeamSpeak", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
         var original = ProgramCatalog.Entries.Single(x => x.Id == "teamspeak");
         var entry = original with { Name = "TeamSpeak " + request.Edition };
         SelectionOpen = true;
@@ -59,6 +62,7 @@ internal sealed partial class ProgramCatalogView
                 Inventory = Inventory with { Installed = installed, Evidence = evidence, Updates = Inventory.Updates?.Where(x => x.Key != entry.Id).ToDictionary(x => x.Key, x => x.Value),
                     GitHubUpdates = Inventory.GitHubUpdates?.Where(x => x.Key != entry.Id).ToDictionary(x => x.Key, x => x.Value), UpdateCheckComplete = false, FromCache = false };
                 if (request.Kind is TeamSpeakInstallKind.Install or TeamSpeakInstallKind.Switch) RecordInstalled(entry.Id);
+                if (shortcut) CreateDesktopShortcut(entry, result.Path);
                 Selected.Remove(entry.Id); OperationPanel.State(entry.Id, L("Bestätigt", "Verified"));
             }
             else OperationPanel.State(entry.Id, result.ExitCode == 3010 ? L("Neustart erforderlich", "Restart required") : L("Nicht bestätigt · siehe Protokoll", "Not verified · see log"));

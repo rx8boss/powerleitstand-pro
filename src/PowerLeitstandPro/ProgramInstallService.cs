@@ -15,13 +15,15 @@ internal sealed record ProgramInventory(bool Complete, IReadOnlyDictionary<strin
     bool StoreCheckComplete = true, string? StoreError = null, string? StoreProvider = null,
     IReadOnlyDictionary<string, IReadOnlyList<ProgramManagedPackage>>? ManagedPackages = null,
     bool IsStale = false, IReadOnlyDictionary<string, string>? PendingUpdates = null, IReadOnlyList<string>? UnverifiedUpdateIds = null,
-    bool SavedPartial = false, IReadOnlyList<string>? UnverifiedInstalledIds = null)
+    bool SavedPartial = false, IReadOnlyList<string>? UnverifiedInstalledIds = null, string? TerminalMsixUpdate = null)
 {
     internal bool UpdateSourcesComplete => UnverifiedUpdateIds is not { Count: > 0 };
     internal bool HasUpdate(string id) => !IsStale && UnverifiedInstalledIds?.Contains(id) != true && Installed.ContainsKey(id) && Updates?.ContainsKey(id) == true
         && !ProgramPublisherLauncher.RequiresPublisherUpdate(id, Evidence?.GetValueOrDefault(id))
         && (ManagedPackages?.GetValueOrDefault(id)?.Any(p => p.IsUpdate) == true
-            || GitHubPackages?.ContainsKey(id) == true || PortableUpdates?.ContainsKey(id) == true || Evidence?.GetValueOrDefault(id) is not { WinGetCompatible: false });
+            || GitHubPackages?.ContainsKey(id) == true || PortableUpdates?.ContainsKey(id) == true
+            || id == "windows-terminal" && StoreCheckComplete && Evidence?.GetValueOrDefault(id)?.Source == "Windows-App"
+            || Evidence?.GetValueOrDefault(id) is not { WinGetCompatible: false });
     internal bool HasUpdateNotice(string id) => Installed.ContainsKey(id) && !HasUpdate(id)
         && (GitHubUpdates?.ContainsKey(id) == true || PendingUpdates?.ContainsKey(id) == true);
 }
@@ -122,7 +124,8 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
         int idIndex = start.ArgumentList.IndexOf("--id");
         int versionIndex = start.ArgumentList.IndexOf("--version");
         int locationIndex = start.ArgumentList.IndexOf("--location");
-        if (idIndex >= 0 && versionIndex >= 0)
+        if (idIndex >= 0 && versionIndex >= 0 && !(start.ArgumentList[idIndex + 1] == "Microsoft.WindowsTerminal"
+            && start.ArgumentList[0] == "install" && !start.ArgumentList.Contains("--no-upgrade")))
         {
             return await ProgramWinGetApi.PreferAsync(async () =>
             {
@@ -418,8 +421,23 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
             throw new InvalidOperationException("No confirmed version for discovered package");
         return _install(Command(entry, true, package.Version), started);
     }
+    private string? _terminalMsixUpdate;
+
     internal ProcessStartInfo UpgradeCommand(ProgramEntry entry, ProgramPackage package)
     {
+        if (package.VersionSource is "msstore" or "terminal-msix")
+        {
+            if (!Approved(entry) || entry.Id != "windows-terminal" || !package.CanInstall
+                || (package.VersionSource == "msstore" ? package.Id != TerminalStoreId || _terminalMsixUpdate is not null
+                    : package.Id != entry.PackageId || package.Version != _terminalMsixUpdate)
+                || _lastEvidence.GetValueOrDefault(entry.Id) is not { Source: "Windows-App", Version: { } installed }
+                || !ProgramVersions.IsNewer(installed, package.Version))
+                throw new InvalidOperationException("Windows-Terminal-Store-Update nicht bestätigt. / Windows Terminal Store update not verified.");
+            if (package.VersionSource == "msstore") return TerminalStoreCommand(upgrade: true);
+            var msix = Command(entry, true, package.Version);
+            msix.ArgumentList.Remove("--no-upgrade");
+            return msix;
+        }
         if (ProgramPublisherLauncher.RequiresPublisherUpdate(entry.Id, _lastEvidence.GetValueOrDefault(entry.Id)))
             throw new InvalidOperationException("EA App zum Aktualisieren öffnen. / Open EA app to update.");
         if (package.PortableUpdate is not null || _lastEvidence.GetValueOrDefault(entry.Id) is { WinGetCompatible: false }) throw new InvalidOperationException("Update source mismatch");
@@ -539,7 +557,8 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
                 InstalledSources: evidence.ToDictionary(x => x.Key, x => x.Value.Source), Evidence: new Dictionary<string, ProgramInstallation>(evidence),
                 Managers: managed.Managers, PortableUpdates: new Dictionary<string, PortableUpdate>(directUpdates), CheckedUtc: DateTime.UtcNow,
                 GitHubUpdates: new Dictionary<string, string>(githubUpdates), GitHubPackages: new Dictionary<string, GitHubProgramUpdate>(githubPackages),
-                StoreCheckComplete: storeComplete, StoreError: storeError, StoreProvider: storeProvider, ManagedPackages: managerOffers);
+                StoreCheckComplete: storeComplete, StoreError: storeError, StoreProvider: storeProvider, ManagedPackages: managerOffers, TerminalMsixUpdate: _terminalMsixUpdate);
+        if (entries.Any(e => e.Id == "windows-terminal")) _terminalMsixUpdate = null;
         bool storeMerged = !_readStoreInventory;
         async Task MergeStoreAsync()
         {
@@ -623,6 +642,22 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
         catch (Exception e) when (e is IOException or System.ComponentModel.Win32Exception or OperationCanceledException or InvalidOperationException)
         { token.ThrowIfCancellationRequested(); localError = "Update check: " + e.Message; }
         await MergeStoreAsync();
+        if (storeComplete && entries.Any(e => e.Id == "windows-terminal")
+            && evidence.GetValueOrDefault("windows-terminal") is { Source: "Windows-App", Version: { } terminalVersion })
+        {
+            try
+            {
+                using var storeLimit = CancellationTokenSource.CreateLinkedTokenSource(token);
+                storeLimit.CancelAfter(TimeSpan.FromSeconds(20));
+                var storeOffer = await _query(TerminalStoreCommand(upgrade: false), storeLimit.Token);
+                if (storeOffer.ExitCode == 0 && ReadTerminalStoreOffer(storeOffer.Output, terminalVersion) is { } target)
+                    updates["windows-terminal"] = target;
+                else if (storeOffer.ExitCode is not (0 or unchecked((int)0x8A150014) or unchecked((int)0x8A15002B)))
+                    localError ??= "WinGet (msstore): 0x" + storeOffer.ExitCode.ToString("X8");
+            }
+            catch (Exception e) when (e is IOException or System.ComponentModel.Win32Exception or OperationCanceledException or InvalidOperationException)
+            { token.ThrowIfCancellationRequested(); localError ??= "WinGet (msstore): " + e.Message; }
+        }
         var githubTask = TimedInspectionAsync("GitHub-late", () => CompleteGithubNoticesAsync(entries, earlyInstalled, new Dictionary<string, string?>(installed), earlyGithub, token, Uncertain));
         InventoryChanged?.Invoke(Snapshot(false, localError, updates: updates, updatesComplete: updatesComplete) with { IsPartial = true });
         if (selection is null)
@@ -686,6 +721,28 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
                 if (item.Direct is { } direct) { githubPackages[item.Id] = direct; updates[item.Id] = direct.Version; githubUpdates.Remove(item.Id); }
                 else if (item.WinGet is { } version) { updates[item.Id] = version; githubUpdates.Remove(item.Id); }
             }
+        }
+        if (_realInventory && storeComplete && !updates.ContainsKey("windows-terminal")
+            && evidence.GetValueOrDefault("windows-terminal") is { Source: "Windows-App", Version: { } installedTerminal }
+            && githubUpdates.GetValueOrDefault("windows-terminal") is { } targetTerminal
+            && Version.TryParse(targetTerminal, out var msixVersion) && msixVersion.Revision >= 0
+            && ProgramVersions.IsNewer(installedTerminal, targetTerminal))
+        {
+            try
+            {
+                using var limit = CancellationTokenSource.CreateLinkedTokenSource(token);
+                limit.CancelAfter(TimeSpan.FromSeconds(12));
+                var url = new Uri($"https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/m/Microsoft/WindowsTerminal/{targetTerminal}/Microsoft.WindowsTerminal.installer.yaml");
+                var manifest = System.Text.Encoding.UTF8.GetString(await CatalogWeb.ReadAsync(url,
+                    new HashSet<string> { "raw.githubusercontent.com" }, 128 * 1024, limit.Token));
+                if (TerminalMsixMatches(manifest, targetTerminal))
+                {
+                    _terminalMsixUpdate = updates["windows-terminal"] = targetTerminal;
+                    githubUpdates.Remove("windows-terminal");
+                }
+            }
+            catch (Exception e) when (e is IOException or HttpRequestException or OperationCanceledException)
+            { token.ThrowIfCancellationRequested(); localError ??= "Windows Terminal MSIX: " + e.Message; }
         }
         managerOffers = await managerOffersTask;
         foreach (var pair in managerOffers)

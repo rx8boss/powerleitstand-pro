@@ -67,7 +67,8 @@ internal sealed partial class ProgramInfoCard
             : L("\nStore-Prüfung läuft noch.", "\nStore check is still running.");
         _availabilityNote.Text = AvailabilityNote();
         _availabilityNote.Visibility = _availabilityNote.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        if (_metadataLoaded && StoreKnown && _confirmedOnline is null) _available.Text = L("Im Microsoft Store prüfen", "Check in Microsoft Store");
+        if (_metadataLoaded && StoreKnown && _confirmedOnline is null) _available.Text = TerminalStore
+            ? L("Kein Update bestätigt", "No update verified") : L("Im Microsoft Store prüfen", "Check in Microsoft Store");
         if (_manualRow is not null) _manualRow.Visibility = _view.ShowManualMark(_entry.Id) ? Visibility.Visible : Visibility.Collapsed;
         if (_manualSwitch is not null) _manualSwitch.IsEnabled = _view.CanMark(_entry.Id);
     }
@@ -98,7 +99,9 @@ internal sealed partial class ProgramInfoCard
                 checkedUpdates = await service.ProbeTukuiAsync(checkedUpdates, progress.Report, limit.Token);
             }
             var offer = await service.ResolveCheckedUpdateAsync(_entry, checkedUpdates, limit.Token);
-            var package = ForDisplayedVariant(offer ?? await service.ResolveAsync(_entry, limit.Token), checkedUpdates.Evidence?.GetValueOrDefault(_entry.Id));
+            var installation = checkedUpdates.Evidence?.GetValueOrDefault(_entry.Id);
+            bool terminalStore = _entry.Id == "windows-terminal" && installation?.Source == "Windows-App";
+            var package = ForDisplayedVariant(offer ?? (terminalStore ? null : await service.ResolveAsync(_entry, limit.Token)), installation);
             if (offer is null && package is not null) package = package with { CanInstall = false };
             var result = (Installation: checkedUpdates.Evidence?.GetValueOrDefault(_entry.Id), Package: package, CheckedUtc: checkedUpdates.CheckedUtc ?? DateTime.UtcNow);
             if (_closed) return;
@@ -107,7 +110,7 @@ internal sealed partial class ProgramInfoCard
             _singleEntryEvidence = result.Installation; _singleEntryCheckedUtc = result.CheckedUtc; _singleEntryUpdates = checkedUpdates;
             _resolvedPackage = result.Package;
             _confirmedOnline = ProgramVersions.ConfirmedVersion(offer?.Version ?? checkedUpdates.Updates?.GetValueOrDefault(_entry.Id)
-                ?? checkedUpdates.GitHubUpdates?.GetValueOrDefault(_entry.Id) ?? result.Package?.OnlineVersion ?? result.Package?.Version);
+                ?? (terminalStore ? null : checkedUpdates.GitHubUpdates?.GetValueOrDefault(_entry.Id) ?? result.Package?.OnlineVersion ?? result.Package?.Version));
             _available.Text = _confirmedOnline ?? L("Nicht ermittelbar", "Unavailable");
             _error.Visibility = Visibility.Collapsed;
             _view.VersionChecked(_entry.Id, _confirmedOnline);
@@ -145,6 +148,7 @@ internal sealed partial class ProgramInfoCard
         if (_singleEntryCheckedUtc is { } checkedUtc)
             return L("Einzelprüfung abgeschlossen", "Single check complete")
                 + (SingleUpdateAvailable ? L(" · Update für dieses Programm bestätigt", " · update verified for this application")
+                    : TerminalStore ? L(" · WinGet hat kein passendes Update bestätigt", " · WinGet did not verify a matching update")
                     : _singleEntryEvidence?.Source == "Windows-App" ? L(" · Updates im Microsoft Store prüfen", " · Check for updates in Microsoft Store")
                     : ProgramVersions.IsNewer(_singleEntryEvidence?.Version, _confirmedOnline)
                         ? L(" · Kein passender Updateweg bestätigt. Herstellerseite verwenden.", " · No matching update route verified. Use the publisher website.") : "")
@@ -155,6 +159,7 @@ internal sealed partial class ProgramInfoCard
         if (StorePending) note = _view.Inventory.StoreError is null ? L("Store-Prüfung läuft …", "Checking Store apps …")
             : StoreKnown ? L("Store-Prüfung fehlgeschlagen · letzter bestätigter Stand", "Store check failed · last confirmed state")
                 : L("Store-Prüfung fehlgeschlagen · bitte erneut prüfen", "Store check failed · please check again");
+        else if (TerminalStore) note = L("Paketversion aus Windows · Prüfung über WinGet", "Package version from Windows · checked through WinGet");
         else if (StoreKnown) note = L("Paketversion aus Windows · Updates über Microsoft Store", "Package version from Windows · updates through Microsoft Store");
         else if (_resolvedPackage?.ManagedPackage is { } managed) note = L("Paketversion · ", "Package version · ") + managed.Manager
             + (managed.NeedsPreparation ? L(" · Quellen zuerst vorbereiten", " · prepare sources first") : managed.IsUpdate ? L(" · Update auswählbar", " · update can be selected") : "");

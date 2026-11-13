@@ -57,10 +57,13 @@ internal sealed partial class DeveloperPackages
     internal async Task SetupAsync(string manager, CancellationToken token, Action<string> phase, Guid? approvedChocolateyEntry = null)
     {
         var (source, target) = SetupDetails(manager);
+        bool repairModule = false;
         if (manager == "PowerShell")
         {
+            phase("check");
             try { await InstalledAsync(false, token); return; }
             catch (MissingPSResourceGetException) { }
+            catch (BrokenPSResourceGetException e) when (ModuleRepairMatches(target, e.Manifest)) { repairModule = true; }
         }
         else if (await Task.Run(() => LocalSetupReady(manager), token)) return;
 
@@ -103,9 +106,11 @@ internal sealed partial class DeveloperPackages
             phase("install");
             if (manager == "PowerShell")
             {
-                await Task.Run(() => InstallModuleArchive(data, target));
-                phase("verify");
-                await InstalledAsync(false, CancellationToken.None);
+                await ApplyModuleSetupAsync(data, target, repairModule, async () =>
+                {
+                    phase("verify");
+                    await InstalledAsync(false, CancellationToken.None);
+                });
                 return;
             }
             if (manager == "NuGet")
@@ -147,6 +152,35 @@ internal sealed partial class DeveloperPackages
         phase("verify");
         if (!await Task.Run(() => LocalSetupReady(manager)))
             throw new IOException("Einrichtung konnte nicht bestätigt werden. / Setup could not be verified.");
+    }
+
+    internal static bool ModuleRepairMatches(string target, string manifest) => Directory.Exists(target)
+        && string.Equals(Path.Combine(target, Module + ".psd1"), manifest, StringComparison.OrdinalIgnoreCase);
+
+    internal static async Task ApplyModuleSetupAsync(byte[] data, string target, bool repair, Func<Task> verify)
+    {
+        string? backup = null;
+        bool installed = false;
+        try
+        {
+            if (repair)
+            {
+                ValidateDirectory(target);
+                string modules = Path.GetDirectoryName(Path.GetDirectoryName(target)!)!;
+                backup = Path.Combine(modules, "." + Module + "-Backup-" + Guid.NewGuid().ToString("N"));
+                Directory.Move(target, backup);
+            }
+            await Task.Run(() => InstallModuleArchive(data, target));
+            installed = true;
+            await verify();
+        }
+        catch
+        {
+            if (installed) Directory.Delete(target, true);
+            if (backup is not null && Directory.Exists(backup)) Directory.Move(backup, target);
+            throw;
+        }
+        // The previous module stays outside the discovery path as a recovery copy.
     }
 
     internal static void InstallModuleArchive(byte[] data, string target)

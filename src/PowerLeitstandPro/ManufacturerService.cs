@@ -119,7 +119,7 @@ internal sealed class ManufacturerService : IManufacturerService
         using var connection = new OnlineRequest(token); token = connection.Token;
         if (uri.Host is not ("www.nvidia.com" or "www.amd.com" or "www.kingston.com" or "semiconductor.samsung.com" or "www.asus.com" or "www.msi.com" or "www.gigabyte.com") || uri.Scheme != "https" || !uri.IsDefaultPort || uri.UserInfo.Length != 0)
             throw new IOException("Die Downloadquelle ist nicht freigegeben.");
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri); request.Headers.UserAgent.ParseAdd("PowerLeitstand-PRO/1.1.5");
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri); request.Headers.UserAgent.ParseAdd(AppVersion.UserAgent);
         using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token); response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength is > 4 * 1024 * 1024) throw new IOException("Die Seitenantwort ist zu groß.");
         await using var stream = await response.Content.ReadAsStreamAsync(token);

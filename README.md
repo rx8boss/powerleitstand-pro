@@ -1,6 +1,6 @@
 # PowerLeitstand PRO · Windows (WPF)
 
-![PowerLeitstand PRO v1.1.5 – Kompaktansicht](docs/screenshots/main-window.png)
+![PowerLeitstand PRO v1.1.6 – Kompaktansicht](docs/screenshots/main-window.png)
 
 
 [![CodeQL · C#](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml/badge.svg)](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml)
@@ -81,7 +81,7 @@ The standalone `PowerLeitstand-PRO.exe` is placed in `publish\Windows-x64`; thes
 
 ## Vorschau / Preview
 
-Aktuelle WPF-Oberfläche in Version 1.1.5 (Kompaktansicht im Standarddesign, 860 × 620). / Current WPF interface in version 1.1.5 (compact view in the default theme, 860 × 620).
+Aktuelle WPF-Oberfläche in Version 1.1.6 (Kompaktansicht im Standarddesign, 860 × 620). / Current WPF interface in version 1.1.6 (compact view in the default theme, 860 × 620).
 
 
 ### Update-Download / Update download
@@ -92,4 +92,4 @@ Sichtbarer Download mit Fortschritt, Datenmenge, Dateiprüfung und Abbruch. Der 
 
 ### Versions- und Sprachprüfung / Version and language checks
 
-[Release-Ablauf / Release checklist](docs/release-checklist.md) · [Änderungen 1.1.5 / Changes in 1.1.5](docs/releases/v1.1.5.md)
+[Release-Ablauf / Release checklist](docs/release-checklist.md) · [Änderungen 1.1.6 / Changes in 1.1.6](docs/releases/v1.1.6.md)

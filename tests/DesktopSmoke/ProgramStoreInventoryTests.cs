@@ -91,6 +91,45 @@ internal static class ProgramStoreInventoryTests
         try { integrated.UpgradeCommand(ea, new(ea.PackageId!, "2.0", "Fixture", DateTime.UtcNow)); }
         catch (InvalidOperationException) { blocked = true; }
         Assert(blocked, "EA backend also refuses the unrequested WinGet upgrade path");
+        var terminal = ProgramCatalog.Entries.Single(e => e.Id == "windows-terminal");
+        const string currentTerminal = "1.24.12741.0", nextTerminal = "1.25.3131.0";
+        string terminalRow = $"Windows Terminal   {ProgramInstallService.TerminalStoreId}   {currentTerminal}   {nextTerminal}   msstore";
+        Assert(ProgramInstallService.ReadTerminalStoreOffer(terminalRow, currentTerminal) == nextTerminal
+            && ProgramInstallService.ReadTerminalStoreOffer(terminalRow, "1.22.0.0") is null
+            && ProgramInstallService.ReadTerminalStoreOffer(terminalRow + "\n" + terminalRow, currentTerminal) is null, "Store offer must be unique and match the installed version");
+        string manifest = $"""
+            PackageIdentifier: Microsoft.WindowsTerminal
+            PackageVersion: {nextTerminal}
+            PackageFamilyName: Microsoft.WindowsTerminal_8wekyb3d8bbwe
+            InstallerType: msix
+            - InstallerUrl: ignored
+              InstallerUrl: https://github.com/microsoft/terminal/releases/download/v{nextTerminal}/Microsoft.WindowsTerminal_{nextTerminal}_8wekyb3d8bbwe.msixbundle
+              InstallerSha256: {new string('a', 64)}
+            """;
+        Assert(ProgramInstallService.TerminalMsixMatches(manifest, nextTerminal)
+            && !ProgramInstallService.TerminalMsixMatches(manifest.Replace("WindowsTerminal_8we", "WindowsTerminalPreview_8we"), nextTerminal)
+            && !ProgramInstallService.TerminalMsixMatches(manifest.Replace("github.com/microsoft", "example.org/microsoft"), nextTerminal),
+            "The direct package must be the official Microsoft MSIX for the installed family");
+        var terminalProof = new ProgramInstallation(currentTerminal, "Windows-App", output, false);
+        bool upgraded = false;
+        var terminalService = new ProgramInstallService((start, _) => Task.FromResult(new WinGetResult(0,
+            start.ArgumentList.Contains("msstore") && !upgraded ? terminalRow : "")),
+            (start, started) =>
+            {
+                Assert(start.ArgumentList.SequenceEqual(new[] { "upgrade", "--id", ProgramInstallService.TerminalStoreId, "--exact", "--source", "msstore", "--disable-interactivity", "--silent" })
+                    && !start.UseShellExecute && start.CreateNoWindow, "Exact Store upgrade runs in PowerLeitstand with no external window");
+                started(); upgraded = true; return Task.FromResult(0);
+            },
+            storeReader: _ => Task.FromResult(new ProgramStoreSnapshot(new Dictionary<string, ProgramInstallation>
+            { [terminal.Id] = upgraded ? terminalProof with { Version = nextTerminal } : terminalProof }, true)),
+            localReader: (_, _) => Task.FromResult(new Dictionary<string, ProgramInstallation>()));
+        var terminalInventory = await terminalService.InspectUpdatesAsync([terminal], CancellationToken.None);
+        var terminalPackage = await terminalService.ResolveCheckedUpdateAsync(terminal, terminalInventory, CancellationToken.None);
+        Assert(terminalPackage?.VersionSource == "msstore" && ProgramInstallService.CheckedUpdateMatches(terminal, terminalPackage, terminalInventory)
+            && !ProgramInstallService.CheckedUpdateMatches(terminal, terminalPackage, terminalInventory with { StoreCheckComplete = false }), "Only a complete matching Store offer becomes installable");
+        Assert(await terminalService.UpgradeAsync(terminal, terminalPackage!, () => { }) == 0 && upgraded, "Confirmed offer reaches the Store installer");
+        var terminalResult = await terminalService.InspectUpdatesAsync([terminal], CancellationToken.None);
+        Assert(terminalResult.Installed[terminal.Id] == nextTerminal && !terminalResult.HasUpdate(terminal.Id), "New Store version is detected after upgrade");
         File.WriteAllText(Path.Combine(output, "Store-Checks.json"), JsonSerializer.Serialize(new { Checks = checks, Passed = true, InstallersExecuted = false }, new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"PASS {checks} Store-provider/fallback/cache/cancellation checks."); return 0;
     }

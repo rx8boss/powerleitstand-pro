@@ -62,6 +62,25 @@ internal static class DeveloperPackageTests
             try { DeveloperPackages.InstallModuleArchive(ModuleArchive("../outside.ps1"), moduleTarget + "-unsafe"); }
             catch (IOException) { escaped = true; }
             Assert(escaped && !Directory.Exists(moduleTarget + "-unsafe") && !File.Exists(Path.Combine(output, "ModuleSetup", "outside.ps1")), "Archive traversal cannot publish a partial module or write outside staging");
+            string versionFolder = Path.Combine(output, "ModuleSetup", Guid.NewGuid().ToString("N"), "PSResourceGet", "1.1.1");
+            Directory.CreateDirectory(versionFolder);
+            string manifest = Path.Combine(versionFolder, "Microsoft.PowerShell.PSResourceGet.psd1");
+            File.WriteAllText(manifest, "broken fixture");
+            Assert(DeveloperPackages.ModuleRepairMatches(versionFolder, manifest) && !DeveloperPackages.ModuleRepairMatches(versionFolder, manifest + ".other"), "Repair is bound to the reported manifest");
+            try { Wait(DeveloperPackages.ApplyModuleSetupAsync(ModuleArchive(null), versionFolder, true, () => Task.FromException(new IOException("fixture import failure")))); }
+            catch (IOException e) when (e.Message == "fixture import failure") { }
+            Assert(File.ReadAllText(manifest) == "broken fixture", "Failed import restores the previous module");
+            Wait(DeveloperPackages.ApplyModuleSetupAsync(ModuleArchive(null), versionFolder, true, () => Task.CompletedTask));
+            Assert(File.ReadAllText(manifest).Contains("ModuleVersion"), "Successful repair activates the replacement");
+            string desktop = Path.Combine(output, "DesktopFixture-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(desktop);
+            string shortcutName = "Fixture-" + Guid.NewGuid().ToString("N");
+            string executable = Path.Combine(desktop, "program.exe");
+            File.Copy(Environment.ProcessPath!, executable);
+            Assert(ProgramCatalogView.SaveDesktopShortcut(shortcutName, executable, desktop) == true
+                && ProgramPathResolver.ReadShortcut(Path.Combine(desktop, shortcutName + ".lnk")) == executable, "Desktop link points to the verified program path");
+            Assert(ProgramCatalogView.SaveDesktopShortcut(shortcutName, executable, desktop) == false
+                && ProgramCatalogView.SaveDesktopShortcut(shortcutName, desktop, desktop) is null, "Existing links are preserved and directory targets are rejected");
             var archiveSource = Path.Combine(output, "ChocolateyFixture-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(archiveSource);
             File.WriteAllText(Path.Combine(archiveSource, "fixture.txt"), "retained");

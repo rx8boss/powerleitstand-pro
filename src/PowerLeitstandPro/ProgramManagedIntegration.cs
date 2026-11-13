@@ -41,5 +41,5 @@ internal sealed partial class ProgramInstallService
     internal static bool ManagedReinstallSupported(ProgramManagedPackage package) => package.Manager == "Scoop"
         || package.Manager == "Chocolatey" && package.Target.Id.EndsWith(".portable", StringComparison.OrdinalIgnoreCase);
     internal static string PackageSource(ProgramPackage? package, bool english) => package?.ManagedPackage?.Manager
-        ?? (package?.GitHubUpdate is not null ? "GitHub" : package?.PortableUpdate is not null ? english ? "Publisher · Portable" : "Hersteller · Portable" : "WinGet");
+        ?? (package?.VersionSource == "msstore" ? "WinGet · Microsoft Store" : package?.VersionSource == "terminal-msix" ? "WinGet · Microsoft MSIX" : package?.GitHubUpdate is not null ? "GitHub" : package?.PortableUpdate is not null ? english ? "Publisher · Portable" : "Hersteller · Portable" : "WinGet");
 }

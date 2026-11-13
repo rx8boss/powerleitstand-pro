@@ -5,7 +5,8 @@ internal sealed partial class ProgramCatalogView
     internal async Task ApplyEntryCheckAsync(ProgramEntry entry, ProgramInstallation? proof, ProgramPackage? package, DateTime checkedUtc, CancellationToken token, ProgramInventory? checkedUpdates = null)
     {
         if (Service is not ProgramInstallService service) return;
-        var latest = checkedUpdates?.Updates?.GetValueOrDefault(entry.Id) ?? checkedUpdates?.GitHubUpdates?.GetValueOrDefault(entry.Id);
+        var latest = checkedUpdates?.Updates?.GetValueOrDefault(entry.Id)
+            ?? (entry.Id == "windows-terminal" && proof?.Source == "Windows-App" ? null : checkedUpdates?.GitHubUpdates?.GetValueOrDefault(entry.Id));
         if (latest is not null) package = package is null
             ? new(entry.PackageId ?? entry.Id, null, "", checkedUtc, OnlineVersion: latest, CanInstall: false)
             : package with { OnlineVersion = latest };
