@@ -50,7 +50,7 @@ internal static class LanguageTests
         }
         try
         {
-            Assert(AppVersion.Installed.ToString() == "1.1.4" && AppVersion.UserAgent.EndsWith("/1.1.4"), "assembly version and update user agent agree");
+            Assert(AppVersion.Installed.ToString() == "1.1.5" && AppVersion.UserAgent.EndsWith("/1.1.5"), "assembly version and update user agent agree");
             Assert(AppReleaseNotes.Select(AppReleaseNotes.Current, false) == AppReleaseNotes.German.Trim(), "complete German changelog selected");
             Assert(AppReleaseNotes.Select(AppReleaseNotes.Current, true) == AppReleaseNotes.English.Trim(), "complete English changelog selected");
             Assert(AppReleaseNotes.German.Count(c => c == '•') == AppReleaseNotes.English.Count(c => c == '•'), "equal number of release changes in both languages");
@@ -61,7 +61,7 @@ internal static class LanguageTests
             Assert(UiText.Translate("Windows raw text", true) == "Windows raw text", "external technical evidence preserved");
             var originalLog = new RepairLogEntry("12:00", "SFC", "FEHLER", "CBS.log konnte nicht gelesen werden.");
             Assert(originalLog.WithLanguage(true).DisplayLevel == "ERROR" && originalLog.WithLanguage(true).DisplayMessage == "CBS.log could not be read." && originalLog.WithLanguage(true).ToLine() == originalLog.ToLine(), "repair log display translates without changing original evidence");
-            File.WriteAllText(Path.Combine(output, "release-v1.1.4.md"), "# PowerLeitstand PRO 1.1.4\n\n" + AppReleaseNotes.Current);
+            File.WriteAllText(Path.Combine(output, "release-v1.1.5.md"), "# PowerLeitstand PRO 1.1.5\n\n" + AppReleaseNotes.Current);
 
             foreach (var theme in new[] { "Standard", "Classic" })
             foreach (var english in new[] { false, true })
@@ -114,10 +114,13 @@ internal static class LanguageTests
                 var release = new UpdateRelease(new AvailableUpdate(new Version(1, 1, 4), "", new string('a', 64)) { Notes = AppReleaseNotes.Current }, AppReleaseNotes.Current, DateTimeOffset.Now);
                 var manager = new UpdateManagerWindow(ThemePalette.For("Standard"), english, () => false, store, _ => Task.FromResult<IReadOnlyList<UpdateRelease>>(new[] { release }), false) { ShowActivated = false };
                 manager.Show(); Wait(manager.ReloadAsync()); manager.ShowNotesView(); Pump();
-                Assert(((TextBlock)manager.FindName("NotesText")).Text == (english ? AppReleaseNotes.English : AppReleaseNotes.German).Trim(), "GitHub notes use selected language");
+                var shownNotes = ((TextBlock)manager.FindName("NotesText")).Text;
+                var expectedNotes = (english ? AppReleaseNotes.English : AppReleaseNotes.German).Replace("\r", "").Trim();
+                Assert(shownNotes == expectedNotes, "GitHub notes use selected language");
                 Save(manager, "Aenderungen-" + (english ? "EN" : "DE"));
                 manager.ShowRecoveryView(); Wait(manager.PendingSelection); manager.ShowNotesView(); Pump();
-                Assert(((TextBlock)manager.FindName("NotesText")).Text == (english ? AppReleaseNotes.English : AppReleaseNotes.German).Trim(), "saved backup notes use selected language"); manager.Close();
+                var shownBackupNotes = ((TextBlock)manager.FindName("NotesText")).Text;
+                Assert(shownBackupNotes == expectedNotes, "saved backup notes use selected language"); manager.Close();
             }
             Assert(errors.Count == 0, "no unhandled language-test errors");
             Console.WriteLine($"PASS LANGUAGES: {checks} assertions; 32 main-page/options states, DE/EN dialogs, release and backup language selection."); return 0;

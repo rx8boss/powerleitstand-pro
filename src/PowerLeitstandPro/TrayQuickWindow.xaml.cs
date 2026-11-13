@@ -10,13 +10,14 @@ using FontFamily = System.Windows.Media.FontFamily;
 
 namespace PowerControlProWpf;
 
-internal sealed record TraySnapshot(bool Busy, bool TimerActive, bool RepairActive, string Remaining, string Action);
+internal sealed record TraySnapshot(bool Busy, bool TimerActive, bool RepairActive, string Remaining, string Action, bool WindowVisible = false, bool RepairStopping = false);
 
 public partial class TrayQuickWindow : Window
 {
     private readonly Func<TraySnapshot> _state;
     private readonly Action<string> _execute;
     private readonly bool _english;
+    private readonly ThemePalette _palette;
     private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromSeconds(1) };
     private bool _closingOrClosed;
     private bool _dismissQueued;
@@ -27,7 +28,7 @@ public partial class TrayQuickWindow : Window
         InitializeComponent();
         CrossButtonAppearance.PreserveCustomSurface(ExitButton);
         _state = state; _execute = execute; _english = english;
-        var palette = ThemePalette.For(theme);
+        var palette = _palette = ThemePalette.For(theme);
         Brush Solid(string value) => new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(value));
         Resources["TrayText"] = Solid(palette.Colors[5]);
         Resources["TraySubtle"] = Solid(palette.Colors[6]);
@@ -39,7 +40,6 @@ public partial class TrayQuickWindow : Window
         Resources["TrayInset"] = Solid(palette.Colors[4]);
         Resources["TrayDangerBackground"] = Solid(palette.Actions[0]);
         Foreground = Solid(palette.Colors[5]); FontFamily = new FontFamily(palette.FontFamily);
-        StateDot.Fill = Solid(palette.Ready);
         foreach (var (image, name) in new[] { (ShutdownIcon, "shutdown"), (RestartIcon, "restart"), (LogoutIcon, "logout"), (LockIcon, "lock") })
             image.Source = new BitmapImage(new Uri($"pack://application:,,,/Assets/icons/{palette.IconSet}/{name}.png"));
         if (palette.IsNeon) MenuFrame.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = (System.Windows.Media.Color)ColorConverter.ConvertFromString(palette.Glow!), BlurRadius = 9, ShadowDepth = 0, Opacity = 0.4 };
@@ -91,12 +91,24 @@ public partial class TrayQuickWindow : Window
     internal void RefreshState()
     {
         var state = _state();
+        ActivityStatusAppearance.Update(StateDot, _palette, state.Busy || state.TimerActive || state.RepairActive,
+            ActivityStatusAppearance.Description(_english, state.TimerActive, state.RepairActive, state.RepairStopping, state.Busy));
+        OpenCaption.Text = state.WindowVisible
+            ? (_english ? "Minimize window" : "Fenster minimieren")
+            : (_english ? "Open window" : "Fenster öffnen");
+        System.Windows.Automation.AutomationProperties.SetName(OpenButton, OpenCaption.Text);
+        OpenButton.ToolTip = OpenCaption.Text;
+        OpenArrowIcon.Visibility = state.WindowVisible ? Visibility.Collapsed : Visibility.Visible;
+        OpenFrameIcon.Data = Geometry.Parse(state.WindowVisible
+            ? "M 2,4 L 20,4 L 20,19 L 2,19 Z M 2,8 L 20,8 M 7,15 L 15,15"
+            : "M 2,4 L 17,4 L 17,19 L 2,19 Z M 2,8 L 10,8");
         ShutdownButton.IsEnabled = RestartButton.IsEnabled = LogoutButton.IsEnabled = LockButton.IsEnabled = ExitButton.IsEnabled = !state.Busy;
         CancelTimerButton.IsEnabled = state.TimerActive;
         TimerCard.Visibility = state.TimerActive ? Visibility.Visible : Visibility.Collapsed;
         RemainingText.Text = state.Remaining; ActionText.Text = state.Action;
         StateText.Text = state.TimerActive ? (_english ? "Timer active" : "Timer aktiv")
-            : state.RepairActive ? (_english ? "Repair running" : "Reparatur läuft")
+            : state.RepairActive ? state.RepairStopping ? (_english ? "Stopping repair…" : "Reparatur wird beendet…")
+                : (_english ? "Repair running" : "Reparatur läuft")
             : state.Busy ? (_english ? "Update running" : "Update läuft") : (_english ? "Program ready" : "Programm bereit");
         GuardHint.Text = state.TimerActive ? (_english ? "Please cancel the timer first." : "Bitte zuerst den Timer abbrechen.")
             : state.Busy ? (_english ? "Please finish the active operation first." : "Bitte zuerst den laufenden Vorgang beenden.")
@@ -133,7 +145,7 @@ public partial class TrayQuickWindow : Window
             _execute(action);
         }, DispatcherPriority.Background);
     }
-    private void OpenWindow(object s, RoutedEventArgs e) => Invoke("open");
+    private void OpenWindow(object s, RoutedEventArgs e) => Invoke(_state().WindowVisible ? "minimize" : "open");
     private void CenterWindow(object s, RoutedEventArgs e) => Invoke("center");
     private void CancelTimer(object s, RoutedEventArgs e) { if (_state().TimerActive) Invoke("cancel"); }
     private void ExitProgram(object s, RoutedEventArgs e) => Invoke("exit", true);

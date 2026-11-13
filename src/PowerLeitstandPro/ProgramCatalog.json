@@ -1,0 +1,2697 @@
+[
+  {
+    "Id": "filee",
+    "Name": "Filee",
+    "Categories": ["tools", "office"],
+    "PackageId": "KnifeLemon.Filee",
+    "Publisher": "Filee contributors",
+    "DescriptionDe": "Konvertiert Bilder, Dokumente und Mediendateien lokal per Drag-and-drop. Zusätzliche Konvertierungsengines sind optional.",
+    "DescriptionEn": "Convert images, documents and media files locally by drag and drop. Additional conversion engines are optional.",
+    "UseDe": "Für das Umwandeln von Dateiformaten ohne Hochladen der Dateien. Manche Formate benötigen zusätzliche Engines.",
+    "UseEn": "For converting file formats without uploading files. Some formats require additional engines.",
+    "Website": "https://filee.sh/",
+    "IconUrl": "",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/k/KnifeLemon/Filee",
+    "AssetVersion": "2026-11-04"
+  },
+  {
+    "Id": "adwcleaner",
+    "Name": "AdwCleaner",
+    "Categories": ["tools"],
+    "PackageId": "Malwarebytes.AdwCleaner",
+    "Publisher": "Malwarebytes",
+    "DescriptionDe": "Sucht nach Adware, unerwünschten Programmen und Browser-Manipulationen. Portable Anwendung von Malwarebytes.",
+    "DescriptionEn": "Find adware, potentially unwanted programs and browser hijackers. A portable application from Malwarebytes.",
+    "UseDe": "Für die Prüfung eines PCs auf Adware und unerwünschte Programme; Funde lassen sich anschließend in AdwCleaner prüfen und entfernen.",
+    "UseEn": "For checking a PC for adware and unwanted programs; findings can then be reviewed and removed in AdwCleaner.",
+    "Website": "https://www.malwarebytes.com/adwcleaner",
+    "IconUrl": "",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Malwarebytes/AdwCleaner",
+    "AssetVersion": "2026-11-04"
+  },
+  {
+    "Id": "firefox",
+    "Name": "Firefox",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Mozilla.Firefox",
+    "Publisher": "Mozilla",
+    "DescriptionDe": "Webbrowser mit Datenschutzfunktionen",
+    "DescriptionEn": "Web browser with privacy features",
+    "Website": "https://www.firefox.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Mozilla/Firefox",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "google-chrome",
+    "Name": "Google Chrome",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Google.Chrome",
+    "Publisher": "Google",
+    "DescriptionDe": "Browser mit Google-Diensten",
+    "DescriptionEn": "Browser with Google services",
+    "Website": "https://www.google.com/chrome/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/g/Google/Chrome",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "brave",
+    "Name": "Brave",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Brave.Brave",
+    "Publisher": "Brave Software",
+    "DescriptionDe": "Browser mit integriertem Werbeschutz",
+    "DescriptionEn": "Browser with built-in ad blocking",
+    "Website": "https://brave.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/b/Brave/Brave",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "vivaldi",
+    "Name": "Vivaldi",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Vivaldi.Vivaldi",
+    "Publisher": "Vivaldi Technologies",
+    "DescriptionDe": "Anpassbarer Browser mit vielen Werkzeugen",
+    "DescriptionEn": "Customizable browser with many tools",
+    "Website": "https://vivaldi.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/v/Vivaldi/Vivaldi",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "opera",
+    "Name": "Opera",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Opera.Opera",
+    "Publisher": "Opera",
+    "DescriptionDe": "Browser mit Seitenleiste",
+    "DescriptionEn": "Browser with sidebar",
+    "Website": "https://www.opera.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/o/Opera/Opera",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "opera-gx",
+    "Name": "Opera GX",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Opera.OperaGX",
+    "Publisher": "Opera",
+    "DescriptionDe": "Gaming-Browser mit Ressourcensteuerung",
+    "DescriptionEn": "Gaming browser with resource controls",
+    "Website": "https://www.opera.com/gx",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/o/Opera/OperaGX",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "tor-browser",
+    "Name": "Tor Browser",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "TorProject.TorBrowser",
+    "Publisher": "Tor Project",
+    "DescriptionDe": "Browser für das Tor-Netzwerk",
+    "DescriptionEn": "Browser for the Tor network",
+    "Website": "https://www.torproject.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/t/TorProject/TorBrowser",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "microsoft-edge",
+    "Name": "Microsoft Edge",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Microsoft.Edge",
+    "Publisher": "Microsoft",
+    "DescriptionDe": "Windows-Browser mit Microsoft-Diensten",
+    "DescriptionEn": "Windows browser with Microsoft services",
+    "Website": "https://www.microsoft.com/edge",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Microsoft/Edge",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "librewolf",
+    "Name": "LibreWolf",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "LibreWolf.LibreWolf",
+    "Publisher": "LibreWolf",
+    "DescriptionDe": "Datenschutzorientierter Firefox-Ableger",
+    "DescriptionEn": "Privacy-focused Firefox derivative",
+    "Website": "https://librewolf.net/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/l/LibreWolf/LibreWolf",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "waterfox",
+    "Name": "Waterfox",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Waterfox.Waterfox",
+    "Publisher": "Waterfox",
+    "DescriptionDe": "Anpassbarer Firefox-basierter Browser",
+    "DescriptionEn": "Customizable Firefox-based browser",
+    "Website": "https://www.waterfox.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/w/Waterfox/Waterfox",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "zen-browser",
+    "Name": "Zen Browser",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Zen-Team.Zen-Browser",
+    "Publisher": "Zen Browser",
+    "DescriptionDe": "Browser mit vertikalen Tabs",
+    "DescriptionEn": "Browser with vertical tabs",
+    "Website": "https://zen-browser.app/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/z/Zen-Team/Zen-Browser",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "floorp",
+    "Name": "Floorp",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Ablaze.Floorp",
+    "Publisher": "Ablaze",
+    "DescriptionDe": "Firefox-basierter Browser für Arbeitsbereiche",
+    "DescriptionEn": "Firefox-based browser with workspaces",
+    "Website": "https://floorp.app/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/a/Ablaze/Floorp",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "7-zip",
+    "Name": "7-Zip",
+    "Categories": [
+      "tools"
+    ],
+    "PackageId": "7zip.7zip",
+    "Publisher": "Igor Pavlov",
+    "DescriptionDe": "Archive erstellen und entpacken",
+    "DescriptionEn": "Create and extract archives",
+    "Website": "https://www.7-zip.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/7/7zip/7zip",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "powertoys",
+    "Name": "PowerToys",
+    "Categories": [
+      "tools"
+    ],
+    "PackageId": "Microsoft.PowerToys",
+    "Publisher": "Microsoft",
+    "DescriptionDe": "Zusätzliche Werkzeuge für Windows",
+    "DescriptionEn": "Extra utilities for Windows",
+    "Website": "https://github.com/microsoft/PowerToys",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Microsoft/PowerToys",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "notepad",
+    "Name": "Notepad++",
+    "Categories": [
+      "tools",
+      "development"
+    ],
+    "PackageId": "Notepad++.Notepad++",
+    "Publisher": "Notepad++",
+    "DescriptionDe": "Text- und Quellcodeeditor",
+    "DescriptionEn": "Text and source code editor",
+    "Website": "https://notepad-plus-plus.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/n/Notepad++/Notepad++",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "everything",
+    "Name": "Everything",
+    "Categories": [
+      "tools"
+    ],
+    "PackageId": "voidtools.Everything",
+    "Publisher": "voidtools",
+    "DescriptionDe": "Schnelle Dateisuche",
+    "DescriptionEn": "Fast file search",
+    "Website": "https://www.voidtools.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/v/voidtools/Everything",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "rufus",
+    "Name": "Rufus",
+    "Categories": [
+      "tools"
+    ],
+    "PackageId": "Rufus.Rufus",
+    "Publisher": "Akeo",
+    "DescriptionDe": "Startfähige USB-Laufwerke erstellen",
+    "DescriptionEn": "Create bootable USB drives",
+    "Website": "https://rufus.ie/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/r/Rufus/Rufus",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "vs-code",
+    "Name": "VS Code",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "Microsoft.VisualStudioCode",
+    "Publisher": "Microsoft",
+    "DescriptionDe": "Erweiterbarer Codeeditor",
+    "DescriptionEn": "Extensible code editor",
+    "Website": "https://code.visualstudio.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Microsoft/VisualStudioCode",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "git",
+    "Name": "Git",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "Git.Git",
+    "Publisher": "Git Project",
+    "DescriptionDe": "Versionsverwaltung für Projekte",
+    "DescriptionEn": "Version control for projects",
+    "Website": "https://git-scm.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/g/Git/Git",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "python",
+    "Name": "Python",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "Python.Python.3.14",
+    "Publisher": "Python Software Foundation",
+    "DescriptionDe": "Programmiersprache und Laufzeit",
+    "DescriptionEn": "Programming language and runtime",
+    "Website": "https://www.python.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/p/Python/Python/3/14",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "node-js",
+    "Name": "Node.js",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "OpenJS.NodeJS.LTS",
+    "Publisher": "OpenJS Foundation",
+    "DescriptionDe": "JavaScript-Laufzeit, LTS-Ausgabe",
+    "DescriptionEn": "JavaScript runtime, LTS edition",
+    "Website": "https://nodejs.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/o/OpenJS/NodeJS/LTS",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "vlc",
+    "Name": "VLC",
+    "Categories": [
+      "media"
+    ],
+    "PackageId": "VideoLAN.VLC",
+    "Publisher": "VideoLAN",
+    "DescriptionDe": "Video- und Audioplayer",
+    "DescriptionEn": "Video and audio player",
+    "Website": "https://www.videolan.org/vlc/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/v/VideoLAN/VLC",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "obs-studio",
+    "Name": "OBS Studio",
+    "Categories": [
+      "media",
+      "streaming"
+    ],
+    "PackageId": "OBSProject.OBSStudio",
+    "Publisher": "OBS Project",
+    "DescriptionDe": "Live-Streaming und Bildschirmaufnahme",
+    "DescriptionEn": "Live streaming and screen recording",
+    "Website": "https://obsproject.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/o/OBSProject/OBSStudio",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "audacity",
+    "Name": "Audacity",
+    "Categories": [
+      "media",
+      "streaming"
+    ],
+    "PackageId": "Audacity.Audacity",
+    "Publisher": "Audacity",
+    "DescriptionDe": "Audio aufnehmen und bearbeiten",
+    "DescriptionEn": "Record and edit audio",
+    "Website": "https://www.audacityteam.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/a/Audacity/Audacity",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "gimp",
+    "Name": "GIMP",
+    "Categories": [
+      "media",
+      "streaming"
+    ],
+    "PackageId": "GIMP.GIMP.3",
+    "Publisher": "GIMP Team",
+    "DescriptionDe": "Bilder und Grafiken bearbeiten",
+    "DescriptionEn": "Edit images and graphics",
+    "Website": "https://www.gimp.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/g/GIMP/GIMP/3",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "paint-net",
+    "Name": "Paint.NET",
+    "Categories": [
+      "media"
+    ],
+    "PackageId": "dotPDN.PaintDotNet",
+    "Publisher": "dotPDN",
+    "DescriptionDe": "Bildbearbeitung für Windows",
+    "DescriptionEn": "Image editing for Windows",
+    "Website": "https://www.getpaint.net/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/d/dotPDN/PaintDotNet",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "streamlabs-desktop",
+    "Name": "Streamlabs Desktop",
+    "Categories": [
+      "streaming"
+    ],
+    "PackageId": "Streamlabs.Streamlabs",
+    "Publisher": "Streamlabs",
+    "DescriptionDe": "Streaming mit Szenen und Widgets",
+    "DescriptionEn": "Streaming with scenes and widgets",
+    "Website": "https://streamlabs.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/s/Streamlabs/Streamlabs",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "streamer-bot",
+    "Name": "Streamer.bot",
+    "Categories": [
+      "streaming"
+    ],
+    "PackageId": null,
+    "Publisher": "Streamer.bot",
+    "DescriptionDe": "Streaming-Aktionen automatisieren",
+    "DescriptionEn": "Automate streaming actions",
+    "Website": "https://streamer.bot/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "mix-it-up",
+    "Name": "Mix It Up",
+    "Categories": [
+      "streaming"
+    ],
+    "PackageId": null,
+    "Publisher": "Mix It Up",
+    "DescriptionDe": "Streaming-Bot für Aktionen und Chat",
+    "DescriptionEn": "Streaming bot for actions and chat",
+    "Website": "https://mixitupapp.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "discord",
+    "Name": "Discord",
+    "Categories": [
+      "streaming"
+    ],
+    "PackageId": "Discord.Discord",
+    "Publisher": "Discord",
+    "DescriptionDe": "Sprachchat und Communities",
+    "DescriptionEn": "Voice chat and communities",
+    "Website": "https://discord.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/d/Discord/Discord",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "voicemeeter",
+    "Name": "Voicemeeter",
+    "Categories": [
+      "streaming"
+    ],
+    "PackageId": null,
+    "Publisher": "VB-Audio",
+    "DescriptionDe": "Virtuelles Audiomischpult",
+    "DescriptionEn": "Virtual audio mixer",
+    "Website": "https://vb-audio.com/Voicemeeter/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "vb-cable",
+    "Name": "VB-CABLE",
+    "Categories": [
+      "streaming"
+    ],
+    "PackageId": null,
+    "Publisher": "VB-Audio",
+    "DescriptionDe": "Virtuelles Audiokabel; Treiberinstallation",
+    "DescriptionEn": "Virtual audio cable; driver installation",
+    "Website": "https://vb-audio.com/Cable/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "stream-deck",
+    "Name": "Stream Deck",
+    "Categories": [
+      "streaming"
+    ],
+    "PackageId": "Elgato.StreamDeck",
+    "Publisher": "Elgato",
+    "DescriptionDe": "Streaming-Steuerung; passende Hardware prüfen",
+    "DescriptionEn": "Streaming controls; check compatible hardware",
+    "Website": "https://www.elgato.com/us/en/s/stream-deck-app",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/e/Elgato/StreamDeck",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "shotcut",
+    "Name": "Shotcut",
+    "Categories": [
+      "media",
+      "streaming"
+    ],
+    "PackageId": "Meltytech.Shotcut",
+    "Publisher": "Meltytech",
+    "DescriptionDe": "Videos schneiden und bearbeiten",
+    "DescriptionEn": "Cut and edit videos",
+    "Website": "https://shotcut.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Meltytech/Shotcut",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "handbrake",
+    "Name": "HandBrake",
+    "Categories": [
+      "media",
+      "streaming"
+    ],
+    "PackageId": "HandBrake.HandBrake",
+    "Publisher": "HandBrake Team",
+    "DescriptionDe": "Videos in andere Formate umwandeln",
+    "DescriptionEn": "Convert videos to other formats",
+    "Website": "https://handbrake.fr/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HandBrake/HandBrake",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "chatgpt",
+    "Name": "ChatGPT",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "OpenAI",
+    "DescriptionDe": "Cloud-KI-Assistent; Konto erforderlich",
+    "DescriptionEn": "Cloud AI assistant; account required",
+    "Website": "https://chatgpt.com/download/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "claude",
+    "Name": "Claude",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": "Anthropic.Claude",
+    "Publisher": "Anthropic",
+    "DescriptionDe": "Cloud-KI-Assistent; Konto erforderlich",
+    "DescriptionEn": "Cloud AI assistant; account required",
+    "Website": "https://claude.com/download",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/a/Anthropic/Claude",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "microsoft-copilot",
+    "Name": "Microsoft Copilot",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "Microsoft",
+    "DescriptionDe": "Cloud-KI-Assistent für Windows",
+    "DescriptionEn": "Cloud AI assistant for Windows",
+    "Website": "https://copilot.microsoft.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "lm-studio",
+    "Name": "LM Studio",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": "ElementLabs.LMStudio",
+    "Publisher": "LM Studio",
+    "DescriptionDe": "Lokale KI-Modelle; Modelle separat laden",
+    "DescriptionEn": "Local AI models; download models separately",
+    "Website": "https://lmstudio.ai/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/e/ElementLabs/LMStudio",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "ollama",
+    "Name": "Ollama",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": "Ollama.Ollama",
+    "Publisher": "Ollama",
+    "DescriptionDe": "Lokale KI-Laufzeit; Modelle separat laden",
+    "DescriptionEn": "Local AI runtime; download models separately",
+    "Website": "https://ollama.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/o/Ollama/Ollama",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "jan",
+    "Name": "Jan",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": "Jan.Jan",
+    "Publisher": "Jan",
+    "DescriptionDe": "Lokaler KI-Assistent; Modelle separat",
+    "DescriptionEn": "Local AI assistant; models separate",
+    "Website": "https://jan.ai/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/j/Jan/Jan",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "gpt4all",
+    "Name": "GPT4All",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "Nomic",
+    "DescriptionDe": "Lokaler KI-Chat; Modelle separat",
+    "DescriptionEn": "Local AI chat; models separate",
+    "Website": "https://www.nomic.ai/gpt4all",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "anythingllm",
+    "Name": "AnythingLLM",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "Mintplex Labs",
+    "DescriptionDe": "Dokumente und KI-Chat",
+    "DescriptionEn": "Documents and AI chat",
+    "Website": "https://anythingllm.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "msty-studio",
+    "Name": "Msty Studio",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "Msty",
+    "DescriptionDe": "Arbeitsplatz für lokale und Cloud-KI",
+    "DescriptionEn": "Workspace for local and cloud AI",
+    "Website": "https://msty.ai/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "cherry-studio",
+    "Name": "Cherry Studio",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "Cherry Studio",
+    "DescriptionDe": "KI-Clients und Modelle; Anbieter separat",
+    "DescriptionEn": "AI clients and models; providers separate",
+    "Website": "https://www.cherry-ai.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "cursor",
+    "Name": "Cursor",
+    "Categories": [
+      "ai",
+      "development"
+    ],
+    "PackageId": "Anysphere.Cursor",
+    "Publisher": "Anysphere",
+    "DescriptionDe": "KI-Codeeditor; Konto oder Dienst nötig",
+    "DescriptionEn": "AI code editor; account or service needed",
+    "Website": "https://cursor.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/a/Anysphere/Cursor",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "comfyui",
+    "Name": "ComfyUI",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "Comfy Org",
+    "DescriptionDe": "Lokale Bild-Workflows; Modelle und Hardware prüfen",
+    "DescriptionEn": "Local image workflows; check models and hardware",
+    "Website": "https://www.comfy.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "pinokio",
+    "Name": "Pinokio",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "Pinokio",
+    "DescriptionDe": "KI-App-Verwaltung; Apps separat installieren",
+    "DescriptionEn": "AI app manager; install apps separately",
+    "Website": "https://desktop.pinokio.co/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "lobehub",
+    "Name": "LobeHub",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "LobeHub",
+    "DescriptionDe": "KI-Assistenten und Agenten; Anbieter separat",
+    "DescriptionEn": "AI assistants and agents; providers separate",
+    "Website": "https://lobehub.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "nvidia-chatrtx",
+    "Name": "NVIDIA ChatRTX",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "NVIDIA",
+    "DescriptionDe": "Lokaler KI-Chat; unterstützte RTX-GPU nötig",
+    "DescriptionEn": "Local AI chat; supported RTX GPU required",
+    "Website": "https://www.nvidia.com/en-us/ai-on-rtx/chatrtx/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "nvidia-broadcast",
+    "Name": "NVIDIA Broadcast",
+    "Categories": [
+      "ai",
+      "streaming"
+    ],
+    "PackageId": null,
+    "Publisher": "NVIDIA",
+    "DescriptionDe": "Audio- und Videoeffekte; unterstützte RTX-GPU nötig",
+    "DescriptionEn": "Audio and video effects; supported RTX GPU required",
+    "Website": "https://www.nvidia.com/en-us/geforce/broadcasting/broadcast-app/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "stability-matrix",
+    "Name": "Stability Matrix",
+    "Categories": [
+      "ai"
+    ],
+    "PackageId": null,
+    "Publisher": "Lykos AI",
+    "DescriptionDe": "Bild-KI-Verwaltung; Modelle und Hardware prüfen",
+    "DescriptionEn": "Image AI manager; check models and hardware",
+    "Website": "https://github.com/LykosAI/StabilityMatrix",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Id": "upscayl",
+    "Name": "Upscayl",
+    "Categories": [
+      "ai",
+      "media"
+    ],
+    "PackageId": "Upscayl.Upscayl",
+    "Publisher": "Upscayl",
+    "DescriptionDe": "Bilder mit KI vergrößern; GPU-Anforderungen prüfen",
+    "DescriptionEn": "AI image upscaling; check GPU requirements",
+    "Website": "https://upscayl.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/u/Upscayl/Upscayl",
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Name": "WinRAR",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "win.rar GmbH",
+    "DescriptionDe": "Dateien komprimieren, RAR-/ZIP-Archive erstellen und Archive mit einem Kennwort schützen.",
+    "DescriptionEn": "Create and extract archives, compress files and protect archives with a password.",
+    "UseDe": "Für große Downloads, Dateiversand und platzsparendes Archivieren. WinRAR ist kostenpflichtige Software mit Testmöglichkeit.",
+    "Website": "https://www.win-rar.com/",
+    "IconUrl": "",
+    "PackageId": "RARLab.WinRAR",
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/r/RARLab/WinRAR",
+    "Id": "winrar",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For large downloads, file sharing and space-saving archiving. WinRAR is paid software with a trial period."
+  },
+  {
+    "Name": "PeaZip",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "Giorgio Tani",
+    "DescriptionDe": "Archive öffnen, erstellen, umwandeln und unterstützte Formate verschlüsseln.",
+    "DescriptionEn": "Open, create, convert and encrypt supported archive formats.",
+    "UseDe": "Für häufige Arbeit mit unterschiedlichen Archivformaten.",
+    "Website": "https://peazip.github.io/",
+    "IconUrl": "",
+    "PackageId": "Giorgiotani.Peazip",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/g/Giorgiotani/Peazip",
+    "Id": "peazip",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For working regularly with different archive formats."
+  },
+  {
+    "Name": "NanaZip",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "M2-Team",
+    "DescriptionDe": "Archive komprimieren und entpacken, mit Integration in Windows.",
+    "DescriptionEn": "Compress and extract archives with Windows Explorer integration.",
+    "UseDe": "Für schnellen Zugriff auf Archivfunktionen im Explorer.",
+    "Website": "https://github.com/M2Team/NanaZip",
+    "IconUrl": "",
+    "PackageId": "M2Team.NanaZip",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/M2Team/NanaZip",
+    "Id": "nanazip",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For quick access to archive features in Windows Explorer."
+  },
+  {
+    "Name": "ShareX",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "ShareX Team",
+    "DescriptionDe": "Bildschirmbereiche aufnehmen, Screenshots bearbeiten und Arbeitsabläufe vereinfachen.",
+    "DescriptionEn": "Capture screen areas, edit screenshots and automate capture workflows.",
+    "UseDe": "Für Dokumentation, Fehlerberichte und Bildschirmaufnahmen.",
+    "Website": "https://getsharex.com/",
+    "IconUrl": "",
+    "PackageId": "ShareX.ShareX",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/s/ShareX/ShareX",
+    "Id": "sharex",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For documentation, bug reports and screen recordings."
+  },
+  {
+    "Name": "WinSCP",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "Martin Prikryl",
+    "DescriptionDe": "Dateien zwischen lokalem PC und Servern über unterstützte Protokolle übertragen.",
+    "DescriptionEn": "Transfer files between your PC and servers over supported secure protocols.",
+    "UseDe": "Für SFTP-/FTP-Zugriffe und die Verwaltung von Serverdateien.",
+    "Website": "https://winscp.net/",
+    "IconUrl": "",
+    "PackageId": "WinSCP.WinSCP",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/w/WinSCP/WinSCP",
+    "Id": "winscp",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For SFTP/FTP access and managing files on servers."
+  },
+  {
+    "Name": "PuTTY",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "Simon Tatham",
+    "DescriptionDe": "Terminalverbindungen zu entfernten Geräten und Servern herstellen.",
+    "DescriptionEn": "Connect to remote computers and network devices using SSH and terminal sessions.",
+    "UseDe": "Für SSH-Zugriff und die Arbeit an Servern oder Netzwerkgeräten.",
+    "Website": "https://www.chiark.greenend.org.uk/~sgtatham/putty/",
+    "IconUrl": "",
+    "PackageId": "PuTTY.PuTTY",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/p/PuTTY/PuTTY",
+    "Id": "putty",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For SSH access and work on servers or network devices."
+  },
+  {
+    "Name": "Wireshark",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "Wireshark Foundation",
+    "DescriptionDe": "Netzwerkpakete mitschneiden und Protokolle untersuchen.",
+    "DescriptionEn": "Capture network packets and inspect protocols on networks you are authorized to analyze.",
+    "UseDe": "Für Fehlersuche und Analyse im eigenen oder autorisierten Netzwerk.",
+    "Website": "https://www.wireshark.org/",
+    "IconUrl": "",
+    "PackageId": "WiresharkFoundation.Wireshark",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/w/WiresharkFoundation/Wireshark",
+    "Id": "wireshark",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For troubleshooting and analysis on your own or an authorized network."
+  },
+  {
+    "Name": "HWiNFO",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "HWiNFO",
+    "DescriptionDe": "Informationen zu Hardware und verfügbaren Sensoren anzeigen.",
+    "DescriptionEn": "Display hardware details and available sensor measurements.",
+    "UseDe": "Für eine Hardwareübersicht und Diagnose. Verfügbarkeit von Sensoren ist hardwareabhängig.",
+    "Website": "https://www.hwinfo.com/",
+    "IconUrl": "",
+    "PackageId": "REALiX.HWiNFO",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/r/REALiX/HWiNFO",
+    "Id": "hwinfo",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For hardware overviews and diagnostics. Sensor availability depends on the hardware."
+  },
+  {
+    "Name": "CPU-Z",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "CPUID",
+    "DescriptionDe": "Technische Informationen zu CPU, Mainboard und RAM anzeigen.",
+    "DescriptionEn": "Identify the processor, motherboard and memory configuration.",
+    "UseDe": "Für die Identifikation von Komponenten und Speichereinstellungen.",
+    "Website": "https://www.cpuid.com/softwares/cpu-z.html",
+    "IconUrl": "",
+    "PackageId": "CPUID.CPU-Z",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/c/CPUID/CPU-Z",
+    "Id": "cpu-z",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20b",
+    "UseEn": "For identifying components and memory settings."
+  },
+  {
+    "Name": "GPU-Z",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "TechPowerUp",
+    "DescriptionDe": "Technische Informationen zur Grafikkarte und verfügbare Messwerte anzeigen.",
+    "DescriptionEn": "Display graphics card specifications and available monitoring data.",
+    "UseDe": "Für die Identifikation und Diagnose der Grafikkarte.",
+    "Website": "https://www.techpowerup.com/gpuz/",
+    "IconUrl": "",
+    "PackageId": "TechPowerUp.GPU-Z",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/t/TechPowerUp/GPU-Z",
+    "Id": "gpu-z",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20b",
+    "UseEn": "For identifying and diagnosing a graphics card."
+  },
+  {
+    "Name": "CrystalDiskInfo",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "Crystal Dew World",
+    "DescriptionDe": "Laufwerksinformationen und verfügbare SMART-Daten anzeigen.",
+    "DescriptionEn": "Display supported drive information and SMART health data.",
+    "UseDe": "Für die Übersicht zum Zustand unterstützter SSDs und Festplatten.",
+    "Website": "https://crystalmark.info/en/software/crystaldiskinfo/",
+    "IconUrl": "",
+    "PackageId": "CrystalDewWorld.CrystalDiskInfo",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/c/CrystalDewWorld/CrystalDiskInfo",
+    "Id": "crystaldiskinfo",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20d",
+    "UseEn": "For checking the condition of supported SSDs and hard drives."
+  },
+  {
+    "Name": "CrystalDiskMark",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "Crystal Dew World",
+    "DescriptionDe": "Die Lese- und Schreibgeschwindigkeit eines ausgewählten Laufwerks messen.",
+    "DescriptionEn": "Measure read and write performance on a selected drive.",
+    "UseDe": "Für Leistungsvergleiche von SSDs, Festplatten und USB-Laufwerken.",
+    "Website": "https://crystalmark.info/en/software/crystaldiskmark/",
+    "IconUrl": "",
+    "PackageId": "CrystalDewWorld.CrystalDiskMark",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/c/CrystalDewWorld/CrystalDiskMark",
+    "Id": "crystaldiskmark",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20d",
+    "UseEn": "For comparing SSD, hard drive and USB drive performance."
+  },
+  {
+    "Name": "Windows Terminal",
+    "Categories": [
+      "development"
+    ],
+    "Publisher": "Microsoft Corporation",
+    "DescriptionDe": "Mehrere unterstützte Kommandozeilen in Registerkarten verwalten.",
+    "DescriptionEn": "Manage multiple command-line shells in tabs and panes.",
+    "UseDe": "Für PowerShell, Eingabeaufforderung und Entwicklungsarbeiten.",
+    "Website": "https://github.com/microsoft/terminal",
+    "IconUrl": "",
+    "PackageId": "Microsoft.WindowsTerminal",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Microsoft/WindowsTerminal",
+    "Id": "windows-terminal",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For PowerShell, Command Prompt and development tasks."
+  },
+  {
+    "Name": "PowerShell",
+    "Categories": [
+      "development"
+    ],
+    "Publisher": "Microsoft Corporation",
+    "DescriptionDe": "Aufgaben per Kommandozeile und Skript automatisieren.",
+    "DescriptionEn": "Automate tasks and system administration using commands and scripts.",
+    "UseDe": "Für Systemverwaltung und wiederkehrende Entwicklungsaufgaben.",
+    "Website": "https://github.com/PowerShell/PowerShell",
+    "IconUrl": "",
+    "PackageId": "Microsoft.PowerShell",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Microsoft/PowerShell",
+    "Id": "powershell",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For administration and recurring development tasks."
+  },
+  {
+    "Name": "GitHub Desktop",
+    "Categories": [
+      "development"
+    ],
+    "Publisher": "GitHub, Inc.",
+    "DescriptionDe": "Änderungen, Commits und Git-Repositories in einer Oberfläche verwalten.",
+    "DescriptionEn": "Manage Git repositories, commits and changes in a graphical interface.",
+    "UseDe": "Für die Versionsverwaltung ohne ständige Kommandozeilenbedienung.",
+    "Website": "https://desktop.github.com/",
+    "IconUrl": "",
+    "PackageId": "GitHub.GitHubDesktop",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/g/GitHub/GitHubDesktop",
+    "Id": "github-desktop",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20d",
+    "UseEn": "For version control without constant command-line use."
+  },
+  {
+    "Name": "VSCodium",
+    "Categories": [
+      "development"
+    ],
+    "Publisher": "VSCodium",
+    "DescriptionDe": "Quellcode bearbeiten und den Editor mit Erweiterungen ergänzen.",
+    "DescriptionEn": "Edit source code using a VS Code based editor and extensions.",
+    "UseDe": "Für Programmierung und Textbearbeitung mit einer VS-Code-basierten Oberfläche.",
+    "Website": "https://vscodium.com/",
+    "IconUrl": "",
+    "PackageId": "VSCodium.VSCodium",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/v/VSCodium/VSCodium",
+    "Id": "vscodium",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20b",
+    "UseEn": "For programming and text editing in a VS Code based interface."
+  },
+  {
+    "Name": ".NET SDK",
+    "Categories": [
+      "development"
+    ],
+    "Publisher": "Microsoft Corporation",
+    "DescriptionDe": ".NET-Anwendungen erstellen, bauen und testen.",
+    "DescriptionEn": "Build, run and test applications with the .NET development tools.",
+    "UseDe": "Für die Entwicklung mit C#, F# und weiteren .NET-Werkzeugen.",
+    "Website": "https://dotnet.microsoft.com/download",
+    "IconUrl": "",
+    "PackageId": "Microsoft.DotNet.SDK.10",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Microsoft/DotNet/SDK/10",
+    "Id": "net-sdk",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For development with C#, F# and other .NET tools."
+  },
+  {
+    "Name": "Docker Desktop",
+    "Categories": [
+      "development"
+    ],
+    "Publisher": "Docker Inc.",
+    "DescriptionDe": "Containerbasierte Entwicklungsumgebungen verwalten.",
+    "DescriptionEn": "Build and manage container development environments. Check system and license requirements.",
+    "UseDe": "Für reproduzierbare Dienste und lokale Entwicklung. Systemvoraussetzungen und Lizenzbedingungen prüfen.",
+    "Website": "https://www.docker.com/products/docker-desktop/",
+    "IconUrl": "",
+    "PackageId": "Docker.DockerDesktop",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/d/Docker/DockerDesktop",
+    "Id": "docker-desktop",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For reproducible services and local development. Check system requirements and license terms."
+  },
+  {
+    "Name": "Postman",
+    "Categories": [
+      "development"
+    ],
+    "Publisher": "Postman",
+    "DescriptionDe": "HTTP-Anfragen erstellen und API-Abläufe testen.",
+    "DescriptionEn": "Create HTTP requests and test API workflows and interfaces.",
+    "UseDe": "Für Web-APIs, Integrationstests und die Untersuchung von Schnittstellen.",
+    "Website": "https://www.postman.com/downloads/",
+    "IconUrl": "",
+    "PackageId": "Postman.Postman",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/p/Postman/Postman",
+    "Id": "postman",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20b",
+    "UseEn": "For web APIs, integration tests and investigating interfaces."
+  },
+  {
+    "Name": "DBeaver Community",
+    "Categories": [
+      "development"
+    ],
+    "Publisher": "DBeaver Corp",
+    "DescriptionDe": "Datenbankverbindungen, Tabellen und SQL-Abfragen in einer Oberfläche bearbeiten.",
+    "DescriptionEn": "Manage supported database connections, tables and SQL queries.",
+    "UseDe": "Für die Arbeit mit unterstützten Datenbanksystemen.",
+    "Website": "https://dbeaver.io/",
+    "IconUrl": "",
+    "PackageId": "DBeaver.DBeaver.Community",
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/d/DBeaver/DBeaver/Community",
+    "Id": "dbeaver-community",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For working with supported database systems."
+  },
+  {
+    "Name": "DB Browser for SQLite",
+    "Categories": [
+      "development"
+    ],
+    "Publisher": "DB Browser for SQLite Team",
+    "DescriptionDe": "SQLite-Dateien öffnen, Tabellen bearbeiten und SQL ausführen.",
+    "DescriptionEn": "Open SQLite files, edit tables and execute SQL statements.",
+    "UseDe": "Für lokale SQLite-Datenbanken und kleinere Datenprojekte.",
+    "Website": "https://sqlitebrowser.org/",
+    "IconUrl": "",
+    "PackageId": "DBBrowserForSQLite.DBBrowserForSQLite",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/d/DBBrowserForSQLite/DBBrowserForSQLite",
+    "Id": "db-browser-for-sqlite",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For local SQLite databases and smaller data projects."
+  },
+  {
+    "Name": "Krita",
+    "Categories": [
+      "media"
+    ],
+    "Publisher": "Krita Foundation",
+    "DescriptionDe": "Digitale Bilder mit Pinseln und Ebenen gestalten.",
+    "DescriptionEn": "Create digital illustrations and paintings with brushes and layers.",
+    "UseDe": "Für Illustrationen, Zeichnungen und digitale Malerei.",
+    "Website": "https://krita.org/",
+    "IconUrl": "",
+    "PackageId": "KDE.Krita",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/k/KDE/Krita",
+    "Id": "krita",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For illustrations, drawing and digital painting."
+  },
+  {
+    "Name": "Inkscape",
+    "Categories": [
+      "media"
+    ],
+    "Publisher": "Inkscape",
+    "DescriptionDe": "Skalierbare Grafiken und SVG-Dateien bearbeiten.",
+    "DescriptionEn": "Create and edit scalable vector graphics and SVG files.",
+    "UseDe": "Für Logos, Symbole und technische Illustrationen.",
+    "Website": "https://inkscape.org/",
+    "IconUrl": "",
+    "PackageId": "Inkscape.Inkscape",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/i/Inkscape/Inkscape",
+    "Id": "inkscape",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For logos, symbols and technical illustrations."
+  },
+  {
+    "Name": "Blender",
+    "Categories": [
+      "media"
+    ],
+    "Publisher": "Blender Foundation",
+    "DescriptionDe": "3D-Modelle, Animationen und gerenderte Szenen erstellen.",
+    "DescriptionEn": "Create 3D models, animations and rendered scenes.",
+    "UseDe": "Für 3D-Grafik und Animation; Hardwareanforderungen beachten.",
+    "Website": "https://www.blender.org/",
+    "IconUrl": "",
+    "PackageId": "BlenderFoundation.Blender",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/b/BlenderFoundation/Blender",
+    "Id": "blender",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For 3D graphics and animation; check hardware requirements."
+  },
+  {
+    "Name": "Kdenlive",
+    "Categories": [
+      "media"
+    ],
+    "Publisher": "KDE",
+    "DescriptionDe": "Videos auf mehreren Spuren schneiden und bearbeiten.",
+    "DescriptionEn": "Edit videos on multiple tracks and assemble video productions.",
+    "UseDe": "Für Videoprojekte, Zusammenschnitte und einfache Produktionen.",
+    "Website": "https://kdenlive.org/",
+    "IconUrl": "",
+    "PackageId": "KDE.Kdenlive",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/k/KDE/Kdenlive",
+    "Id": "kdenlive",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For video projects, compilations and simple productions."
+  },
+  {
+    "Name": "mpv",
+    "Categories": [
+      "media"
+    ],
+    "Publisher": "mpv developers",
+    "DescriptionDe": "Video- und Audiodateien mit einem schlanken Player abspielen.",
+    "DescriptionEn": "Play video and audio with a lightweight, configurable media player.",
+    "UseDe": "Für Medienwiedergabe mit umfangreichen Einstellungsmöglichkeiten.",
+    "Website": "https://mpv.io/",
+    "IconUrl": "",
+    "PackageId": null,
+    "PackageEvidence": null,
+    "Id": "mpv",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20b",
+    "UseEn": "For media playback with extensive configuration options."
+  },
+  {
+    "Name": "MPC-BE",
+    "Categories": [
+      "media"
+    ],
+    "Publisher": "MPC-BE Team",
+    "DescriptionDe": "Lokale Video- und Audiodateien wiedergeben.",
+    "DescriptionEn": "Play local video and audio files in a compact Windows interface.",
+    "UseDe": "Für eine klassische kompakte Mediaplayer-Oberfläche.",
+    "Website": "https://sourceforge.net/projects/mpcbe/",
+    "IconUrl": "",
+    "PackageId": "MPC-BE.MPC-BE",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/MPC-BE/MPC-BE",
+    "Id": "mpc-be",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20d",
+    "UseEn": "For a classic, compact media player interface."
+  },
+  {
+    "Name": "foobar2000",
+    "Categories": [
+      "media"
+    ],
+    "Publisher": "Peter Pawlowski",
+    "DescriptionDe": "Musik abspielen und eine Audiobibliothek verwalten.",
+    "DescriptionEn": "Play music and manage an extensible local audio library.",
+    "UseDe": "Für lokale Musiksammlungen und anpassbare Audiowiedergabe.",
+    "Website": "https://www.foobar2000.org/",
+    "IconUrl": "",
+    "PackageId": "PeterPawlowski.foobar2000",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/p/PeterPawlowski/foobar2000",
+    "Id": "foobar2000",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20",
+    "UseEn": "For local music collections and customizable audio playback."
+  },
+  {
+    "Name": "Vortex",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "Nexus Mods",
+    "DescriptionDe": "Verwaltet unterstützte Spiel-Mods und Profile.",
+    "DescriptionEn": "Manage supported game mods and profiles.",
+    "Website": "https://www.nexusmods.com/vortex",
+    "IconUrl": "",
+    "PackageId": "NexusMods.Vortex",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/n/NexusMods/Vortex",
+    "Id": "vortex",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Name": "WowUp-CF",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "WowUp",
+    "DescriptionDe": "Verwaltet World-of-Warcraft-Add-ons mit CurseForge-Unterstützung.",
+    "DescriptionEn": "Manage World of Warcraft add-ons with CurseForge support.",
+    "Website": "https://wowup.io/",
+    "IconUrl": "",
+    "PackageId": "WowUp.CF",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/w/WowUp/CF",
+    "Id": "wowup-cf",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20b"
+  },
+  {
+    "Name": "Tukui Client",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "Tukui",
+    "DescriptionDe": "Verwaltet unterstützte Tukui- und ElvUI-Add-ons für World of Warcraft.",
+    "DescriptionEn": "Manage supported Tukui and ElvUI add-ons for World of Warcraft.",
+    "Website": "https://tukui.org/client",
+    "IconUrl": "",
+    "PackageId": "TukuiCommunity.TukuiClient",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/t/TukuiCommunity/TukuiClient",
+    "Id": "tukui-client",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-11-04",
+    "UseDe": "Verwaltet unterstützte WoW-Add-ons. Die registrierte Windows-MSI-Ausgabe verwendet den bestätigten WinGet-Paketweg. Bei der getrennten Standalone-EXE prüft „Erneut prüfen“ das offizielle Paket und dessen Entwicklersignatur für einen direkten Dateiaustausch.",
+    "UseEn": "Manage supported WoW add-ons. The registered Windows MSI edition uses the verified WinGet package route. For the separate standalone EXE, “Check again” verifies the official package and its developer signature for direct file replacement."
+  },
+  {
+    "Name": "Epic Games Launcher",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "Epic Games",
+    "DescriptionDe": "Installiert, startet und verwaltet Spiele aus der Epic-Bibliothek.",
+    "DescriptionEn": "Install, launch and manage games in the Epic library.",
+    "Website": "https://store.epicgames.com/download",
+    "IconUrl": "",
+    "PackageId": "EpicGames.EpicGamesLauncher",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/e/EpicGames/EpicGamesLauncher",
+    "Id": "epic-games-launcher",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20d"
+  },
+  {
+    "Name": "Steam",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "Valve Corporation",
+    "DescriptionDe": "Spieleplattform mit Bibliothek, Downloads und Community-Funktionen.",
+    "DescriptionEn": "Game platform with a library, downloads and community features.",
+    "Website": "https://store.steampowered.com/about/",
+    "IconUrl": "",
+    "PackageId": "Valve.Steam",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/v/Valve/Steam",
+    "Id": "steam",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Name": "Ubisoft Connect",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "Ubisoft",
+    "DescriptionDe": "Startet und verwaltet Ubisoft-Spiele und verbundene Kontofunktionen.",
+    "DescriptionEn": "Launch and manage Ubisoft games and connected account features.",
+    "Website": "https://www.ubisoft.com/ubisoft-connect",
+    "IconUrl": "",
+    "PackageId": "Ubisoft.Connect",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/u/Ubisoft/Connect",
+    "Id": "ubisoft-connect",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Name": "Satisfactory Mod Manager",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "Satisfactory Modding Community",
+    "DescriptionDe": "Installiert und verwaltet Mods für Satisfactory.",
+    "DescriptionEn": "Install and manage mods for Satisfactory.",
+    "Website": "https://ficsit.app/",
+    "IconUrl": "",
+    "PackageId": "SatisfactoryModding.SatisfactoryModManager",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/s/SatisfactoryModding/SatisfactoryModManager",
+    "Id": "satisfactory-mod-manager",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20d"
+  },
+  {
+    "Name": "CurseForge",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "Overwolf",
+    "DescriptionDe": "Findet und verwaltet unterstützte Spiel-Add-ons und Modpacks.",
+    "DescriptionEn": "Find and manage supported game add-ons and modpacks.",
+    "Website": "https://www.curseforge.com/download/app",
+    "IconUrl": "",
+    "PackageId": "Overwolf.CurseForge",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/o/Overwolf/CurseForge",
+    "Id": "curseforge",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20d"
+  },
+  {
+    "Name": "Battle.net",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "Blizzard Entertainment",
+    "DescriptionDe": "Startet, installiert und aktualisiert Spiele der Battle.net-Bibliothek.",
+    "DescriptionEn": "Launch, install and update games in the Battle.net library.",
+    "Website": "https://download.battle.net/",
+    "IconUrl": "",
+    "PackageId": "Blizzard.BattleNet",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/b/Blizzard/BattleNet",
+    "Id": "battle-net",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20b"
+  },
+  {
+    "Id": "turtle-beach-swarm-ii",
+    "Name": "Turtle Beach Swarm II",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "Turtle Beach",
+    "DescriptionDe": "Konfigurationssoftware für unterstützte Turtle-Beach-Geräte; Kompatibilität hängt vom Modell ab.",
+    "DescriptionEn": "Configuration software for supported Turtle Beach devices; compatibility depends on the model.",
+    "UseDe": "Zum Verwalten und Anpassen kompatibler Turtle-Beach-Geräte.",
+    "UseEn": "For managing and customizing compatible Turtle Beach devices.",
+    "Website": "https://www.turtlebeach.com/swarm2",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageId": null,
+    "PackageEvidence": null,
+    "AssetVersion": "2026-11-06"
+  },
+  {
+    "Name": "Roblox Client",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "Roblox Corporation",
+    "DescriptionDe": "Öffnet und spielt Roblox-Erlebnisse mit einem Roblox-Konto.",
+    "DescriptionEn": "Open and play Roblox experiences using a Roblox account.",
+    "Website": "https://www.roblox.com/download",
+    "IconUrl": "",
+    "PackageId": "Roblox.Roblox",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/r/Roblox/Roblox",
+    "Id": "roblox-client",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Name": "MelonLoader",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "LavaGang",
+    "DescriptionDe": "Lädt unterstützte Mods für Unity-Spiele. Einrichtung erfolgt für das jeweilige Spiel.",
+    "DescriptionEn": "Load supported mods for Unity games. Setup is specific to each game.",
+    "Website": "https://melonwiki.xyz/",
+    "IconUrl": "",
+    "PackageId": null,
+    "PackageEvidence": null,
+    "Id": "melonloader",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Name": "UltraPlus Manager",
+    "Categories": [
+      "gaming"
+    ],
+    "Publisher": "UltraPlus",
+    "DescriptionDe": "Lädt Ultra+-Mods für unterstützte Spiele herunter, aktualisiert sie und bietet Presets und Konfiguration.",
+    "DescriptionEn": "Download and update Ultra+ mods for supported games and manage presets and configuration.",
+    "Website": "https://theultraplace.com/installing/",
+    "IconUrl": "",
+    "PackageId": null,
+    "PackageEvidence": null,
+    "Id": "ultraplus-manager",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20c",
+    "UseDe": "Für die Einrichtung und Verwaltung von Ultra+ in unterstützten Spielen. Spiele und Presets werden im Manager ausgewählt.",
+    "UseEn": "For setting up and managing Ultra+ in supported games. Games and presets are selected in the manager."
+  },
+  {
+    "Name": "Geek Uninstaller",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "Geek Uninstaller",
+    "DescriptionDe": "Deinstalliert Programme und hilft beim Erkennen verbliebener Einträge.",
+    "DescriptionEn": "Uninstall applications and help identify leftover entries.",
+    "Website": "https://geekuninstaller.com/",
+    "IconUrl": "",
+    "PackageId": "GeekUninstaller.GeekUninstaller",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/g/GeekUninstaller/GeekUninstaller",
+    "Id": "geek-uninstaller",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Name": "BCUninstaller",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "Klocman software",
+    "DescriptionDe": "Verwaltet Deinstallationen und hilft beim Entfernen mehrerer Programme.",
+    "DescriptionEn": "Manage uninstallations and help remove multiple applications.",
+    "Website": "https://www.bcuninstaller.com/",
+    "IconUrl": "",
+    "PackageId": "Klocman.BulkCrapUninstaller",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/k/Klocman/BulkCrapUninstaller",
+    "Id": "bcuninstaller",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20b"
+  },
+  {
+    "Name": "DLSS Swapper",
+    "Categories": [
+      "tools",
+      "gaming"
+    ],
+    "Publisher": "beeradmoore",
+    "DescriptionDe": "Verwaltet unterstützte DLSS-, FSR- und XeSS-Bibliotheken für Spiele.",
+    "DescriptionEn": "Manage supported DLSS, FSR and XeSS libraries for games.",
+    "Website": "https://github.com/beeradmoore/dlss-swapper",
+    "IconUrl": "",
+    "PackageId": "beeradmoore.dlss-swapper",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/b/beeradmoore/dlss-swapper",
+    "Id": "dlss-swapper",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20d"
+  },
+  {
+    "Name": "CompactGUI",
+    "Categories": [
+      "tools",
+      "gaming"
+    ],
+    "Publisher": "IridiumIO",
+    "DescriptionDe": "Bedient die Windows-Dateikomprimierung für ausgewählte Ordner. Spielekompatibilität prüfen.",
+    "DescriptionEn": "Control Windows file compression for selected folders. Check game compatibility.",
+    "Website": "https://github.com/IridiumIO/CompactGUI",
+    "IconUrl": "",
+    "PackageId": "IridiumIO.CompactGUI",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/i/IridiumIO/CompactGUI",
+    "Id": "compactgui",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20d"
+  },
+  {
+    "Name": "Autoruns",
+    "Categories": [
+      "tools"
+    ],
+    "Publisher": "Microsoft Corporation",
+    "DescriptionDe": "Zeigt Windows-Autostarteinträge an und ermöglicht deren gezielte Verwaltung.",
+    "DescriptionEn": "Display Windows startup entries and manage individual entries.",
+    "Website": "https://learn.microsoft.com/sysinternals/downloads/autoruns",
+    "IconUrl": "",
+    "PackageId": "Microsoft.Sysinternals.Autoruns",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Microsoft/Sysinternals/Autoruns",
+    "Id": "autoruns",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20b"
+  },
+  {
+    "Name": "MSI Afterburner",
+    "Categories": [
+      "tools",
+      "gaming"
+    ],
+    "Publisher": "Micro-Star International",
+    "DescriptionDe": "Zeigt GPU-Messwerte und bietet Einstellungen für unterstützte Grafikkarten.",
+    "DescriptionEn": "Show GPU monitoring data and settings for supported graphics cards.",
+    "Website": "https://www.msi.com/Landing/afterburner/graphics-cards",
+    "IconUrl": "",
+    "PackageId": "Guru3D.Afterburner",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/g/Guru3D/Afterburner",
+    "Id": "msi-afterburner",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20"
+  },
+  {
+    "Name": "TeamSpeak",
+    "Categories": [
+      "streaming",
+      "gaming"
+    ],
+    "Publisher": "TeamSpeak Systems",
+    "DescriptionDe": "Bietet Sprachkommunikation über TeamSpeak-Server.",
+    "DescriptionEn": "Communicate by voice through TeamSpeak servers.",
+    "Website": "https://www.teamspeak.com/en/downloads/",
+    "IconUrl": "",
+    "PackageId": "TeamSpeakSystems.TeamSpeakClient",
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/t/TeamSpeakSystems/TeamSpeakClient",
+    "Id": "teamspeak",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20b"
+  },
+  {
+    "Name": "ArtCraft Launcher",
+    "Categories": [
+      "media"
+    ],
+    "Publisher": "ArtCraft",
+    "DescriptionDe": "Verwaltet die vom Anbieter angebotenen Kreativanwendungen. Einzelprogramme werden separat ausgewählt.",
+    "DescriptionEn": "Manage creative applications offered by the publisher. Individual programs are selected separately.",
+    "Website": "https://getartcraft.com/apps",
+    "IconUrl": "",
+    "PackageId": null,
+    "PackageEvidence": null,
+    "Id": "artcraft-launcher",
+    "PreviewUrl": null,
+    "AssetVersion": "2026-10-20d"
+  },
+  {
+    "Id": "lightshot",
+    "Name": "Lightshot",
+    "Categories": [
+      "tools"
+    ],
+    "PackageId": "Skillbrains.Lightshot",
+    "Publisher": "Skillbrains",
+    "DescriptionDe": "Erstellt Screenshots eines gewählten Bildschirmbereichs. Bilder lassen sich markieren, speichern oder über einen Link teilen.",
+    "DescriptionEn": "Capture a selected screen area. Annotate screenshots, save them locally or share them through a link.",
+    "UseDe": "Für schnelle Bildschirmfotos, Fehlerberichte und bebilderte Erklärungen. Das Teilen im Internet ist optional.",
+    "UseEn": "For quick screenshots, bug reports and illustrated explanations. Sharing online is optional.",
+    "Website": "https://app.prntscr.com/en/index.html",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/s/Skillbrains/Lightshot",
+    "AssetVersion": "2026-10-21"
+  },
+  {
+    "Id": "extra-hibbiki-chromium",
+    "Name": "Chromium",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Hibbiki.Chromium",
+    "Publisher": "The Chromium Authors",
+    "DescriptionDe": "Freier Browser als Grundlage vieler anderer Browser.",
+    "DescriptionEn": "Open-source browser used as the basis for many other browsers.",
+    "Website": "https://www.chromium.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/h/Hibbiki/Chromium",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Recherche, Webanwendungen und alltägliches Surfen. Konten und Erweiterungen werden im Browser eingerichtet.",
+    "UseEn": "For research, web applications and everyday browsing. Accounts and extensions are set up in the browser.",
+    "InstalledNames": [
+      "Chromium"
+    ]
+  },
+  {
+    "Id": "extra-mozilla-firefox-esr",
+    "Name": "Firefox ESR",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "Mozilla.Firefox.ESR",
+    "Publisher": "Mozilla",
+    "DescriptionDe": "Firefox mit länger unterstütztem Veröffentlichungszyklus.",
+    "DescriptionEn": "Firefox with an extended support release cycle.",
+    "Website": "https://www.mozilla.org/en-US/firefox/enterprise/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/m/Mozilla/Firefox/ESR",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Recherche, Webanwendungen und alltägliches Surfen. Konten und Erweiterungen werden im Browser eingerichtet.",
+    "UseEn": "For research, web applications and everyday browsing. Accounts and extensions are set up in the browser.",
+    "InstalledNames": [
+      "Firefox ESR"
+    ]
+  },
+  {
+    "Id": "extra-mullvadvpn-mullvadbrowser",
+    "Name": "Mullvad Browser",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "MullvadVPN.MullvadBrowser",
+    "Publisher": "Mullvad",
+    "DescriptionDe": "Browser mit Schwerpunkt auf Datenschutz und reduziertem Tracking.",
+    "DescriptionEn": "Browser focused on privacy and reducing tracking.",
+    "Website": "https://mullvad.net/browser",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/m/MullvadVPN/MullvadBrowser",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Recherche, Webanwendungen und alltägliches Surfen. Konten und Erweiterungen werden im Browser eingerichtet.",
+    "UseEn": "For research, web applications and everyday browsing. Accounts and extensions are set up in the browser.",
+    "InstalledNames": [
+      "Mullvad Browser"
+    ]
+  },
+  {
+    "Id": "extra-eloston-ungoogled-chromium",
+    "Name": "Ungoogled Chromium",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "eloston.ungoogled-chromium",
+    "Publisher": "ungoogled-chromium",
+    "DescriptionDe": "Chromium-Variante ohne Integration von Google-Diensten.",
+    "DescriptionEn": "Chromium variant without Google service integration.",
+    "Website": "https://github.com/Eloston/ungoogled-chromium",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/e/eloston/ungoogled-chromium",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Recherche, Webanwendungen und alltägliches Surfen. Konten und Erweiterungen werden im Browser eingerichtet.",
+    "UseEn": "For research, web applications and everyday browsing. Accounts and extensions are set up in the browser.",
+    "InstalledNames": [
+      "Ungoogled Chromium"
+    ]
+  },
+  {
+    "Id": "extra-imputnet-helium",
+    "Name": "Helium",
+    "Categories": [
+      "browser"
+    ],
+    "PackageId": "ImputNet.Helium",
+    "Publisher": "imput",
+    "DescriptionDe": "Chromium-basierter Browser mit Fokus auf Datenschutz und einfache Bedienung.",
+    "DescriptionEn": "Chromium-based browser focused on privacy and a simple interface.",
+    "Website": "https://helium.computer",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/i/ImputNet/Helium",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Recherche, Webanwendungen und alltägliches Surfen. Konten und Erweiterungen werden im Browser eingerichtet.",
+    "UseEn": "For research, web applications and everyday browsing. Accounts and extensions are set up in the browser.",
+    "InstalledNames": [
+      "Helium"
+    ]
+  },
+  {
+    "Id": "extra-github-cli",
+    "Name": "GitHub CLI",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "GitHub.cli",
+    "Publisher": "GitHub",
+    "DescriptionDe": "GitHub-Projekte, Issues und Pull Requests im Terminal verwalten.",
+    "DescriptionEn": "Manage GitHub projects, issues and pull requests in the terminal.",
+    "Website": "https://cli.github.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/g/GitHub/cli",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für eigene Softwareprojekte. Benötigte Laufzeiten und weitere Werkzeuge hängen vom jeweiligen Projekt ab.",
+    "UseEn": "For your own software projects. Required runtimes and additional tools depend on the project.",
+    "InstalledNames": [
+      "GitHub CLI"
+    ]
+  },
+  {
+    "Id": "extra-kitware-cmake",
+    "Name": "CMake",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "Kitware.CMake",
+    "Publisher": "Kitware",
+    "DescriptionDe": "Build-Konfigurationen für C-, C++- und weitere Softwareprojekte erstellen.",
+    "DescriptionEn": "Create build configurations for C, C++ and other software projects.",
+    "Website": "https://cmake.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/k/Kitware/CMake",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für eigene Softwareprojekte. Benötigte Laufzeiten und weitere Werkzeuge hängen vom jeweiligen Projekt ab.",
+    "UseEn": "For your own software projects. Required runtimes and additional tools depend on the project.",
+    "InstalledNames": [
+      "CMake"
+    ]
+  },
+  {
+    "Id": "extra-golang-go",
+    "Name": "Go",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "GoLang.Go",
+    "Publisher": "Google",
+    "DescriptionDe": "Compiler und Werkzeuge für die Programmiersprache Go.",
+    "DescriptionEn": "Compiler and tools for the Go programming language.",
+    "Website": "https://go.dev/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/g/GoLang/Go",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für eigene Softwareprojekte. Benötigte Laufzeiten und weitere Werkzeuge hängen vom jeweiligen Projekt ab.",
+    "UseEn": "For your own software projects. Required runtimes and additional tools depend on the project.",
+    "InstalledNames": [
+      "Go"
+    ]
+  },
+  {
+    "Id": "extra-rustlang-rust-msvc",
+    "Name": "Rust",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "Rustlang.Rust.MSVC",
+    "Publisher": "The Rust Project Developers",
+    "DescriptionDe": "Werkzeuge für die Entwicklung mit Rust und der MSVC-Werkzeugkette.",
+    "DescriptionEn": "Tools for Rust development using the MSVC toolchain.",
+    "Website": "https://www.rust-lang.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/r/Rustlang/Rust/MSVC",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für eigene Softwareprojekte. Benötigte Laufzeiten und weitere Werkzeuge hängen vom jeweiligen Projekt ab.",
+    "UseEn": "For your own software projects. Required runtimes and additional tools depend on the project.",
+    "InstalledNames": [
+      "Rust"
+    ]
+  },
+  {
+    "Id": "extra-jetbrains-toolbox",
+    "Name": "JetBrains Toolbox",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "JetBrains.Toolbox",
+    "Publisher": "JetBrains",
+    "DescriptionDe": "JetBrains-Entwicklungsumgebungen installieren und verwalten.",
+    "DescriptionEn": "Install and manage JetBrains development environments.",
+    "Website": "https://www.jetbrains.com/toolbox/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/j/JetBrains/Toolbox",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für eigene Softwareprojekte. Benötigte Laufzeiten und weitere Werkzeuge hängen vom jeweiligen Projekt ab.",
+    "UseEn": "For your own software projects. Required runtimes and additional tools depend on the project.",
+    "InstalledNames": [
+      "JetBrains Toolbox"
+    ]
+  },
+  {
+    "Id": "extra-bruno-bruno",
+    "Name": "Bruno",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "Bruno.Bruno",
+    "Publisher": "Bruno",
+    "DescriptionDe": "HTTP-APIs testen und Anfragesammlungen lokal verwalten.",
+    "DescriptionEn": "Test HTTP APIs and manage request collections locally.",
+    "Website": "https://www.usebruno.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/b/Bruno/Bruno",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für eigene Softwareprojekte. Benötigte Laufzeiten und weitere Werkzeuge hängen vom jeweiligen Projekt ab.",
+    "UseEn": "For your own software projects. Required runtimes and additional tools depend on the project.",
+    "InstalledNames": [
+      "Bruno"
+    ]
+  },
+  {
+    "Id": "extra-sublimehq-sublimetext-4",
+    "Name": "Sublime Text",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "SublimeHQ.SublimeText.4",
+    "Publisher": "Sublime",
+    "DescriptionDe": "Text- und Quellcode-Editor mit umfangreichen Bearbeitungsfunktionen.",
+    "DescriptionEn": "Text and source-code editor with extensive editing features.",
+    "Website": "https://www.sublimetext.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/s/SublimeHQ/SublimeText/4",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für eigene Softwareprojekte. Benötigte Laufzeiten und weitere Werkzeuge hängen vom jeweiligen Projekt ab.",
+    "UseEn": "For your own software projects. Required runtimes and additional tools depend on the project.",
+    "InstalledNames": [
+      "Sublime Text"
+    ]
+  },
+  {
+    "Id": "extra-neovim-neovim",
+    "Name": "Neovim",
+    "Categories": [
+      "development"
+    ],
+    "PackageId": "Neovim.Neovim",
+    "Publisher": "Neovim",
+    "DescriptionDe": "Erweiterbarer, tastaturorientierter Text- und Code-Editor.",
+    "DescriptionEn": "Extensible, keyboard-driven text and code editor.",
+    "Website": "https://neovim.io/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/n/Neovim/Neovim",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für eigene Softwareprojekte. Benötigte Laufzeiten und weitere Werkzeuge hängen vom jeweiligen Projekt ab.",
+    "UseEn": "For your own software projects. Required runtimes and additional tools depend on the project.",
+    "InstalledNames": [
+      "Neovim"
+    ]
+  },
+  {
+    "Id": "extra-ventoy-ventoy",
+    "Name": "Ventoy",
+    "Categories": [
+      "tools"
+    ],
+    "PackageId": "Ventoy.Ventoy",
+    "Publisher": "Ventoy",
+    "DescriptionDe": "Mehrere bootfähige Abbilddateien von einem USB-Laufwerk starten.",
+    "DescriptionEn": "Boot multiple disk-image files from a USB drive.",
+    "Website": "https://www.ventoy.net/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/v/Ventoy/Ventoy",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die beschriebene Aufgabe am PC. Einrichtung und Einstellungen erfolgen in der jeweiligen Anwendung.",
+    "UseEn": "For the described PC task. Configuration and settings are managed in the application itself.",
+    "InstalledNames": [
+      "Ventoy"
+    ]
+  },
+  {
+    "Id": "extra-microsoft-sysinternals-processexplorer",
+    "Name": "Process Explorer",
+    "Categories": [
+      "tools"
+    ],
+    "PackageId": "Microsoft.Sysinternals.ProcessExplorer",
+    "Publisher": "Microsoft",
+    "DescriptionDe": "Laufende Prozesse, offene Handles und geladene Bibliotheken untersuchen.",
+    "DescriptionEn": "Inspect running processes, open handles and loaded libraries.",
+    "Website": "https://learn.microsoft.com/sysinternals/downloads/process-explorer",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/m/Microsoft/Sysinternals/ProcessExplorer",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die beschriebene Aufgabe am PC. Einrichtung und Einstellungen erfolgen in der jeweiligen Anwendung.",
+    "UseEn": "For the described PC task. Configuration and settings are managed in the application itself.",
+    "InstalledNames": [
+      "Process Explorer"
+    ]
+  },
+  {
+    "Id": "extra-microsoft-sysinternals-processmonitor",
+    "Name": "Process Monitor",
+    "Categories": [
+      "tools"
+    ],
+    "PackageId": "Microsoft.Sysinternals.ProcessMonitor",
+    "Publisher": "Microsoft",
+    "DescriptionDe": "Datei-, Registry- und Prozessaktivität zur Fehlersuche aufzeichnen.",
+    "DescriptionEn": "Record file, registry and process activity for troubleshooting.",
+    "Website": "https://docs.microsoft.com/en-us/sysinternals/downloads/procmon",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/m/Microsoft/Sysinternals/ProcessMonitor",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die beschriebene Aufgabe am PC. Einrichtung und Einstellungen erfolgen in der jeweiligen Anwendung.",
+    "UseEn": "For the described PC task. Configuration and settings are managed in the application itself.",
+    "InstalledNames": [
+      "Process Monitor"
+    ]
+  },
+  {
+    "Id": "extra-microsoft-sysinternals-tcpview",
+    "Name": "TCPView",
+    "Categories": [
+      "tools",
+      "network"
+    ],
+    "PackageId": "Microsoft.Sysinternals.TCPView",
+    "Publisher": "Microsoft",
+    "DescriptionDe": "Aktive Netzwerkverbindungen ihren Windows-Prozessen zuordnen.",
+    "DescriptionEn": "Map active network connections to their Windows processes.",
+    "Website": "https://docs.microsoft.com/en-us/sysinternals/downloads/tcpview",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/m/Microsoft/Sysinternals/TCPView",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verbindung, Dateisynchronisierung oder Diagnose in eigenen Netzwerken, entsprechend der Programmbeschreibung.",
+    "UseEn": "For connections, file synchronization or diagnostics on networks you manage, according to the program description.",
+    "InstalledNames": [
+      "TCPView"
+    ]
+  },
+  {
+    "Id": "extra-cpuid-hwmonitor",
+    "Name": "HWMonitor",
+    "Categories": [
+      "tools"
+    ],
+    "PackageId": "CPUID.HWMonitor",
+    "Publisher": "CPUID",
+    "DescriptionDe": "Verfügbare Hardware-Sensorwerte wie Temperaturen und Lüfterdaten anzeigen.",
+    "DescriptionEn": "View available hardware sensor readings such as temperatures and fan speeds.",
+    "Website": "https://www.cpuid.com/softwares/hwmonitor.html",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/c/CPUID/HWMonitor",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die beschriebene Aufgabe am PC. Einrichtung und Einstellungen erfolgen in der jeweiligen Anwendung.",
+    "UseEn": "For the described PC task. Configuration and settings are managed in the application itself.",
+    "InstalledNames": [
+      "HWMonitor"
+    ]
+  },
+  {
+    "Id": "extra-localsend-localsend",
+    "Name": "LocalSend",
+    "Categories": [
+      "tools",
+      "network"
+    ],
+    "PackageId": "LocalSend.LocalSend",
+    "Publisher": "LocalSend",
+    "DescriptionDe": "Dateien zwischen Geräten im lokalen Netzwerk übertragen.",
+    "DescriptionEn": "Transfer files between devices on the local network.",
+    "Website": "https://localsend.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/l/LocalSend/LocalSend",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verbindung, Dateisynchronisierung oder Diagnose in eigenen Netzwerken, entsprechend der Programmbeschreibung.",
+    "UseEn": "For connections, file synchronization or diagnostics on networks you manage, according to the program description.",
+    "InstalledNames": [
+      "LocalSend"
+    ]
+  },
+  {
+    "Id": "extra-duongdieuphap-imageglass",
+    "Name": "ImageGlass",
+    "Categories": [
+      "media"
+    ],
+    "PackageId": "DuongDieuPhap.ImageGlass",
+    "Publisher": "Duong Dieu Phap",
+    "DescriptionDe": "Bilder in vielen Formaten anzeigen und durch Fotosammlungen blättern.",
+    "DescriptionEn": "View many image formats and browse photo collections.",
+    "Website": "https://imageglass.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/d/DuongDieuPhap/ImageGlass",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die beschriebene Aufgabe am PC. Einrichtung und Einstellungen erfolgen in der jeweiligen Anwendung.",
+    "UseEn": "For the described PC task. Configuration and settings are managed in the application itself.",
+    "InstalledNames": [
+      "ImageGlass"
+    ]
+  },
+  {
+    "Id": "extra-irfanskiljan-irfanview",
+    "Name": "IrfanView",
+    "Categories": [
+      "media"
+    ],
+    "PackageId": "IrfanSkiljan.IrfanView",
+    "Publisher": "Irfan Skiljan",
+    "DescriptionDe": "Bilder anzeigen, konvertieren und in Stapeln bearbeiten.",
+    "DescriptionEn": "View, convert and batch-process images.",
+    "Website": "https://irfanview.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/i/IrfanSkiljan/IrfanView",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die beschriebene Aufgabe am PC. Einrichtung und Einstellungen erfolgen in der jeweiligen Anwendung.",
+    "UseEn": "For the described PC task. Configuration and settings are managed in the application itself.",
+    "InstalledNames": [
+      "IrfanView"
+    ]
+  },
+  {
+    "Id": "extra-aimp-aimp",
+    "Name": "AIMP",
+    "Categories": [
+      "media"
+    ],
+    "PackageId": "AIMP.AIMP",
+    "Publisher": "AIMP",
+    "DescriptionDe": "Musik abspielen sowie Wiedergabelisten und Audiobibliotheken verwalten.",
+    "DescriptionEn": "Play music and manage playlists and audio libraries.",
+    "Website": "https://www.aimp.ru/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/a/AIMP/AIMP",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die beschriebene Aufgabe am PC. Einrichtung und Einstellungen erfolgen in der jeweiligen Anwendung.",
+    "UseEn": "For the described PC task. Configuration and settings are managed in the application itself.",
+    "InstalledNames": [
+      "AIMP"
+    ]
+  },
+  {
+    "Id": "extra-xbmcfoundation-kodi",
+    "Name": "Kodi",
+    "Categories": [
+      "media"
+    ],
+    "PackageId": "XBMCFoundation.Kodi",
+    "Publisher": "XBMC Foundation",
+    "DescriptionDe": "Medienbibliotheken und Wiedergabe in einer gemeinsamen Oberfläche verwalten.",
+    "DescriptionEn": "Manage media libraries and playback in a unified interface.",
+    "Website": "https://kodi.tv/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/x/XBMCFoundation/Kodi",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die beschriebene Aufgabe am PC. Einrichtung und Einstellungen erfolgen in der jeweiligen Anwendung.",
+    "UseEn": "For the described PC task. Configuration and settings are managed in the application itself.",
+    "InstalledNames": [
+      "Kodi"
+    ]
+  },
+  {
+    "Id": "extra-jellyfin-jellyfinmediaplayer",
+    "Name": "Jellyfin Media Player",
+    "Categories": [
+      "media"
+    ],
+    "PackageId": "Jellyfin.JellyfinMediaPlayer",
+    "Publisher": "Jellyfin",
+    "DescriptionDe": "Desktop-Wiedergabe von Medien eines vorhandenen Jellyfin-Servers.",
+    "DescriptionEn": "Desktop playback of media from an existing Jellyfin server.",
+    "Website": "https://jellyfin.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/j/Jellyfin/JellyfinMediaPlayer",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die beschriebene Aufgabe am PC. Einrichtung und Einstellungen erfolgen in der jeweiligen Anwendung.",
+    "UseEn": "For the described PC task. Configuration and settings are managed in the application itself.",
+    "InstalledNames": [
+      "Jellyfin Media Player"
+    ]
+  },
+  {
+    "Id": "extra-openwhispersystems-signal",
+    "Name": "Signal",
+    "Categories": [
+      "streaming",
+      "communication"
+    ],
+    "PackageId": "OpenWhisperSystems.Signal",
+    "Publisher": "Signal Messenger",
+    "DescriptionDe": "Verschlüsselte Nachrichten sowie Sprach- und Videoanrufe verwenden.",
+    "DescriptionEn": "Use encrypted messaging and voice and video calls.",
+    "Website": "https://signal.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/o/OpenWhisperSystems/Signal",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Nachrichten, Besprechungen oder Zusammenarbeit mit anderen. Ein Konto kann beim Anbieter erforderlich sein.",
+    "UseEn": "For messaging, meetings or collaboration. An account with the provider may be required.",
+    "InstalledNames": [
+      "Signal"
+    ]
+  },
+  {
+    "Id": "extra-telegram-telegramdesktop",
+    "Name": "Telegram",
+    "Categories": [
+      "streaming",
+      "communication"
+    ],
+    "PackageId": "Telegram.TelegramDesktop",
+    "Publisher": "Telegram",
+    "DescriptionDe": "Nachrichten, Gruppen und Kanäle am Desktop verwenden.",
+    "DescriptionEn": "Use messaging, groups and channels on the desktop.",
+    "Website": "https://telegram.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/t/Telegram/TelegramDesktop",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Nachrichten, Besprechungen oder Zusammenarbeit mit anderen. Ein Konto kann beim Anbieter erforderlich sein.",
+    "UseEn": "For messaging, meetings or collaboration. An account with the provider may be required.",
+    "InstalledNames": [
+      "Telegram"
+    ]
+  },
+  {
+    "Id": "extra-mozilla-thunderbird",
+    "Name": "Thunderbird",
+    "Categories": [
+      "tools",
+      "communication"
+    ],
+    "PackageId": "Mozilla.Thunderbird",
+    "Publisher": "Mozilla",
+    "DescriptionDe": "E-Mails, Kalender und Kontakte in einer Desktop-Anwendung verwalten.",
+    "DescriptionEn": "Manage email, calendars and contacts in a desktop application.",
+    "Website": "https://www.thunderbird.net/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/m/Mozilla/Thunderbird",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Nachrichten, Besprechungen oder Zusammenarbeit mit anderen. Ein Konto kann beim Anbieter erforderlich sein.",
+    "UseEn": "For messaging, meetings or collaboration. An account with the provider may be required.",
+    "InstalledNames": [
+      "Thunderbird"
+    ]
+  },
+  {
+    "Id": "extra-zoom-zoom",
+    "Name": "Zoom",
+    "Categories": [
+      "streaming",
+      "communication"
+    ],
+    "PackageId": "Zoom.Zoom",
+    "Publisher": "Zoom",
+    "DescriptionDe": "Video-Besprechungen durchführen und den Bildschirm teilen.",
+    "DescriptionEn": "Join video meetings and share your screen.",
+    "Website": "https://zoom.us/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/z/Zoom/Zoom",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Nachrichten, Besprechungen oder Zusammenarbeit mit anderen. Ein Konto kann beim Anbieter erforderlich sein.",
+    "UseEn": "For messaging, meetings or collaboration. An account with the provider may be required.",
+    "InstalledNames": [
+      "Zoom"
+    ]
+  },
+  {
+    "Id": "extra-electronicarts-eadesktop",
+    "Name": "EA App",
+    "Categories": [
+      "gaming"
+    ],
+    "PackageId": "ElectronicArts.EADesktop",
+    "Publisher": "Electronic Arts",
+    "DescriptionDe": "Spiele aus dem EA-Konto installieren, starten und aktualisieren.",
+    "DescriptionEn": "Install, launch and update games from an EA account.",
+    "Website": "https://www.ea.com/ea-app",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/e/ElectronicArts/EADesktop",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verwaltung und den Start unterstützter Spiele. Ein passendes Spielkonto oder weitere Downloads können erforderlich sein.",
+    "UseEn": "For managing and launching supported games. A game account or additional downloads may be required.",
+    "InstalledNames": [
+      "EA App"
+    ]
+  },
+  {
+    "Id": "extra-gog-galaxy",
+    "Name": "GOG Galaxy",
+    "Categories": [
+      "gaming"
+    ],
+    "PackageId": "GOG.Galaxy",
+    "Publisher": "GOG.com",
+    "DescriptionDe": "GOG-Spiele installieren und die eigene Spielebibliothek verwalten.",
+    "DescriptionEn": "Install GOG games and manage your game library.",
+    "Website": "https://www.gog.com/galaxy",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/g/GOG/Galaxy",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verwaltung und den Start unterstützter Spiele. Ein passendes Spielkonto oder weitere Downloads können erforderlich sein.",
+    "UseEn": "For managing and launching supported games. A game account or additional downloads may be required.",
+    "InstalledNames": [
+      "GOG Galaxy"
+    ]
+  },
+  {
+    "Id": "extra-heroicgameslauncher-heroicgameslauncher",
+    "Name": "Heroic Games Launcher",
+    "Categories": [
+      "gaming"
+    ],
+    "PackageId": "HeroicGamesLauncher.HeroicGamesLauncher",
+    "Publisher": "Heroic Games",
+    "DescriptionDe": "Unterstützte Spielebibliotheken über einen freien Launcher verwalten.",
+    "DescriptionEn": "Manage supported game libraries through an open-source launcher.",
+    "Website": "https://heroicgameslauncher.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/h/HeroicGamesLauncher/HeroicGamesLauncher",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verwaltung und den Start unterstützter Spiele. Ein passendes Spielkonto oder weitere Downloads können erforderlich sein.",
+    "UseEn": "For managing and launching supported games. A game account or additional downloads may be required.",
+    "InstalledNames": [
+      "Heroic Games Launcher"
+    ]
+  },
+  {
+    "Id": "extra-playnite-playnite",
+    "Name": "Playnite",
+    "Categories": [
+      "gaming"
+    ],
+    "PackageId": "Playnite.Playnite",
+    "Publisher": "Playnite",
+    "DescriptionDe": "Spiele aus verschiedenen Bibliotheken gemeinsam organisieren und starten.",
+    "DescriptionEn": "Organize and launch games from different libraries in one place.",
+    "Website": "https://playnite.link/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/p/Playnite/Playnite",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verwaltung und den Start unterstützter Spiele. Ein passendes Spielkonto oder weitere Downloads können erforderlich sein.",
+    "UseEn": "For managing and launching supported games. A game account or additional downloads may be required.",
+    "InstalledNames": [
+      "Playnite"
+    ]
+  },
+  {
+    "Id": "extra-prismlauncher-prismlauncher",
+    "Name": "Prism Launcher",
+    "Categories": [
+      "gaming"
+    ],
+    "PackageId": "PrismLauncher.PrismLauncher",
+    "Publisher": "Prism Launcher",
+    "DescriptionDe": "Getrennte Minecraft-Instanzen und passende Mod-Konfigurationen verwalten.",
+    "DescriptionEn": "Manage separate Minecraft instances and their mod configurations.",
+    "Website": "https://prismlauncher.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/p/PrismLauncher/PrismLauncher",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verwaltung und den Start unterstützter Spiele. Ein passendes Spielkonto oder weitere Downloads können erforderlich sein.",
+    "UseEn": "For managing and launching supported games. A game account or additional downloads may be required.",
+    "InstalledNames": [
+      "Prism Launcher"
+    ]
+  },
+  {
+    "Id": "extra-modrinth-modrinthapp",
+    "Name": "Modrinth App",
+    "Categories": [
+      "gaming"
+    ],
+    "PackageId": "Modrinth.ModrinthApp",
+    "Publisher": "Modrinth",
+    "DescriptionDe": "Minecraft-Profile, Mods und Modpacks über Modrinth verwalten.",
+    "DescriptionEn": "Manage Minecraft profiles, mods and modpacks through Modrinth.",
+    "Website": "https://modrinth.com/app",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/m/Modrinth/ModrinthApp",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verwaltung und den Start unterstützter Spiele. Ein passendes Spielkonto oder weitere Downloads können erforderlich sein.",
+    "UseEn": "For managing and launching supported games. A game account or additional downloads may be required.",
+    "InstalledNames": [
+      "Modrinth App"
+    ]
+  },
+  {
+    "Id": "extra-thedocumentfoundation-libreoffice",
+    "Name": "LibreOffice",
+    "Categories": [
+      "tools",
+      "office"
+    ],
+    "PackageId": "TheDocumentFoundation.LibreOffice",
+    "Publisher": "The Document Foundation",
+    "DescriptionDe": "Textdokumente, Tabellen und Präsentationen bearbeiten.",
+    "DescriptionEn": "Edit text documents, spreadsheets and presentations.",
+    "Website": "https://www.libreoffice.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/t/TheDocumentFoundation/LibreOffice",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Büroarbeit, Dokumente oder Wissensverwaltung – entsprechend der beschriebenen Funktion.",
+    "UseEn": "For office work, documents or knowledge management, according to the described function.",
+    "InstalledNames": [
+      "LibreOffice"
+    ]
+  },
+  {
+    "Id": "extra-sumatrapdf-sumatrapdf",
+    "Name": "Sumatra PDF",
+    "Categories": [
+      "tools",
+      "office"
+    ],
+    "PackageId": "SumatraPDF.SumatraPDF",
+    "Publisher": "Krzysztof Kowalczyk",
+    "DescriptionDe": "PDF-Dateien und unterstützte E-Book-Formate schlank anzeigen.",
+    "DescriptionEn": "View PDF files and supported ebook formats in a lightweight reader.",
+    "Website": "https://www.sumatrapdfreader.org/free-pdf-reader.html",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/s/SumatraPDF/SumatraPDF",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Büroarbeit, Dokumente oder Wissensverwaltung – entsprechend der beschriebenen Funktion.",
+    "UseEn": "For office work, documents or knowledge management, according to the described function.",
+    "InstalledNames": [
+      "Sumatra PDF"
+    ]
+  },
+  {
+    "Id": "extra-geeksoftwaregmbh-pdf24creator",
+    "Name": "PDF24 Creator",
+    "Categories": [
+      "tools",
+      "office"
+    ],
+    "PackageId": "geeksoftwareGmbH.PDF24Creator",
+    "Publisher": "geek software",
+    "DescriptionDe": "PDF-Dateien erstellen, zusammenführen und konvertieren.",
+    "DescriptionEn": "Create, merge and convert PDF files.",
+    "Website": "https://tools.pdf24.org/en/creator",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/g/geeksoftwareGmbH/PDF24Creator",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Büroarbeit, Dokumente oder Wissensverwaltung – entsprechend der beschriebenen Funktion.",
+    "UseEn": "For office work, documents or knowledge management, according to the described function.",
+    "InstalledNames": [
+      "PDF24 Creator"
+    ]
+  },
+  {
+    "Id": "extra-obsidian-obsidian",
+    "Name": "Obsidian",
+    "Categories": [
+      "tools",
+      "office"
+    ],
+    "PackageId": "Obsidian.Obsidian",
+    "Publisher": "Obsidian",
+    "DescriptionDe": "Verknüpfte Notizen in lokalen Markdown-Dateien organisieren.",
+    "DescriptionEn": "Organize linked notes in local Markdown files.",
+    "Website": "https://obsidian.md/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/o/Obsidian/Obsidian",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Büroarbeit, Dokumente oder Wissensverwaltung – entsprechend der beschriebenen Funktion.",
+    "UseEn": "For office work, documents or knowledge management, according to the described function.",
+    "InstalledNames": [
+      "Obsidian"
+    ]
+  },
+  {
+    "Id": "extra-joplin-joplin",
+    "Name": "Joplin",
+    "Categories": [
+      "tools",
+      "office"
+    ],
+    "PackageId": "Joplin.Joplin",
+    "Publisher": "Laurent Cozic",
+    "DescriptionDe": "Notizen und Aufgaben mit optionaler Synchronisierung verwalten.",
+    "DescriptionEn": "Manage notes and tasks with optional synchronization.",
+    "Website": "https://joplinapp.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/j/Joplin/Joplin",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Büroarbeit, Dokumente oder Wissensverwaltung – entsprechend der beschriebenen Funktion.",
+    "UseEn": "For office work, documents or knowledge management, according to the described function.",
+    "InstalledNames": [
+      "Joplin"
+    ]
+  },
+  {
+    "Id": "extra-digitalscholar-zotero",
+    "Name": "Zotero",
+    "Categories": [
+      "tools",
+      "office"
+    ],
+    "PackageId": "DigitalScholar.Zotero",
+    "Publisher": "Corporation for Digital Scholarship",
+    "DescriptionDe": "Literaturquellen sammeln, organisieren und zitieren.",
+    "DescriptionEn": "Collect, organize and cite research sources.",
+    "Website": "https://www.zotero.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/d/DigitalScholar/Zotero",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für Büroarbeit, Dokumente oder Wissensverwaltung – entsprechend der beschriebenen Funktion.",
+    "UseEn": "For office work, documents or knowledge management, according to the described function.",
+    "InstalledNames": [
+      "Zotero"
+    ]
+  },
+  {
+    "Id": "extra-wireguard-wireguard",
+    "Name": "WireGuard",
+    "Categories": [
+      "tools",
+      "network"
+    ],
+    "PackageId": "WireGuard.WireGuard",
+    "Publisher": "WireGuard",
+    "DescriptionDe": "Verbindungen zu konfigurierten WireGuard-VPN-Netzen herstellen.",
+    "DescriptionEn": "Connect to configured WireGuard VPN networks.",
+    "Website": "https://www.wireguard.com/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/w/WireGuard/WireGuard",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verbindung, Dateisynchronisierung oder Diagnose in eigenen Netzwerken, entsprechend der Programmbeschreibung.",
+    "UseEn": "For connections, file synchronization or diagnostics on networks you manage, according to the program description.",
+    "InstalledNames": [
+      "WireGuard"
+    ]
+  },
+  {
+    "Id": "extra-openvpntechnologies-openvpnconnect",
+    "Name": "OpenVPN Connect",
+    "Categories": [
+      "tools",
+      "network"
+    ],
+    "PackageId": "OpenVPNTechnologies.OpenVPNConnect",
+    "Publisher": "OpenVPN",
+    "DescriptionDe": "Verbindungen mit vorhandenen OpenVPN-Konfigurationen herstellen.",
+    "DescriptionEn": "Connect using existing OpenVPN configurations.",
+    "Website": "https://openvpn.net/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/o/OpenVPNTechnologies/OpenVPNConnect",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verbindung, Dateisynchronisierung oder Diagnose in eigenen Netzwerken, entsprechend der Programmbeschreibung.",
+    "UseEn": "For connections, file synchronization or diagnostics on networks you manage, according to the program description.",
+    "InstalledNames": [
+      "OpenVPN Connect"
+    ]
+  },
+  {
+    "Id": "extra-angryziber-angryipscanner",
+    "Name": "Angry IP Scanner",
+    "Categories": [
+      "tools",
+      "network"
+    ],
+    "PackageId": "angryziber.AngryIPScanner",
+    "Publisher": "Angry IP Scanner",
+    "DescriptionDe": "Geräte und erreichbare Dienste in eigenen Netzwerken erfassen.",
+    "DescriptionEn": "Discover devices and reachable services on networks you manage.",
+    "Website": "https://angryip.org/",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/a/angryziber/AngryIPScanner",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verbindung, Dateisynchronisierung oder Diagnose in eigenen Netzwerken, entsprechend der Programmbeschreibung.",
+    "UseEn": "For connections, file synchronization or diagnostics on networks you manage, according to the program description.",
+    "InstalledNames": [
+      "Angry IP Scanner"
+    ]
+  },
+  {
+    "Id": "extra-nextcloud-nextclouddesktop",
+    "Name": "Nextcloud Desktop",
+    "Categories": [
+      "tools",
+      "network"
+    ],
+    "PackageId": "Nextcloud.NextcloudDesktop",
+    "Publisher": "Nextcloud",
+    "DescriptionDe": "Dateien mit einem vorhandenen Nextcloud-Konto synchronisieren.",
+    "DescriptionEn": "Synchronize files with an existing Nextcloud account.",
+    "Website": "https://nextcloud.com/install/#install-clients",
+    "IconUrl": "",
+    "PreviewUrl": null,
+    "PackageEvidence": "https://github.com/microsoft/winget-pkgs/tree/master/manifests/n/Nextcloud/NextcloudDesktop",
+    "AssetVersion": "2026-10-21",
+    "UseDe": "Für die Verbindung, Dateisynchronisierung oder Diagnose in eigenen Netzwerken, entsprechend der Programmbeschreibung.",
+    "UseEn": "For connections, file synchronization or diagnostics on networks you manage, according to the program description.",
+    "InstalledNames": [
+      "Nextcloud Desktop"
+    ]
+  }
+]

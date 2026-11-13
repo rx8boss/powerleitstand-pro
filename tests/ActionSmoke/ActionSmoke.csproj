@@ -1,26 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-  <ItemGroup><Compile Include="../../src/PowerLeitstandPro/UiText.cs" Link="UiText.cs"/>
-    <Compile Include="../../src/PowerLeitstandPro/PowerActionDispatcher.cs" Link="PowerActionDispatcher.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/TimerActionDispatcher.cs" Link="TimerActionDispatcher.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/ThemePalette.cs" Link="ThemePalette.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/RepairProgressParser.cs" Link="RepairProgressParser.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/RepairLogEntry.cs" Link="RepairLogEntry.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/RepairTimeEstimator.cs" Link="RepairTimeEstimator.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/RepairProtocol.cs" Link="RepairProtocol.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/RepairProcessLifetime.cs" Link="RepairProcessLifetime.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/RepairResultSummary.cs" Link="RepairResultSummary.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/RepairOutputEncoding.cs" Link="RepairOutputEncoding.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/LocalUserManager.cs" Link="LocalUserManager.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/WindowPlacementMath.cs" Link="WindowPlacementMath.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/WindowSizeMath.cs" Link="WindowSizeMath.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/ProjectLinks.cs" Link="ProjectLinks.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/ReleaseAssetSelector.cs" Link="ReleaseAssetSelector.cs" />
-    <Compile Include="../../src/PowerLeitstandPro/AppBackupStore.cs" Link="AppBackupStore.cs" />
+  <ItemGroup>
+    <ProjectReference Include="../../src/PowerLeitstandPro/PowerControlProWpf.csproj"/>
   </ItemGroup>
 </Project>

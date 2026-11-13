@@ -10,9 +10,15 @@ namespace PowerControlProWpf;
 
 internal static class RepairEngine
 {
-    internal static async Task RunElevatedAsync(string mode, Action<RepairProtocol.Message> onMessage, CancellationToken cancellationToken = default)
+    private const string NetworkSettings = "POWERLEITSTAND_REPAIR_NETWORK";
+
+    internal static async Task RunElevatedAsync(string mode, Action<RepairProtocol.Message> onMessage,
+        CancellationToken cancellationToken = default, bool english = false, RepairNetworkRequest? network = null)
     {
-        if (mode is not ("dism" or "sfc")) throw new ArgumentOutOfRangeException(nameof(mode));
+        if (RepairTool.Find(mode) is not { OpensWindow: false } tool) throw new ArgumentOutOfRangeException(nameof(mode));
+        RequireAdministrator();
+        if (tool.NeedsAdapter)
+            _ = (network ?? throw new ArgumentNullException(nameof(network))).Prelude(mode);
         var pipeName = "PowerControlProRepair-" + Guid.NewGuid().ToString("N");
         var security = new PipeSecurity();
         security.AddAccessRule(new PipeAccessRule(WindowsIdentity.GetCurrent().User!,
@@ -22,13 +28,19 @@ internal static class RepairEngine
             PipeAccessRights.ReadWrite, AccessControlType.Allow));
         await using var pipe = NamedPipeServerStreamAcl.Create(pipeName, PipeDirection.InOut, 1,
             PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 0, 0, security);
-        using var helper = Process.Start(new ProcessStartInfo(Environment.ProcessPath ??
-            throw new InvalidOperationException("Programmdatei nicht gefunden."))
+        var executable = Environment.ProcessPath ?? throw new InvalidOperationException("Programmdatei nicht gefunden.");
+        var startInfo = new ProcessStartInfo(executable)
         {
-            Arguments = $"--repair-helper {mode} {pipeName}",
-            Verb = "runas",
-            UseShellExecute = true
-        }) ?? throw new InvalidOperationException("Die Administratorabfrage konnte nicht gestartet werden.");
+            WorkingDirectory = Path.GetDirectoryName(executable)!,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("--repair-helper");
+        startInfo.ArgumentList.Add(mode);
+        startInfo.ArgumentList.Add(pipeName);
+        startInfo.Environment["POWERLEITSTAND_REPAIR_LANGUAGE"] = english ? "en" : "de";
+        if (tool.NeedsAdapter) startInfo.Environment[NetworkSettings] = JsonSerializer.Serialize(network);
+        using var helper = Process.Start(startInfo) ??
+            throw new InvalidOperationException("Der Administrator-Hilfsprozess konnte nicht gestartet werden.");
 
         await RepairProcessLifetime.RunUntilExitedAsync(helper, async () =>
         {
@@ -54,16 +66,24 @@ internal static class RepairEngine
         });
     }
 
+    private static void RequireAdministrator()
+    {
+        if (!ElevationService.IsElevated())
+            throw new UnauthorizedAccessException("Administratorrechte sind für Windows-Reparaturbefehle erforderlich.");
+    }
+
     internal static async Task RunHelperAsync(string[] args)
     {
         if (args.Length != 3 || args[0] != "--repair-helper" ||
-            args[1] is not ("dism" or "sfc") ||
+            RepairTool.Find(args[1]) is not { OpensWindow: false } ||
             !args[2].StartsWith("PowerControlProRepair-", StringComparison.Ordinal) ||
             !Guid.TryParseExact(args[2]["PowerControlProRepair-".Length..], "N", out _))
             return;
 
+        RequireAdministrator();
+
         using var pipe = new NamedPipeClientStream(".", args[2], PipeDirection.InOut,
-            PipeOptions.Asynchronous);
+            PipeOptions.Asynchronous, TokenImpersonationLevel.Identification);
         await pipe.ConnectAsync(45000);
         using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
         await using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 1024, leaveOpen: true) { AutoFlush = true };
@@ -82,60 +102,37 @@ internal static class RepairEngine
             finally { writeLock.Release(); }
         }
 
-        try
+        using var stopListening = new CancellationTokenSource();
+        using var cancelRequested = new CancellationTokenSource();
+        var cancelListener = ListenForCancellationAsync();
+
+        async Task ListenForCancellationAsync()
         {
-            var system = Environment.GetFolderPath(Environment.SpecialFolder.System);
-            var file = Path.Combine(system, args[1] == "dism" ? "dism.exe" : "sfc.exe");
-            var commandArgs = args[1] == "dism" ? "/Online /Cleanup-Image /RestoreHealth" : "/scannow";
-            // SFC writes UTF-16LE to redirected pipes; treating it as the OEM code page
-            // produces interleaved NULs, broken umlauts and invisible progress values.
-            var outputEncoding = RepairOutputEncoding.ForMode(args[1]);
-            var cbsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Logs", "CBS", "CBS.log");
-            var cbsStart = args[1] == "sfc" && File.Exists(cbsPath) ? new FileInfo(cbsPath).Length : 0;
-            using var process = new Process
+            try
             {
-                StartInfo = new ProcessStartInfo(file, commandArgs)
+                while (await reader.ReadLineAsync(stopListening.Token) is { } command)
                 {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    StandardOutputEncoding = outputEncoding,
-                    StandardErrorEncoding = outputEncoding
+                    if (command == "cancel") break;
                 }
-            };
-            if (!process.Start()) throw new InvalidOperationException("Windows konnte das Reparaturprogramm nicht starten.");
+                cancelRequested.Cancel();
+            }
+            catch (OperationCanceledException) when (stopListening.IsCancellationRequested) { }
+            catch (IOException) { cancelRequested.Cancel(); }
+        }
+
+        async Task<int> RunProcessAsync(ProcessStartInfo startInfo, bool interruptible)
+        {
+            using var process = Process.Start(startInfo) ??
+                throw new InvalidOperationException("Windows konnte das Werkzeug nicht starten.");
+            using var cancellation = interruptible ? cancelRequested.Token.Register(() =>
+            {
+                try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+                catch (InvalidOperationException) { }
+                catch (System.ComponentModel.Win32Exception ex) { Trace.TraceError(ex.ToString()); }
+            }) : default;
+
             await RepairProcessLifetime.RunUntilExitedAsync(process, async () =>
             {
-                await Send("start", $"{Path.GetFileName(file)} {commandArgs}");
-                using var stopListening = new CancellationTokenSource();
-                using var cancelRequested = new CancellationTokenSource();
-                var cancelListener = Task.Run(async () =>
-                {
-                    try
-                    {
-                        while (await reader.ReadLineAsync(stopListening.Token) is { } command)
-                        {
-                            if (command != "cancel") continue;
-                            try
-                            {
-                                if (!process.HasExited)
-                                {
-                                    process.Kill(entireProcessTree: true);
-                                    cancelRequested.Cancel();
-                                }
-                            }
-                            catch (InvalidOperationException) { }
-                            catch (System.ComponentModel.Win32Exception ex)
-                            {
-                                await Send("error", "Reparatur konnte nicht abgebrochen werden: " + ex.Message);
-                            }
-                            break;
-                        }
-                    }
-                    catch (OperationCanceledException) { }
-                    catch (IOException) { }
-                });
                 async Task CopyAsync(StreamReader stream)
                 {
                     var buffer = new char[256];
@@ -154,23 +151,64 @@ internal static class RepairEngine
                     }
                     if (line.Length > 0) await Send("output", line.ToString());
                 }
-                try
-                {
-                    try { await Task.WhenAll(CopyAsync(process.StandardOutput), CopyAsync(process.StandardError)); }
-                    catch (IOException) when (cancelRequested.IsCancellationRequested) { }
-                    await process.WaitForExitAsync();
-                }
-                finally
-                {
-                    stopListening.Cancel();
-                    await cancelListener;
-                }
-                if (cancelRequested.IsCancellationRequested)
-                {
-                    await Send("cancelled", "Reparatur vom Benutzer abgebrochen.", -2);
-                    return;
-                }
-                if (args[1] == "sfc" && File.Exists(cbsPath))
+
+                try { await Task.WhenAll(CopyAsync(process.StandardOutput), CopyAsync(process.StandardError)); }
+                catch (IOException) when (cancelRequested.IsCancellationRequested) { }
+            });
+            return process.ExitCode;
+        }
+
+        ProcessStartInfo ConsoleTool(string path, Encoding outputEncoding) => new(path)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = outputEncoding,
+            StandardErrorEncoding = outputEncoding
+        };
+
+        ProcessStartInfo PowerShellTool(string system, string script)
+        {
+            var startInfo = ConsoleTool(Path.Combine(system, "WindowsPowerShell", "v1.0", "powershell.exe"), Encoding.UTF8);
+            const string outputSetup = "$ProgressPreference = 'SilentlyContinue'; [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ";
+            var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(outputSetup + "try {" + Environment.NewLine + script
+                + Environment.NewLine + "} catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }"));
+            foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded })
+                startInfo.ArgumentList.Add(argument);
+            return startInfo;
+        }
+
+        try
+        {
+            var system = Environment.SystemDirectory;
+            var tool = RepairTool.Find(args[1])!;
+            await Send("start", tool.Caption);
+            var exitCode = 0;
+            var networkActionStarted = false;
+            if (tool.IsReset && !cancelRequested.IsCancellationRequested)
+            {
+                // Allow the reset to restore service states even when the user requests cancellation.
+                exitCode = await RunProcessAsync(PowerShellTool(system, RepairUpdateReset.Script), interruptible: false);
+            }
+
+            var resetFailed = exitCode != 0;
+            if (exitCode == 0 && tool.Id != "update-reset" && !cancelRequested.IsCancellationRequested)
+            {
+                var sfc = tool.Executable == "sfc.exe";
+                var cbsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Logs", "CBS", "CBS.log");
+                var cbsStart = sfc && File.Exists(cbsPath) ? new FileInfo(cbsPath).Length : 0;
+                var english = Environment.GetEnvironmentVariable("POWERLEITSTAND_REPAIR_LANGUAGE") == "en";
+                var network = tool.NeedsAdapter
+                    ? JsonSerializer.Deserialize<RepairNetworkRequest>(Environment.GetEnvironmentVariable(NetworkSettings) ?? "")
+                        ?? throw new ArgumentException("Network action settings are missing.")
+                    : null;
+                var command = tool.Executable == "powershell.exe" ? PowerShellTool(system, tool.CommandFor(english, network))
+                    : ConsoleTool(Path.Combine(system, tool.Executable), RepairOutputEncoding.ForMode(sfc ? "sfc" : "dism"));
+                if (tool.Executable != "powershell.exe") command.Arguments = tool.Arguments;
+                networkActionStarted = tool.IsNetworkAction;
+                exitCode = await RunProcessAsync(command, interruptible: !networkActionStarted);
+                if (sfc && !cancelRequested.IsCancellationRequested && File.Exists(cbsPath))
                 {
                     try
                     {
@@ -190,13 +228,22 @@ internal static class RepairEngine
                     catch (IOException) { await Send("details", "CBS.log konnte nicht gelesen werden."); }
                     catch (UnauthorizedAccessException) { await Send("details", "CBS.log: Zugriff verweigert."); }
                 }
-                await Send("exit", $"Exit-Code: {process.ExitCode}", process.ExitCode);
-            });
+            }
+
+            if (cancelRequested.IsCancellationRequested && !resetFailed && !networkActionStarted)
+                await Send("cancelled", "Vorgang vom Benutzer abgebrochen.", -2);
+            else
+                await Send("exit", $"Exit-Code: {exitCode}", exitCode);
         }
         catch (Exception ex)
         {
             await Send("error", ex.Message);
-            await Send("exit", "Reparatur fehlgeschlagen.", -1);
+            await Send("exit", "Windows-Werkzeug fehlgeschlagen.", -1);
+        }
+        finally
+        {
+            stopListening.Cancel();
+            await cancelListener;
         }
     }
 }

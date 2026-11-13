@@ -17,15 +17,17 @@ internal sealed class AppSettings
     public string WarningSound { get; set; } = "system-warning.wav";
     public int WarningVolume { get; set; } = 80;
     public bool RequestAdministratorOnLaunch { get; set; }
+    public bool CheckUpdatesOnFirstOpen { get; set; } = true;
+    public bool EsuRegistrationConfirmed { get; set; }
     public int? WindowLeftPx { get; set; }
     public int? WindowTopPx { get; set; }
     public string? WindowMonitor { get; set; }
 
-    public static AppSettings Load()
+    public static AppSettings Load(string? path = null)
     {
         try
         {
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path ?? SettingsPath)) ?? new AppSettings();
             settings.Theme = ThemePalette.NormalizeName(settings.Theme);
             if (settings.SizePreferenceVersion < 2)
             {
@@ -52,13 +54,14 @@ internal sealed class AppSettings
         _ => 2
     };
 
-    public void Save()
+    public void Save(string? path = null)
     {
+        path ??= SettingsPath;
         SizePreferenceVersion = 2;
-        var directory = Path.GetDirectoryName(SettingsPath)!;
+        var directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
-        var temporaryPath = SettingsPath + ".tmp";
+        var temporaryPath = path + ".tmp";
         File.WriteAllText(temporaryPath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
-        File.Move(temporaryPath, SettingsPath, true);
+        File.Move(temporaryPath, path, true);
     }
 }

@@ -3,6 +3,7 @@ bin/
 obj/
 publish/
 artifacts/
+/outputs/
 TestResults/
 *.user
 *.suo
@@ -24,3 +25,5 @@ Thumbs.db
 **/[Tt]est[Rr]eport*
 **/[Tt]est-[Rr]eport*
 **/[Tt]est_[Rr]eport*
+# Added by code-review-graph
+.code-review-graph/

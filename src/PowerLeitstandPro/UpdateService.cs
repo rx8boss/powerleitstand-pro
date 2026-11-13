@@ -25,6 +25,8 @@ internal static class UpdateService
 
     internal static async Task<AvailableUpdate?> CheckAsync(CancellationToken cancellationToken = default)
     {
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); limit.CancelAfter(TimeSpan.FromSeconds(20));
+        using var connection = new OnlineRequest(limit.Token); cancellationToken = connection.Token;
         using var response = await Client.GetAsync(ProjectLinks.ReleaseApiUrl, cancellationToken);
         response.EnsureSuccessStatusCode();
         using var data = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(cancellationToken));
@@ -72,6 +74,7 @@ internal static class UpdateService
             start.ArgumentList.Add(staged);
             start.ArgumentList.Add(backup);
             start.ArgumentList.Add(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            start.ArgumentList.Add(update.SourceBackup?.Sha256 ?? update.Sha256);
             using var process = Process.Start(start) ?? throw new InvalidOperationException("Update-Helfer konnte nicht gestartet werden.");
         }
         catch
@@ -85,6 +88,7 @@ internal static class UpdateService
     internal static async Task DownloadAndVerifyAsync(HttpClient client, AvailableUpdate update, string staged,
         IProgress<UpdateProgress>? progress, CancellationToken cancellationToken)
     {
+        using var connection = new OnlineRequest(cancellationToken); cancellationToken = connection.Token;
         var created = false;
         try
         {
@@ -100,7 +104,7 @@ internal static class UpdateService
                 created = true;
                 var buffer = new byte[65536];
                 int count;
-                while ((count = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) != 0)
+                while ((count = await OnlineConnection.ReadAsync(input, buffer, cancellationToken).ConfigureAwait(false)) != 0)
                 {
                     await output.WriteAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
                     received += count;
@@ -131,7 +135,8 @@ internal static class UpdateService
 
     internal static async Task RunHelperAsync(string[] args)
     {
-        if (args.Length != 5 || !int.TryParse(args[4], out var parentId)) return;
+        if (args.Length != 6 || !int.TryParse(args[4], out var parentId) || args[5].Length != 64 || !args[5].All(Uri.IsHexDigit)) return;
+        var expectedHash = args[5];
         var english = UiText.SavedEnglish();
         var target = Path.GetFullPath(args[1]);
         var staged = Path.GetFullPath(args[2]);
@@ -142,7 +147,6 @@ internal static class UpdateService
             !string.Equals(Path.GetDirectoryName(staged), directory, StringComparison.OrdinalIgnoreCase) ||
             !Path.GetFileName(staged).StartsWith("." + Path.GetFileName(target) + ".", StringComparison.Ordinal) ||
             !staged.EndsWith(".new", StringComparison.OrdinalIgnoreCase)) return;
-        Version candidateVersion;
         try
         {
         if (persistent)
@@ -155,11 +159,11 @@ internal static class UpdateService
         }
         else if (!Path.GetFileName(backup).StartsWith("." + Path.GetFileName(target) + ".", StringComparison.Ordinal) ||
             !backup.EndsWith(".bak", StringComparison.OrdinalIgnoreCase) || File.Exists(backup)) return;
-        candidateVersion = Version.Parse(AppBackupStore.FileVersion(staged));
+        await using var verified = await OpenVerifiedExecutableAsync(staged, expectedHash);
         }
         catch (Exception exception)
         {
-            System.Windows.MessageBox.Show((english ? "Update stopped before replacement: " : "Update wurde vor dem Austausch gestoppt: ") + UiText.Error(exception, english), "PowerLeitstand PRO", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            ThemedMessageBox.ShowInLanguage(english, (english ? "Update stopped before replacement: " : "Update wurde vor dem Austausch gestoppt: ") + UiText.Error(exception, english), "PowerLeitstand PRO", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             return;
         }
         try
@@ -184,7 +188,13 @@ internal static class UpdateService
                 start.ArgumentList.Add("--elevation-attempted");
                 start.ArgumentList.Add("--update-ready");
                 start.ArgumentList.Add(pipeName);
-                candidate = Process.Start(start) ?? throw new InvalidOperationException("Neue EXE konnte nicht gestartet werden.");
+                Version candidateVersion;
+                // Pin the verified target against writes and renames until Windows has opened it.
+                await using (var verified = await OpenVerifiedExecutableAsync(target, expectedHash))
+                {
+                    candidateVersion = Version.Parse(AppBackupStore.FileVersion(target));
+                    candidate = Process.Start(start) ?? throw new InvalidOperationException("Neue EXE konnte nicht gestartet werden.");
+                }
                 return candidateVersion >= new Version(1, 1, 3)
                     ? await UpdateStartupConfirmation.WaitAsync(pipe, candidate, TimeSpan.FromSeconds(90))
                     : await WaitForLegacyWindowAsync(candidate);
@@ -206,21 +216,38 @@ internal static class UpdateService
             var autoStart = AutoStartService.Current.Check(target);
             if (autoStart.Error is not null) Trace.TraceWarning("Autostart nach Update: " + autoStart.Error);
             if (result.Restored)
-                System.Windows.MessageBox.Show((english ? "The new version could not be started. The previous EXE was restored and restarted.\n\n" : "Die neue Version konnte nicht gestartet werden. Die vorherige EXE wurde wiederhergestellt und gestartet.\n\n") + UiText.Translate(result.Warning ?? "", english),
+                ThemedMessageBox.ShowInLanguage(english, (english ? "The new version could not be started. The previous EXE was restored and restarted.\n\n" : "Die neue Version konnte nicht gestartet werden. Die vorherige EXE wurde wiederhergestellt und gestartet.\n\n") + UiText.Translate(result.Warning ?? "", english),
                     "PowerLeitstand PRO", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
             else if (result.Warning is not null)
-                System.Windows.MessageBox.Show(UiText.Translate(result.Warning, english), "PowerLeitstand PRO", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                ThemedMessageBox.ShowInLanguage(english, UiText.Translate(result.Warning, english), "PowerLeitstand PRO", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
         }
         catch (Exception exception)
         {
             // Never delete a backup after a failed restoration.
-            System.Windows.MessageBox.Show((english ? "Update failed. Any existing backup is preserved:\n" : "Update fehlgeschlagen. Eine vorhandene Sicherung bleibt erhalten:\n") + backup + "\n\n" + UiText.Error(exception, english),
+            ThemedMessageBox.ShowInLanguage(english, (english ? "Update failed. Any existing backup is preserved:\n" : "Update fehlgeschlagen. Eine vorhandene Sicherung bleibt erhalten:\n") + backup + "\n\n" + UiText.Error(exception, english),
                 "PowerLeitstand PRO", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
         }
         finally
         {
             candidate?.Dispose();
             try { if (File.Exists(staged)) File.Delete(staged); } catch { }
+        }
+    }
+
+    internal static async Task<FileStream> OpenVerifiedExecutableAsync(string path, string expectedHash)
+    {
+        var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, useAsync: true);
+        try
+        {
+            var actual = Convert.ToHexString(await SHA256.HashDataAsync(file));
+            if (!actual.Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("SHA-256-Prüfsumme stimmt nicht überein. Das Update wurde verworfen.");
+            return file;
+        }
+        catch
+        {
+            await file.DisposeAsync();
+            throw;
         }
     }
 

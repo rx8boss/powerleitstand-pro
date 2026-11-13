@@ -29,6 +29,7 @@ public partial class MainWindow
     private DiagnosticsSnapshot _diagnosticsSnapshot = DiagnosticsSnapshot.Empty;
     private Task<DiagnosticsSnapshot>? _diagnosticsRead;
     private bool _diagnosticsClosed, _driveOpenBusy;
+    private bool _diagnosticsStarted;
     private Canvas _diagnosticsLayer = null!;
     private Border _diagnosticsPanel = null!;
     private FrameworkElement? _diagnosticsAnchor;
@@ -79,9 +80,12 @@ public partial class MainWindow
         Deactivated += (_, _) => CloseDiagnosticsHover();
         LayoutUpdated += (_, _) => { if (_diagnosticsKind is not null) PositionDiagnosticsHover(); };
         _diagnosticsTimer.Tick += async (_, _) => await ReadLiveDiagnosticsAsync();
-        Loaded += async (_, _) =>
+        ContentRendered += async (_, _) =>
         {
-            if (SkipSavedPlacementForTests) return;
+            if (SkipSavedPlacementForTests || _diagnosticsStarted) return;
+            _diagnosticsStarted = true;
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (_diagnosticsClosed) return;
             _diagnosticsTimer.Start();
             await ReadLiveDiagnosticsAsync();
         };

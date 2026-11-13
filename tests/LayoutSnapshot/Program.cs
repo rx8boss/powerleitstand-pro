@@ -897,24 +897,26 @@ internal static class Program
             .Invoke(null, ["sfc", 0, false, "Keine Integritätsverletzungen gefunden", "", TimeSpan.FromMinutes(6), false]);
         var resultType = typeof(MainWindow).Assembly.GetType("PowerControlProWpf.RepairResultWindow", true)!;
         var resultConstructor = resultType.GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance).Single();
-        CaptureDialog((Window)resultConstructor.Invoke([summary, palette, false]), Path.Combine(output, "repair-result.png"));
+        CaptureDialog((Window)resultConstructor.Invoke([summary, palette, false, null, null]), Path.Combine(output, "repair-result.png"));
         var errorSummary = summaryType.GetMethod("Create", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, ["dism", 87, false, "", "Fehlende Reparaturquelle", TimeSpan.FromSeconds(25), false]);
-        CaptureDialog((Window)resultConstructor.Invoke([errorSummary, palette, false]), Path.Combine(output, "repair-result-error.png"));
+        CaptureDialog((Window)resultConstructor.Invoke([errorSummary, palette, false, null, null]), Path.Combine(output, "repair-result-error.png"));
         foreach (var theme in new[] { "Classic", "Dark", "Neon Pink" })
         {
             var themePalette = paletteType.GetMethod("For", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [theme]);
-            CaptureDialog((Window)resultConstructor.Invoke([summary, themePalette, false]),
+            CaptureDialog((Window)resultConstructor.Invoke([summary, themePalette, false, null, null]),
                 Path.Combine(output, $"repair-result-{theme.Replace(' ', '-')}.png"));
         }
         var confirmType = assembly.GetType("PowerControlProWpf.RepairConfirmWindow", true)!;
-        var confirmConstructor = confirmType.GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance).Single();
+        var confirmConstructor = confirmType.GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance).Single(constructor =>
+            constructor.GetParameters().Length == 3 && constructor.GetParameters()[0].ParameterType == typeof(string));
         CaptureDialog((Window)confirmConstructor.Invoke(["sfc /scannow", palette, false]), Path.Combine(output, "repair-confirm.png"));
         var classicPalette = paletteType.GetMethod("For", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, ["Classic"]);
         CaptureDialog((Window)confirmConstructor.Invoke(["DISM /Online /Cleanup-Image /RestoreHealth", classicPalette, false]),
             Path.Combine(output, "repair-confirm-Classic.png"));
         var messageType = assembly.GetType("PowerControlProWpf.ThemedMessageBoxWindow", true)!;
-        var messageConstructor = messageType.GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance).Single();
+        var messageConstructor = messageType.GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Single(constructor => constructor.GetParameters().Length == 6);
         CaptureDialog((Window)messageConstructor.Invoke(["Ereignisprotokoll unwiderruflich löschen?", "Ereignisprotokoll löschen?",
             MessageBoxButton.YesNo, MessageBoxImage.Warning, palette, false]), Path.Combine(output, "confirm-delete.png"));
         CaptureDialog((Window)messageConstructor.Invoke(["Ereignisprotokoll unwiderruflich löschen?", "Ereignisprotokoll löschen?",
@@ -1449,7 +1451,8 @@ internal static class Program
         owner = dialogOwner;
         try
         {
-        Window Create(string type, params object?[] args) => (Window)assembly.GetType("PowerControlProWpf." + type, true)!.GetConstructors(flags).Single().Invoke(args);
+        Window Create(string type, params object?[] args) => (Window)assembly.GetType("PowerControlProWpf." + type, true)!
+            .GetConstructors(flags).Single(constructor => constructor.GetParameters().Length == args.Length).Invoke(args);
         var factories = new (string Name, Func<Window> Create)[]
         {
             ("repair", () => Create("RepairConfirmWindow", "DISM /Online /Cleanup-Image /RestoreHealth", palette, false)),
@@ -1603,9 +1606,13 @@ internal static class Program
     {
         static void Hover(Button button, bool entered) => button.RaiseEvent(new System.Windows.Input.MouseEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0)
             { RoutedEvent = entered ? System.Windows.Input.Mouse.MouseEnterEvent : System.Windows.Input.Mouse.MouseLeaveEvent });
-        foreach (var name in new[] { "RestartButton", "CompactTimerPlusMinute", "CreateUserButton", "RefreshUsersButton", "RepairDismButton", "RepairSfcButton", "CheckUpdatesButton", "DoneButton", "StandardRefreshIconButton" })
+        foreach (var name in new[] { "RestartButton", "CompactTimerPlusMinute", "CreateUserButton", "RefreshUsersButton", "RepairTool:dism", "RepairTool:sfc", "CheckUpdatesButton", "DoneButton", "StandardRefreshIconButton" })
         {
-            var button = (Button)window.FindName(name)!;
+            var button = name.StartsWith("RepairTool:", StringComparison.Ordinal)
+                ? ((IEnumerable<Button>)typeof(MainWindow).GetProperty("RepairToolButtons",
+                    BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!)
+                    .Single(control => Equals(control.Tag, name["RepairTool:".Length..]))
+                : (Button)window.FindName(name)!;
             if (button.Effect is not System.Windows.Media.Effects.DropShadowEffect effect) throw new InvalidOperationException($"Missing neon button {name} / {theme}");
             button.ApplyTemplate();
             var border = new[] { "ActionBorder", "StepSurface", "ButtonBorder", "NoticeSurface", "ArrowSurface" }

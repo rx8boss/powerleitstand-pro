@@ -35,14 +35,15 @@ public partial class MainWindow
                     BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1.2"
                     CornerRadius="10" Padding="15,9" Visibility="Collapsed">
               <Grid>
-                <Grid.RowDefinitions><RowDefinition Height="31"/><RowDefinition Height="25"/><RowDefinition Height="*"/><RowDefinition Height="24"/></Grid.RowDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="52"/><RowDefinition Height="25"/><RowDefinition Height="*"/><RowDefinition Height="24"/></Grid.RowDefinitions>
                 <Grid Width="110" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,38,0" IsHitTestVisible="False" ClipToBounds="True">
                   <Path Data="M 86,0 L 110,0 L 80,30 L 56,30 Z" Fill="{DynamicResource AccentBrush}" Opacity="0.10"/>
                   <Path Data="M 76,0 L 46,30 M 94,0 L 64,30" Stroke="{DynamicResource AccentBrush}" StrokeThickness="0.8" Opacity="0.55"/>
                 </Grid>
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBlock x:Name="Title" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
-                  <Button x:Name="Close" Grid.Column="1" Content="×" FontSize="23" Width="28" Height="27" Padding="0" ToolTip="Schließen"/>
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="36"/><ColumnDefinition/><ColumnDefinition Width="28"/></Grid.ColumnDefinitions>
+                  <Path Data="M 18,0 L 3,24 L 15,24 L 9,43 L 31,14 L 18,14 Z" Width="25" Height="38" Stretch="Uniform" Fill="{DynamicResource AccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                  <StackPanel Grid.Column="1" Margin="0,0,100,0" VerticalAlignment="Center"><TextBlock x:Name="Title" FontSize="19" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/><TextBlock Text="PowerLeitstand PRO" FontSize="11" Margin="0,3,0,0" Foreground="{DynamicResource SubtleTextBrush}"/></StackPanel>
+                  <Button x:Name="Close" Grid.Column="2" Width="28" Height="28" Padding="0" ToolTip="Schließen"><Path Data="M 0,0 L 12,12 M 12,0 L 0,12" Width="12" Height="12" Stretch="Uniform" StrokeThickness="1.6"/></Button>
                 </Grid>
                 <TextBlock x:Name="Count" Grid.Row="1" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource SubtleTextBrush}"/>
                 <Border Grid.Row="2" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource InputBorderBrush}" BorderThickness="1" CornerRadius="5">
@@ -79,7 +80,8 @@ public partial class MainWindow
         _expandedLogEmpty = (TextBlock)_expandedLogPanel.FindName("Empty");
         _expandedLogHint = (TextBlock)_expandedLogPanel.FindName("Hint");
         var close = (Button)_expandedLogPanel.FindName("Close");
-        close.Style = (Style)Resources["OptionsCloseButton"];
+        UnifiedDialogAppearance.Resources(this, ThemePalette.For(SelectedTheme()));
+        UnifiedDialogAppearance.Button(this, close, DialogButtonKind.Close);
         close.Click += (_, _) => SetExpandedLogOpen(false);
         System.Windows.Automation.AutomationProperties.SetName(close, "Protokollansicht schließen");
         RegisterName("ExpandedLogPanel", _expandedLogPanel);

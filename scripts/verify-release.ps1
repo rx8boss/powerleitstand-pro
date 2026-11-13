@@ -43,16 +43,42 @@ if ($PublicZip) {
         if (@($archive.Entries | Where-Object FullName -match '(?i)testbericht|test[ _-]?report').Count -gt 0) {
             throw 'Privater Prüfbericht im öffentlichen ZIP / Private report in public ZIP.'
         }
-        $paths = @($archive.Entries | Where-Object { $_.Name.Length -gt 0 } | ForEach-Object { $_.FullName.Replace('\','/') })
+        $entries = @($archive.Entries | Where-Object { $_.Name.Length -gt 0 })
+        $paths = @($entries | ForEach-Object { $_.FullName.Replace('\','/') })
         $rootFiles = @('PowerLeitstand-PRO.exe','Kurzanleitung.txt','Changelog-DE-EN.md')
-        if (@($paths | Where-Object { $_ -notin $rootFiles -and $_ -notmatch '^Lizenzen/[^/]+$' }).Count -gt 0 -or
-            @($rootFiles | Where-Object { $_ -notin $paths }).Count -gt 0 -or
-            @($paths | Where-Object { $_ -match '^Lizenzen/[^/]+$' }).Count -eq 0 -or
+        $projectLicenses = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'docs/licenses') -File)
+        $requiredLicenses = @('DOTNET-LICENSE.txt','WPF-LICENSE.txt','ThirdPartyNotices.txt') + @($projectLicenses.Name)
+        $expectedPaths = $rootFiles + @($requiredLicenses | ForEach-Object { 'Lizenzen/' + $_ })
+        if (@($paths | Where-Object { $_ -cnotin $expectedPaths }).Count -gt 0 -or
+            @($expectedPaths | Where-Object { $_ -cnotin $paths }).Count -gt 0 -or
+            @($entries | Where-Object Length -eq 0).Count -gt 0 -or
             @($paths | Group-Object | Where-Object Count -gt 1).Count -gt 0) {
             throw 'ZIP-Aufbau muss EXE, Kurzanleitung, Changelog und Lizenzen entsprechen / Invalid public ZIP layout.'
         }
+        function Get-ZipHash([string]$path) {
+            $entry = $entries | Where-Object { $_.FullName.Replace('\','/') -ceq $path }
+            $stream = $entry.Open()
+            $sha = [Security.Cryptography.SHA256]::Create()
+            try { return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','') }
+            finally { $sha.Dispose(); $stream.Dispose() }
+        }
+        if ((Get-ZipHash 'PowerLeitstand-PRO.exe') -cne (Get-FileHash -LiteralPath $binary.FullName -Algorithm SHA256).Hash) {
+            throw 'ZIP-EXE stimmt nicht mit der freigegebenen Datei überein / ZIP executable does not match the approved file.'
+        }
+        $changelog = $entries | Where-Object FullName -ceq 'Changelog-DE-EN.md'
+        $reader = [IO.StreamReader]::new($changelog.Open(), [Text.Encoding]::UTF8, $true)
+        try {
+            if ($reader.ReadToEnd().Replace("`r", '').Trim() -cne $expected.Trim()) {
+                throw 'ZIP-Changelog weicht ab / ZIP changelog mismatch.'
+            }
+        } finally { $reader.Dispose() }
+        foreach ($license in $projectLicenses) {
+            if ((Get-ZipHash ('Lizenzen/' + $license.Name)) -cne (Get-FileHash -LiteralPath $license.FullName -Algorithm SHA256).Hash) {
+                throw "ZIP-Lizenz stimmt nicht überein / ZIP license mismatch: $($license.Name)"
+            }
+        }
     } finally { $archive.Dispose() }
-    Write-Output 'PASS PUBLIC ZIP: EXE, guide, bilingual changelog and Lizenzen only; no private development reports.'
+    Write-Output 'PASS PUBLIC ZIP: executable SHA-256, bilingual changelog and required licenses checked.'
 }
 if ($GitHubReleaseJson) {
     $release = Get-Content -LiteralPath $GitHubReleaseJson -Raw | ConvertFrom-Json

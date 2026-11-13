@@ -17,6 +17,24 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args.Contains("--portable-update-failed-start")) return 7;
+        if (args.Contains("--images-only")) System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+        if (Array.IndexOf(args,"--application-close-child") is var closeChild && closeChild>=0)
+            return ProgramApplicationCloseTests.Child(args[closeChild+1],args[closeChild+2]=="refuse",args[closeChild+2]=="hidden");
+        if (args.Contains("--user-query-child-fixture")) { Console.WriteLine(new string('A', 80000)); Console.Error.WriteLine(new string('E', 80000)); return 0; }
+        if (Array.IndexOf(args, "--user-query-hang-fixture") is var hold && hold >= 0) { File.WriteAllText(args[hold + 1], Environment.ProcessId.ToString()); Thread.Sleep(30000); return 0; }
+        if (args.Contains("--hidden-child-fixture")) { Console.WriteLine(new string('A', 80000)); Console.Error.WriteLine("fixture stderr"); Thread.Sleep(300); return 7; }
+        if (args.Contains("--step-child-fixture")) { Console.WriteLine("Downloading https://example.invalid/fixture.exe"); Console.WriteLine("Successfully verified installer hash"); Console.WriteLine("Starting package install..."); Console.Out.Flush(); Thread.Sleep(700); Console.WriteLine("Successfully installed"); return 0; }
+        if (args.Contains("--download-child-fixture"))
+        {
+            Console.OutputEncoding = new System.Text.UTF8Encoding(false);
+            using var stderr = new StreamWriter(Console.OpenStandardError(), new System.Text.UTF8Encoding(false)) { AutoFlush = true };
+            stderr.WriteLine("\uFEFFDownload läuft https://example.invalid/fixture.exe"); Thread.Sleep(150);
+            Console.Write("  25 MB / 100 MB\r"); Console.Out.Flush(); Thread.Sleep(150);
+            stderr.WriteLine("Der Installer-Hash wurde erfolgreich überprüft"); Thread.Sleep(150);
+            Console.WriteLine("Paketinstallation wird gestartet..."); Console.Out.Flush(); Thread.Sleep(500);
+            Console.WriteLine("Erfolgreich installiert"); return 0;
+        }
         var output = args.Length > 0 ? Path.GetFullPath(args[0]) : Path.Combine(Path.GetTempPath(), "PowerLeitstand-Tray-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(output);
         // A compiled test runner has its own entry assembly; use the app's pack resources.
@@ -37,6 +55,128 @@ internal static class Program
         try
         {
             CrossButtonAppearance.Initialize();
+            if (args.Contains("--portable-update-window")) return PortableAppUpdateTests.RunWindow(app, output, args[2], args[3], args[4]);
+            if (args.Contains("--portable-app-update")) return Task.Run(() => PortableAppUpdateTests.RunAsync(output, args[2], args[3])).GetAwaiter().GetResult();
+            if (args.Contains("--neon-presentation")) return NeonPresentationTests.Run(app, output);
+            if (args.Contains("--developer-packages")) return DeveloperPackageTests.Run(app, output);
+            if (args.Contains("--program-rows")) return ProgramRowsTests.Run(app, output);
+            if (args.Contains("--program-presentation")) return ProgramPresentationTests.Run(app, output);
+            if (args.Contains("--vlc-reinstall")) return Task.Run(() => ProgramVlcReinstallTests.Run(output)).GetAwaiter().GetResult();
+            if (args.Contains("--vlc-reinstall-local")) return Task.Run(() => ProgramVlcReinstallTests.Local(output)).GetAwaiter().GetResult();
+            if (args.Contains("--vlc-normal-local-ui")) return ProgramVlcNormalTests.Run(app, output);
+            if (args.Contains("--vlc-source-live")) return Task.Run(() => ProgramVlcNormalTests.Live(output)).GetAwaiter().GetResult();
+            if (args.Contains("--catalog-additions")) return Task.Run(() => ProgramCatalogAdditionsTests.Run(output)).GetAwaiter().GetResult();
+            if (args.Contains("--tooltips")) return AppToolTipTests.Run(app, output);
+            if (args.Contains("--descriptions")) return ProgramDescriptionTests.Run(app, output, args.Contains("--descriptions-live"), args.Contains("--logic-only"));
+            if (args.Contains("--app-logs")) return AppLogTests.Run(app, output, false);
+            if (args.Contains("--app-logs-ui")) return AppLogTests.Run(app, output, true);
+            if (args.Contains("--scoop-git")) return Task.Run(() => ProgramScoopGitTests.Run(output, false)).GetAwaiter().GetResult();
+            if (args.Contains("--scoop-git-live")) return Task.Run(() => ProgramScoopGitTests.Run(output, true)).GetAwaiter().GetResult();
+            if (args.Contains("--check-status")) return ProgramCheckStatusTests.Run(app, output, !args.Contains("--skip-images"));
+            if (args.Contains("--managed-packages")) return Task.Run(() => ProgramManagedPackageTests.Run(output, false)).GetAwaiter().GetResult();
+            if (args.Contains("--managed-ui")) return ProgramManagedUiTests.Run(app, output);
+            if (args.Contains("--managed-packages-live")) return Task.Run(() => ProgramManagedPackageTests.Run(output, true)).GetAwaiter().GetResult();
+            if (args.Contains("--detection-completion")) return Task.Run(() => ProgramDetectionCompletionTests.Run(output, false)).GetAwaiter().GetResult();
+            if (args.Contains("--detection-completion-live")) return Task.Run(() => ProgramDetectionCompletionTests.Run(output, true)).GetAwaiter().GetResult();
+            if (args.Contains("--installed-loading")) return ProgramInstalledLoadingTests.Run(app, output, !args.Contains("--skip-images"));
+            if (args.Contains("--reinstall")) return Task.Run(() => ProgramReinstallTests.Run(output)).GetAwaiter().GetResult();
+            if (args.Contains("--reinstall-ui")) return ProgramReinstallUiTests.Run(app, output);
+            if (args.Contains("--reinstall-large-image")) return ProgramReinstallUiTests.Run(app, output, largeImageOnly: true);
+            if (args.Contains("--reinstall-flow")) return ProgramReinstallFlowTests.Run(app, output);
+            if (args.Contains("--dialog-inventory")) return ProgramDialogInventoryTests.Run(app, output, args.Contains("--observe-before"), args.Contains("--images-only"));
+            if (args.Contains("--store-inventory")) return Task.Run(() => ProgramStoreInventoryTests.Run(output)).GetAwaiter().GetResult();
+            if (args.Contains("--store-inventory-live")) return Task.Run(() => ProgramStoreInventoryTests.Live(output)).GetAwaiter().GetResult();
+            if (args.Contains("--program-paths")) return ProgramPathTests.Run(output);
+            if (args.Contains("--program-paths-live")) return Task.Run(() => ProgramPathTests.Live(output)).GetAwaiter().GetResult();
+            if (args.Contains("--program-paths-msi")) return Task.Run(() => ProgramPathTests.Msi(output)).GetAwaiter().GetResult();
+            if (args.Contains("--teamspeak-info")) return TeamSpeakInfoTests.Run(app, output, args.Contains("--logic-only"));
+            if (args.Contains("--teamspeak-actions")) return Task.Run(() => TeamSpeakActionTests.Run(output)).GetAwaiter().GetResult();
+            if (args.Contains("--teamspeak-artifact")) return TeamSpeakActionTests.Artifact(output, args.Last());
+            if (args.Contains("--teamspeak-prepare-live")) return Task.Run(() => TeamSpeakActionTests.PrepareLive(output)).GetAwaiter().GetResult();
+            if (args.Contains("--repair-tools")) return RepairToolsTests.Run(output);
+            if (args.Contains("--download-repair")) return ProgressRepairTests.Run(app, output);
+            if (args.Contains("--teamspeak-confirm-existing")) return Task.Run(() => ProgressRepairTests.ConfirmExisting(output, args[^2], args[^1])).GetAwaiter().GetResult();
+            if (args.Contains("--teamspeak-live")) return TeamSpeakInfoTests.Live(output);
+            if (args.Contains("--program-info-update")) return ProgramInfoUpdateTests.Run(app, output, args.Contains("--logic-only"));
+            if (args.Contains("--scoped-updates")) return ProgramScopedUpdateTests.Logic(output);
+            if (args.Contains("--scoped-updates-ui")) return ProgramScopedUpdateTests.Ui(app, output);
+            if (args.Contains("--wowup-update-live")) return ProgramScopedUpdateTests.WowUpLive(app, output);
+            if (args.Contains("--publisher-portable")) return Task.Run(()=>ProgramPublisherPortableTests.Logic(output)).GetAwaiter().GetResult();
+            if (args.Contains("--application-close")) return Task.Run(()=>ProgramApplicationCloseTests.Run(output)).GetAwaiter().GetResult();
+            if (args.Contains("--single-check-close-ui")) return ProgramSingleCheckCloseTests.Ui(app,output);
+            if (args.Contains("--publisher-portable-ui")) return ProgramPublisherPortableTests.Ui(app,output);
+            if (Array.IndexOf(args,"--tukui-standalone") is var tukuiFiles && tukuiFiles>=0)
+                return Task.Run(()=>TukuiStandaloneTests.Files(output,args[tukuiFiles+1],args[tukuiFiles+2])).GetAwaiter().GetResult();
+            if (Array.IndexOf(args,"--tukui-standalone-ui") is var tukuiUi && tukuiUi>=0)
+                return TukuiStandaloneTests.Ui(app,output,args[tukuiUi+1],args[tukuiUi+2]);
+            if (Array.IndexOf(args,"--publisher-portable-files") is var publisherFiles && publisherFiles>=0)
+                return Task.Run(()=>ProgramPublisherPortableTests.Files(output,args[publisherFiles+1],args[publisherFiles+2])).GetAwaiter().GetResult();
+            if (args.Contains("--startup-background")) return StartupTests.BackgroundQueries(output);
+            if (args.Contains("--page4-failure")) return Page4NavigationTests.Failure(app, output);
+            if (args.Contains("--page4-live")) return Page4NavigationTests.Run(app, output, args.Contains("--delayed"));
+            if (args.Contains("--startup-timing")) return StartupTests.Run(app, output, args.Contains("--components"), args.Contains("--software-rendering"));
+            if (args.Contains("--program-info-layout")) return ProgramInfoLayoutTests.Run(app, output);
+            if (args.Contains("--program-targets")) return ProgramInstallTargetTests.Run(app, output, !args.Contains("--logic-only"));
+            if (args.Contains("--program-targets-live")) return ProgramInstallTargetTests.Live(output);
+            if (args.Contains("--github-plan-probe")) return ProgramGitHubRemovalTests.Probe(output);
+            if (args.Contains("--github-removal")) return ProgramGitHubRemovalTests.Run(app, output, args.Contains("--logic-only"));
+            if (args.Contains("--inspection-cache")) return ProgramInspectionCacheTests.Run(app, output, false);
+            if (args.Contains("--inspection-cache-ui")) return ProgramInspectionCacheTests.Run(app, output, true);
+            if (args.Contains("--inspection-live")) return ProgramInspectionCacheTests.Live(output, null);
+            if (args.Contains("--inspection-baseline")) return ProgramInspectionCacheTests.Live(output, args.Last());
+            if (args.Contains("--inspection-performance")) return ProgramInspectionTests.Run(app, output, !args.Contains("--skip-images"));
+            if (args.Contains("--icon-fallback")) return ProgramIconFallbackTests.Run(output, args.Contains("--live-icons"));
+            if (args.Contains("--google-icons")) return ProgramGoogleIconTests.Run(output, args.Contains("--live-google"));
+            if (args.Contains("--program-expansion")) return ProgramExpansionTests.Run(output);
+            if (args.Contains("--publisher-live")) return ProgramExpansionTests.LiveGpu(output);
+            if (args.Contains("--lightshot-ui")) return ProgramLightshotTests.Run(app, output);
+            if (args.Contains("--winget-api-probe")) { try { Console.WriteLine(Task.Run(ProgramWinGetApi.Probe).GetAwaiter().GetResult()); return 0; } catch (Exception e) { Console.WriteLine("WinGet API live probe unavailable: " + e.GetType().Name + " / " + e.Message); return 2; } }
+            if (args.Contains("--portable-updates")) return ProgramPortableUpdateTests.Run(app, output);
+            if (args.Contains("--obs-portable")) return Task.Run(() => ObsPortableTests.RunAsync(output)).GetAwaiter().GetResult();
+            if (args.Contains("--vlc-zip")) return Task.Run(() => VlcZipTests.RunAsync(output)).GetAwaiter().GetResult();
+            if (args.Contains("--vlc-official")) return Task.Run(() => VlcZipTests.OfficialAsync(output)).GetAwaiter().GetResult();
+            if (args.Contains("--destinations")) return Task.Run(() => ProgramDestinationTests.Logic(output)).GetAwaiter().GetResult();
+            if (args.Contains("--selection-cancel")) return ProgramSelectionCancelTests.Run(app, output);
+            if (args.Contains("--destination-flow")) return ProgramDestinationTests.Flow(app, output);
+            if (args.Contains("--destinations-ui")) return ProgramDestinationTests.Ui(app, output, args.Contains("--theme") ? args[Array.IndexOf(args, "--theme") + 1] : "Standard");
+            if (args.Contains("--obs-package")) return Task.Run(() => ObsPortableTests.VerifyOfficialAsync(output, args[Array.IndexOf(args, "--package-path") + 1])).GetAwaiter().GetResult();
+            if (args.Contains("--portable-ui")) return ProgramPortableUpdateTests.Ui(app, output);
+            if (args.Contains("--portable-preview")) return ProgramPortableUpdateTests.Ui(app, output, previewOnly: true);
+            if (args.Contains("--program-managers")) return ProgramManagerTests.Run(app, output);
+            if (args.Contains("--program-stages")) return ProgramStageTests.Run(app, output);
+            if (args.Contains("--program-progress")) return ProgramProgressTests.Run(app, output);
+            if (args.Contains("--program-click")) return ProgramClickTests.Run(app, output);
+            if (args.Contains("--program-edges")) return ProgramUpdateFlowTests.Edges(app, output);
+            if (args.Contains("--program-flow")) return ProgramUpdateFlowTests.Run(app, output);
+            if (args.Contains("--program-update-probe")) return ProgramUpdateFlowTests.Probe();
+            if (args.Contains("--program-detection")) return ProgramDetectionTests.Run(app, output);
+            if (args.Contains("--program-sources")) return ProgramCatalogTests.ProbeSources(output);
+            if (args.Contains("--program-live-search")) return ProgramCatalogTests.LiveSearch();
+            if (args.Contains("--program-version-probe")) return ProgramOnlineTests.Probe();
+            if (args.Contains("--program-online")) return ProgramOnlineTests.Run(app, output, args.Contains("--online-retest"));
+            if (args.Contains("--program-catalog")) return ProgramCatalogTests.Run(app, output, args.Contains("--live-assets"), args.Contains("--program-screenshots"));
+            if (args.Contains("--unified-dialogs")) return DialogConsistencyTests.Run(app, output);
+            if (args.Contains("--dialog-routes")) return DialogConsistencyTests.Run(app, output, routesOnly: true);
+            if (args.Contains("--tray-window")) return TrayWindowTests.Run(app, output);
+            if (args.Contains("--overlay-dialogs")) return OverlayDialogTests.Run(app, output);
+            if (args.Contains("--activity-status")) return ActivityStatusTests.Run(app, output);
+            if (args.Contains("--windows-updates-shell")) return WindowsUpdatesShellTests.Run(app, output);
+            if (args.Contains("--windows-update-progress")) return WindowsUpdateProgressTests.Run(app, output);
+            if (args.Contains("--window-corners")) return WindowCornerTests.Run(app, output);
+            if (args.Contains("--window-outline")) return WindowOutlineTests.Run(app, output);
+            foreach (var (flag, theme) in new[] { ("standard", "Standard"), ("classic", "Classic"), ("blue", "Neon Blau"), ("pink", "Neon Pink"), ("green", "Neon Grün"), ("mint", "Linux Mint"), ("dark", "Dark") })
+                if (args.Contains("--window-corners-" + flag)) return WindowCornerTests.Run(app, output, onlyTheme: theme);
+            if (args.Contains("--startup-registry")) return Page4OverviewTests.Run(app, output, registryOnly: true);
+            if (args.Contains("--page4-overview")) return Page4OverviewTests.Run(app, output);
+            if (args.Contains("--startup-packages")) return Task.Run(() => StartupPackageTests.RunAsync(output)).GetAwaiter().GetResult();
+            if (args.Contains("--startup-packages-ui")) return StartupPackageTests.RunUi(app, output);
+            if (args.Contains("--esu")) return WindowsEsuTests.Run(app, output);
+            if (args.Contains("--esu-account-live")) return WindowsEsuTests.AccountLive();
+            if (args.Contains("--animated-progress")) return AnimatedProgressTests.Run(app, output);
+            if (args.Contains("--windows-updates")) return WindowsUpdateTests.Run(app, output, args.Contains("--cached-wua-probe"));
+            if (args.Contains("--manufacturers")) return ManufacturerTests.Run(app, output);
+            if (args.Contains("--winget")) return WinGetTests.Run(app, output);
+            if (args.Contains("--winget-probe")) return WinGetTests.ProbeOnly();
             if (args.Contains("--install-dialog")) return InstallDialogTests.Run(app, output);
             if (args.Contains("--languages")) return LanguageTests.Run(app, output);
             if (args.Contains("--updates")) return UpdateManagerTests.Run(app, output);

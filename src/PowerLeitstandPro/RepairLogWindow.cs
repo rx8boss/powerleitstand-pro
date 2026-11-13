@@ -187,6 +187,10 @@ internal sealed class RepairLogWindow : Window
         done.Click += (_, _) => Close();
         Grid.SetRow(done, 3);
         layout.Children.Add(done);
+        UnifiedDialogAppearance.Apply(this, outer, layout, palette,
+            english ? "Repair log" : "Reparaturprotokoll", english);
+        outer.Padding = new Thickness(20);
+        done.Height = 40; done.HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch;
     }
 
     private Button CreateButton(string label, Brush background, Brush border) => new()

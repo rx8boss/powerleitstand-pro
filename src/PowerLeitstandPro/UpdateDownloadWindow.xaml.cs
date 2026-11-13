@@ -22,6 +22,7 @@ public partial class UpdateDownloadWindow : Window
     internal UpdateDownloadWindow(AvailableUpdate update, ThemePalette palette, bool english, Func<bool> isBusy)
     {
         InitializeComponent();
+        DownloadBar.ApplyPalette(palette);
         _update = update; _isBusy = isBusy; _english = english;
         Brush Solid(string value) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(value));
         foreach (var (key, index) in new[] { ("DialogBackground", 0), ("DialogText", 5), ("DialogSubtleText", 6), ("DialogAccent", 7), ("DialogInput", 4) })
@@ -40,6 +41,7 @@ public partial class UpdateDownloadWindow : Window
         PhaseText.Text = english ? "Preparing download …" : "Download wird vorbereitet …";
         HintText.Text = english ? "The file will be verified. The app will then restart." : "Anschließend wird die Datei geprüft. Danach startet die App neu.";
         CancelCaption.Text = english ? "Cancel" : "Abbrechen";
+        System.Windows.Automation.AutomationProperties.SetName(DownloadBar, english ? "Download progress" : "Downloadfortschritt");
         System.Windows.Automation.AutomationProperties.SetName(HeaderCloseButton, english ? "Cancel download" : "Download abbrechen");
         HeaderCloseButton.ToolTip = english ? "Cancel download" : "Download abbrechen";
         if (update.SourceBackup is not null)
@@ -47,6 +49,15 @@ public partial class UpdateDownloadWindow : Window
             HeaderText.Text = english ? "Restore application backup" : "Programmsicherung wiederherstellen";
             HintText.Text = english ? "The backup is verified and the current EXE is saved before replacement." : "Die Sicherung wird geprüft. Vor dem Austausch wird die aktuelle EXE gesichert.";
         }
+        HeaderCloseButton.Tag = "UnifiedHeaderClose";
+        UnifiedDialogAppearance.Buttons(this, palette);
+        VersionText.Margin = new Thickness(0, 0, 0, 12);
+        PhaseText.FontSize = 16; PhaseText.Margin = new Thickness(0, 0, 0, 12);
+        DownloadBar.Height = 26; DownloadBar.Margin = new Thickness(0, 0, 0, 8);
+        HintText.Margin = new Thickness(0, 10, 0, 0); HintText.FontSize = 13;
+        DialogLayout.Compose(this, DialogFrame, palette, HeaderText.Text, english,
+            DialogLayout.Stack(VersionText, PhaseText, DownloadBar, TransferredText, HintText),
+            DialogLayout.Actions(CancelButton), HeaderCloseButton);
         ContentRendered += RunDownload;
         Closing += GuardClosing;
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { RequestCancellation(); e.Handled = true; } };
@@ -68,6 +79,7 @@ public partial class UpdateDownloadWindow : Window
         catch (Exception exception) { Failure = exception; }
         finally
         {
+            DownloadBar.IsRunning = false;
             _finished = true;
             DialogResult = installed;
         }
@@ -85,19 +97,16 @@ public partial class UpdateDownloadWindow : Window
             if (progress.TotalBytes is > 0)
             {
                 DownloadBar.Value = Math.Clamp(progress.ReceivedBytes * 100d / progress.TotalBytes.Value, 0, 100);
-                PercentText.Text = $"{Math.Floor(DownloadBar.Value):0} %";
                 TransferredText.Text = _english ? $"{Mb(progress.ReceivedBytes)} MB of {Mb(progress.TotalBytes.Value)} MB downloaded"
                     : $"{Mb(progress.ReceivedBytes)} MB von {Mb(progress.TotalBytes.Value)} MB heruntergeladen";
             }
             else
             {
-                PercentText.Text = "";
                 TransferredText.Text = _english ? $"{Mb(progress.ReceivedBytes)} MB downloaded" : $"{Mb(progress.ReceivedBytes)} MB heruntergeladen";
             }
         }
         else
         {
-            PercentText.Text = "";
             PhaseText.Text = progress.Phase == UpdatePhase.Verifying
                 ? (_english ? "Verifying file …" : "Datei wird geprüft …")
                 : (_english ? "Preparing restart …" : "Neustart wird vorbereitet …");

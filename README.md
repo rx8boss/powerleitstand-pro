@@ -1,6 +1,6 @@
 # PowerLeitstand PRO · Windows (WPF)
 
-![PowerLeitstand PRO v1.1.4 – Kompaktansicht](docs/screenshots/main-window.png)
+![PowerLeitstand PRO v1.1.5 – Kompaktansicht](docs/screenshots/main-window.png)
 
 
 [![CodeQL · C#](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml/badge.svg)](https://github.com/rx8boss/powerleitstand-pro/actions/workflows/codeql.yml)
@@ -51,7 +51,7 @@ This project was created and further developed with AI assistance, including Ope
 
 ### Download and run
 
-[**Download the Windows EXE**](https://github.com/rx8boss/powerleitstand-pro/releases/latest). From version 1.1.0 onward, the file is named `PowerLeitstand-PRO.exe`. The release also includes a ZIP with the EXE, a German/English quick-start guide, and its checksum. The portable EXE needs no separate .NET installation. Verify the release version, origin, and SHA-256 checksum before running it.
+[**Download the Windows EXE**](https://github.com/rx8boss/powerleitstand-pro/releases/latest). From version 1.1.0 onward, the file is named `PowerLeitstand-PRO.exe`. The release also includes a ZIP with the EXE, a bilingual quick-start guide and changelog, and the licenses. SHA-256 checksums are provided separately. The portable EXE needs no separate .NET installation. Verify the release version, origin, and SHA-256 checksum before running it.
 
 ### Features
 
@@ -81,7 +81,7 @@ The standalone `PowerLeitstand-PRO.exe` is placed in `publish\Windows-x64`; thes
 
 ## Vorschau / Preview
 
-Aktuelle WPF-Oberfläche in Version 1.1.4 (Kompaktansicht im Standarddesign, 860 × 620; Diagnose-Platzhalter im Bild oben). Korrekturversion auf Basis von 1.1.3 mit überarbeiteter Installationsbestätigung und passenden Benutzer-Buttons. / Current WPF interface in version 1.1.4 (compact view in the default theme, 860 × 620; diagnostic placeholders in the image above). Correction release based on 1.1.3 with revised installation confirmation and correctly sized user buttons.
+Aktuelle WPF-Oberfläche in Version 1.1.5 (Kompaktansicht im Standarddesign, 860 × 620). / Current WPF interface in version 1.1.5 (compact view in the default theme, 860 × 620).
 
 
 ### Update-Download / Update download
@@ -92,4 +92,4 @@ Sichtbarer Download mit Fortschritt, Datenmenge, Dateiprüfung und Abbruch. Der 
 
 ### Versions- und Sprachprüfung / Version and language checks
 
-[Release-Ablauf / Release checklist](docs/release-checklist.md) · [Änderungen 1.1.4 / Changes in 1.1.4](docs/releases/v1.1.4.md)
+[Release-Ablauf / Release checklist](docs/release-checklist.md) · [Änderungen 1.1.5 / Changes in 1.1.5](docs/releases/v1.1.5.md)

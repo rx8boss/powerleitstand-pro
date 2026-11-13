@@ -20,43 +20,31 @@ public partial class MainWindow
 {
     private readonly Dictionary<string, object> _referencePaletteDefaults = new();
     private readonly Dictionary<System.Windows.Shapes.Path, (Brush? Fill, Brush? Stroke)> _referenceStripeDefaults = new();
-    private readonly List<(AdornerLayer Layer, NeonFrameAdorner Frame)> _neonFrames = new();
+    private readonly Dictionary<Border, (AdornerLayer Layer, NeonFrameAdorner Frame)> _neonFrames = new();
     private readonly List<DropShadowEffect> _animatedNeonEffects = new();
     private readonly Dictionary<Button, DropShadowEffect> _neonButtons = new();
     private readonly Dictionary<Button, Border> _neonHoverSurfaces = new();
-    private readonly Dictionary<(DependencyObject Target, DependencyProperty Property), AnimationClock> _neonPulseClocks = new();
+    private AnimationClock? _neonClock;
+    private Color? _neonColor;
+    private Border? _neonOuterOutline;
+    private System.Windows.Threading.DispatcherOperation? _neonRefresh;
     private bool _isWindowDragging;
-
-    private void StartNeonPulse(DependencyObject target, DependencyProperty property, double low, double high)
-    {
-        StopNeonPulse(target, property);
-        var clock = (AnimationClock)NeonPulse(low, high).CreateClock(true);
-        if (target is Animatable animation) animation.ApplyAnimationClock(property, clock);
-        else if (target is UIElement element) element.ApplyAnimationClock(property, clock);
-        _neonPulseClocks[(target, property)] = clock;
-        if (_isWindowDragging) clock.Controller?.Pause();
-    }
-
-    private void StopNeonPulse(DependencyObject target, DependencyProperty property)
-    {
-        if (_neonPulseClocks.Remove((target, property), out var clock)) clock.Controller?.Remove();
-        if (target is Animatable animation) animation.BeginAnimation(property, null);
-        else if (target is UIElement element) element.BeginAnimation(property, null);
-    }
 
     private void BeginWindowDragPresentation()
     {
         if (_isWindowDragging) return;
         _isWindowDragging = true;
         _placementSaveTimer.Stop();
-        foreach (var clock in _neonPulseClocks.Values) clock.Controller?.Pause();
+        foreach (var bar in FindVisualChildren<AnimatedProgressBar>(Root)) bar.IsAnimationSuspended = true;
+        _neonClock?.Controller?.Pause();
     }
 
     private void EndWindowDragPresentation()
     {
         if (!_isWindowDragging) return;
         _isWindowDragging = false;
-        foreach (var clock in _neonPulseClocks.Values) clock.Controller?.Resume();
+        foreach (var bar in FindVisualChildren<AnimatedProgressBar>(Root)) bar.IsAnimationSuspended = false;
+        _neonClock?.Controller?.Resume();
         if (!IsLoaded) return;
         UpdateLiveDiagnosticsLabels();
         if (_diagnosticsKind is not null) RefreshDiagnosticsHover();
@@ -80,8 +68,8 @@ public partial class MainWindow
     private void ApplyClassicCancelTheme(string theme)
     {
         if (!IsLoaded) return;
-        CrossButtonAppearance.Prepare(RepairCancelButton);
-        ClassicCancelAppearance.Apply(RepairCancelButton, theme == "Classic", "CrossFrame");
+        UnifiedDialogAppearance.Resources(this, ThemePalette.For(theme));
+        UnifiedDialogAppearance.Button(this, RepairCancelButton, DialogButtonKind.Danger);
         ClassicCancelAppearance.Apply(AbortTimerButton, theme == "Classic", "AbortBorder");
     }
 
@@ -150,42 +138,100 @@ public partial class MainWindow
             : (Brush)Resources["StandardReferenceCardBrush"];
     }
 
-    private static DoubleAnimationUsingKeyFrames NeonPulse(double low, double high)
+    internal static DoubleAnimationUsingKeyFrames NeonPulse(double litSeconds, double darkSeconds)
     {
-        var pulse = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromSeconds(2), RepeatBehavior = RepeatBehavior.Forever };
-        foreach (var (seconds, value) in new[] { (0.0, .15), (.1, .4), (.2, .78), (.3, 1.0), (.4, .64), (.5, .92),
-                     (.6, .68), (.7, .5), (.8, .32), (.9, .2), (1.0, .12), (3.0, .12) })
-            pulse.KeyFrames.Add(new LinearDoubleKeyFrame(low + (high - low) * value, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(seconds / 1.5))));
+        const double ignition = 1.2;
+        var pulse = new DoubleAnimationUsingKeyFrames();
+        void Add(double seconds, double strength) => pulse.KeyFrames.Add(new SplineDoubleKeyFrame(
+            strength, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(seconds)), new KeySpline(.42, 0, .58, 1)));
+        Add(0, 0);
+        Add(.14, .34);
+        Add(.29, .08);
+        Add(.64, 1);
+        Add(ignition, .43);
+        for (double second = 1.5; second < litSeconds; second += 1.5)
+            Add(ignition + second, second % 3 == 0 ? .43 : .52);
+        Add(ignition + litSeconds, .43);
+        Add(ignition + litSeconds + .24, 0);
+        Add(ignition + litSeconds + .24 + darkSeconds, 0);
         return pulse;
+    }
+
+    private void StartNeonCycle()
+    {
+        var clock = (AnimationClock)NeonPulse(Random.Shared.Next(5, 31),
+            .55 + Random.Shared.NextDouble() * .65).CreateClock(true);
+        clock.Completed += (_, _) => { if (ReferenceEquals(_neonClock, clock)) StartNeonCycle(); };
+        var previous = _neonClock;
+        _neonClock = clock;
+        foreach (var (_, frame) in _neonFrames.Values)
+            frame.ApplyAnimationClock(NeonFrameAdorner.StrengthProperty, clock);
+        foreach (var effect in _animatedNeonEffects)
+            effect.ApplyAnimationClock(DropShadowEffect.OpacityProperty, clock);
+        foreach (var (button, effect) in _neonButtons)
+            if (button.IsEnabled) effect.ApplyAnimationClock(DropShadowEffect.OpacityProperty, clock);
+        previous?.Controller?.Remove();
+        if (_isWindowDragging) clock.Controller?.Pause();
     }
 
     private void ConfigureNeonPresentation(ThemePalette palette)
     {
-        StopNeonPresentation();
-        if (!palette.IsNeon || !IsLoaded) return;
+        if (!palette.IsNeon || !IsLoaded) { StopNeonPresentation(); return; }
         var color = (Color)ColorConverter.ConvertFromString(palette.Glow!);
-        foreach (var card in new[] { ImmediateCardSurface, TimerCardSurface, UserCardSurface, RepairCardSurface, StandardStatusLogBar })
+        if (_neonColor != color)
         {
+            StopNeonPresentation();
+            _neonColor = color;
+            var iconGlow = new DropShadowEffect { Color = color, ShadowDepth = 0, BlurRadius = 10, Opacity = .43 };
+            var surfaceGlow = new DropShadowEffect { Color = color, ShadowDepth = 0, BlurRadius = 15, Opacity = .43 };
+            _animatedNeonEffects.Add(iconGlow);
+            _animatedNeonEffects.Add(surfaceGlow);
+            if (SystemParameters.ClientAreaAnimation) StartNeonCycle();
+            Resources["NeonIconGlow"] = iconGlow;
+            Resources["NeonGlow"] = surfaceGlow;
+        }
+        QueueNeonRefresh();
+    }
+
+    private void QueueNeonRefresh()
+    {
+        if (_neonColor is not Color color || _neonRefresh is not null) return;
+        _neonRefresh = Dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                UpdateLayout();
+                RefreshNeonSurfaces(color);
+            }
+            finally { _neonRefresh = null; }
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void RefreshNeonSurfaces(Color color)
+    {
+        _neonOuterOutline = Template.FindName("OuterWindowOutline", this) as Border;
+        var cards = new[] { _neonOuterOutline, ImmediateCardSurface, TimerCardSurface, UserCardSurface,
+                RepairCardSurface, StandardStatusLogBar }.OfType<Border>().Concat(_updatesPage?.CardSurfaces ?? []).ToHashSet();
+        foreach (var card in _neonFrames.Keys.Where(card => !cards.Contains(card)
+                     || _neonFrames[card].Layer != AdornerLayer.GetAdornerLayer(card)).ToArray())
+            RemoveNeonFrame(card);
+        foreach (var card in cards)
+        {
+            if (_neonFrames.ContainsKey(card)) continue;
             var layer = AdornerLayer.GetAdornerLayer(card);
             if (layer is null) continue;
             var frame = new NeonFrameAdorner(card, color);
             frame.SetBinding(VisibilityProperty, new Binding(nameof(IsVisible)) { Source = card, Converter = new BooleanToVisibilityConverter() });
             layer.Add(frame);
-            _neonFrames.Add((layer, frame));
-            if (SystemParameters.ClientAreaAnimation)
-                StartNeonPulse(frame, NeonFrameAdorner.StrengthProperty, 0, 1);
-            else frame.Strength = .45;
+            _neonFrames.Add(card, (layer, frame));
+            if (_neonClock is not null) frame.ApplyAnimationClock(NeonFrameAdorner.StrengthProperty, _neonClock);
         }
-        var iconGlow = new DropShadowEffect { Color = color, ShadowDepth = 0, BlurRadius = 12, Opacity = .8 };
-        _animatedNeonEffects.Add(iconGlow);
-        if (SystemParameters.ClientAreaAnimation) StartNeonPulse(iconGlow, DropShadowEffect.OpacityProperty, .3, .9);
-        Resources["NeonIconGlow"] = iconGlow;
-        var surfaceGlow = ((DropShadowEffect)Resources["NeonGlow"]).Clone();
-        _animatedNeonEffects.Add(surfaceGlow);
-        if (SystemParameters.ClientAreaAnimation) StartNeonPulse(surfaceGlow, DropShadowEffect.OpacityProperty, .3, .9);
-        Resources["NeonGlow"] = surfaceGlow;
-        foreach (var action in FindVisualChildren<Button>(Root).Where(IsNeonButton).ToArray())
+        var actions = FindVisualChildren<Button>(Root).Concat(RepairNavigationButtons).Where(IsNeonButton).ToHashSet();
+        foreach (var button in _neonButtons.Keys.Where(button => !actions.Contains(button)).ToArray())
+            RemoveNeonButton(button);
+        foreach (var action in actions)
         {
+            if (_neonButtons.ContainsKey(action)) continue;
             var actionColor = action == ShutdownButton || action == TimerShutdown
                 ? ((SolidColorBrush)Resources["DangerBorderBrush"]).Color : color;
             var effect = new DropShadowEffect { Color = actionColor, ShadowDepth = 0, BlurRadius = 10 };
@@ -207,8 +253,10 @@ public partial class MainWindow
 
     private void UpdateNeonOverlayVisibility()
     {
-        var show = SettingsPanel.Visibility != Visibility.Visible;
-        foreach (var (_, frame) in _neonFrames) frame.Opacity = show ? 1 : 0;
+        var show = SettingsPanel.Visibility != Visibility.Visible && _updatesPage?.ProgramView?.HasOverlay != true
+            && _updatesPage?.HasStartupOverlay != true && _updatesPage?.HasInstallOverlay != true;
+        foreach (var (card, (_, frame)) in _neonFrames)
+            frame.Opacity = show || ReferenceEquals(card, _neonOuterOutline) ? 1 : 0;
     }
 
     private void NeonButtonHover(object sender, System.Windows.Input.MouseEventArgs e)
@@ -225,14 +273,14 @@ public partial class MainWindow
     private void UpdateNeonButton(Button button, DropShadowEffect effect, bool? hovered = null)
     {
         var activeHover = button.IsEnabled && (hovered ?? button.IsMouseOver);
-        StopNeonPulse(effect, DropShadowEffect.OpacityProperty);
-        effect.Opacity = !button.IsEnabled ? 0 : activeHover ? 1 : .45;
-        effect.BlurRadius = activeHover ? 18 : 10;
+        effect.ApplyAnimationClock(DropShadowEffect.OpacityProperty, button.IsEnabled ? _neonClock : null);
+        effect.Opacity = !button.IsEnabled ? 0 : activeHover ? .74 : .43;
+        effect.BlurRadius = activeHover ? 16 : 7;
         ClearNeonHoverSurface(button);
         if (activeHover)
         {
             button.ApplyTemplate();
-            var surface = new[] { "ActionBorder", "StepSurface", "ButtonBorder", "NoticeSurface", "ArrowSurface" }
+            var surface = new[] { "ActionBorder", "StepSurface", "ButtonBorder", "NoticeSurface", "ArrowSurface", "Surface" }
                 .Select(name => button.Template?.FindName(name, button)).OfType<Border>().FirstOrDefault();
             if (surface is not null)
             {
@@ -247,8 +295,6 @@ public partial class MainWindow
                 _neonHoverSurfaces[button] = surface;
             }
         }
-        if (button.IsEnabled && !activeHover && SystemParameters.ClientAreaAnimation)
-            StartNeonPulse(effect, DropShadowEffect.OpacityProperty, .16, .8);
     }
 
     private void ClearNeonHoverSurface(Button button)
@@ -263,28 +309,39 @@ public partial class MainWindow
 
     private void StopNeonPresentation()
     {
-        foreach (var clock in _neonPulseClocks.Values) clock.Controller?.Remove();
-        _neonPulseClocks.Clear();
-        foreach (var (layer, frame) in _neonFrames)
-        {
-            frame.BeginAnimation(NeonFrameAdorner.StrengthProperty, null);
-            BindingOperations.ClearBinding(frame, VisibilityProperty);
-            layer.Remove(frame);
-        }
-        _neonFrames.Clear();
+        _neonRefresh?.Abort();
+        _neonRefresh = null;
+        _neonColor = null;
+        _neonOuterOutline = null;
+        var clock = _neonClock;
+        _neonClock = null;
+        clock?.Controller?.Remove();
+        foreach (var card in _neonFrames.Keys.ToArray()) RemoveNeonFrame(card);
         foreach (var effect in _animatedNeonEffects)
             if (!effect.IsFrozen) effect.BeginAnimation(DropShadowEffect.OpacityProperty, null);
         _animatedNeonEffects.Clear();
-        foreach (var (button, effect) in _neonButtons)
-        {
-            ClearNeonHoverSurface(button);
-            effect.BeginAnimation(DropShadowEffect.OpacityProperty, null);
-            if (ReferenceEquals(button.Effect, effect)) button.ClearValue(EffectProperty);
-            button.MouseEnter -= NeonButtonHover;
-            button.MouseLeave -= NeonButtonHover;
-            button.IsEnabledChanged -= NeonButtonEnabledChanged;
-        }
-        _neonButtons.Clear();
+        foreach (var button in _neonButtons.Keys.ToArray()) RemoveNeonButton(button);
+    }
+
+    private void RemoveNeonFrame(Border card)
+    {
+        var (layer, frame) = _neonFrames[card];
+        _neonFrames.Remove(card);
+        frame.BeginAnimation(NeonFrameAdorner.StrengthProperty, null);
+        BindingOperations.ClearBinding(frame, VisibilityProperty);
+        layer.Remove(frame);
+    }
+
+    private void RemoveNeonButton(Button button)
+    {
+        var effect = _neonButtons[button];
+        _neonButtons.Remove(button);
+        ClearNeonHoverSurface(button);
+        effect.BeginAnimation(DropShadowEffect.OpacityProperty, null);
+        if (ReferenceEquals(button.Effect, effect)) button.ClearValue(EffectProperty);
+        button.MouseEnter -= NeonButtonHover;
+        button.MouseLeave -= NeonButtonHover;
+        button.IsEnabledChanged -= NeonButtonEnabledChanged;
     }
 }
 
@@ -302,9 +359,9 @@ internal sealed class NeonFrameAdorner : Adorner
 
     internal NeonFrameAdorner(Border card, Color color) : base(card)
     {
-        _haloPens = new[] { (24.0, .025), (19.0, .04), (14.0, .065), (10.0, .11), (6.0, .2), (3.0, .35) }
+        _haloPens = new[] { (21.0, .025), (16.0, .045), (12.0, .075), (8.0, .12), (5.0, .21), (2.8, .46) }
             .Select(layer => new Pen(new SolidColorBrush(Color.FromArgb((byte)(255 * layer.Item2), color.R, color.G, color.B)), layer.Item1)).ToArray();
-        var core = Color.FromRgb(Math.Max(color.R, (byte)185), Math.Max(color.G, (byte)185), Math.Max(color.B, (byte)185));
+        var core = Color.FromRgb((byte)((color.R + 510) / 3), (byte)((color.G + 510) / 3), (byte)((color.B + 510) / 3));
         _corePen = new Pen(new SolidColorBrush(Color.FromArgb(235, core.R, core.G, core.B)), 1.25);
         foreach (var pen in _haloPens.Append(_corePen)) pen.Freeze();
         IsHitTestVisible = false;

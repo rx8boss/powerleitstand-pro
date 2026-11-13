@@ -34,7 +34,7 @@ internal static class ManagerExeIntegration
                 await AppBackupStore.CopyAsync(source, staged, CancellationToken.None);
                 var expected = await AppBackupStore.HashAsync(source);
                 var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
-                foreach (var arg in new[] { "--update-helper", target, staged, saved.BinaryPath, int.MaxValue.ToString() }) start.ArgumentList.Add(arg);
+                foreach (var arg in new[] { "--update-helper", target, staged, saved.BinaryPath, int.MaxValue.ToString(), expected }) start.ArgumentList.Add(arg);
                 var helper = Process.Start(start)!; processes.Add(helper);
                 var deadline = DateTime.UtcNow.AddSeconds(110); Process? app = null;
                 while (!helper.HasExited && DateTime.UtcNow < deadline)

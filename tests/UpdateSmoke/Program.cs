@@ -2,7 +2,10 @@ using System.Net;
 using System.Net.Http;
 using System.IO;
 using System.Security.Cryptography;
+using System.Diagnostics;
 using PowerControlProWpf;
+
+if (args is ["--verified-start"]) return;
 
 var root = Path.Combine(Path.GetTempPath(), "PowerLeitstand-UpdateSmoke-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
@@ -48,11 +51,22 @@ try
     await Run("bad checksum", true, badHash: true);
     await Run("truncated body", true, shortResponse: true);
     await Run("HTTP failure", true, serverError: true);
+    string executable = Environment.ProcessPath!;
+    string hash = await AppBackupStore.HashAsync(executable);
+    try { await using var invalid = await UpdateService.OpenVerifiedExecutableAsync(executable, new string('0', 64)); throw new Exception("Changed executable accepted"); }
+    catch (InvalidDataException) { Assert(true, "helper rejects a mismatched executable"); }
+    await using (var verified = await UpdateService.OpenVerifiedExecutableAsync(executable, hash))
+    {
+        using var child = Process.Start(new ProcessStartInfo(executable, "--verified-start") { UseShellExecute = false, CreateNoWindow = true })!;
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await child.WaitForExitAsync(limit.Token);
+        Assert(child.ExitCode == 0, "verified executable can start while the read lock is held");
+    }
     var existing = Path.Combine(root, "unrelated.new");File.WriteAllText(existing,"preserve");
     using var client = new HttpClient(new FixtureHandler(bytes, true, false, false));
     try { await UpdateService.DownloadAndVerifyAsync(client, update, existing, null, CancellationToken.None); throw new Exception("existing file overwritten"); }
     catch (IOException) { Assert(File.ReadAllText(existing) == "preserve", "pre-existing file preserved"); }
-    Console.WriteLine($"PASS ALL {count} update checks; local HTTP fixture only; no program replacement or system action.");
+    Console.WriteLine($"PASS ALL {count} update checks; local HTTP fixture and test process only.");
 }
 catch (Exception e) { Console.Error.WriteLine(e); Environment.ExitCode=1; }
 finally

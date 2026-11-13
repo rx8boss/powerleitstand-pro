@@ -51,6 +51,7 @@ public partial class UpdateManagerWindow : Window
         Brush Solid(string hex) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
         foreach (var (key, i) in new[] { ("DialogBackground", 0), ("DialogInput", 4), ("DialogText", 5), ("DialogSubtleText", 6), ("DialogAccent", 7), ("DialogLine", 8) }) Resources[key] = Solid(palette.Colors[i]);
         DialogAppearance.ApplySurface(this, DialogFrame, palette);
+        WindowCorners.Apply(this, DialogFrame.CornerRadius.TopLeft);
         FontFamily = new FontFamily(palette.FontFamily);
         CrossButtonAppearance.PreserveCustomSurface(HeaderCloseButton);
         CrossButtonAppearance.PreserveCustomSurface(CloseButton);
@@ -67,7 +68,7 @@ public partial class UpdateManagerWindow : Window
             KeepHint.Text = "Settings and logs are preserved. Finish active timers or repairs first.";
             InstallHint.Text = "Before installation"; NotesScroll.ToolTip = "Scroll with mouse wheel or arrow keys";
             NotesHint.Text = "Scroll for more changes"; DeleteBackupButton.Content = "Delete backup …";
-            ListScrollHint.Text = "⌄ Scroll for more versions"; ChangesButton.Content = "Show changes …  ›"; RecoveryButton.Content = "Restore points …  ›";
+            ListScrollHint.Text = "⌄ Scroll for more versions"; ChangesButton.Content = "Show changes …  ›"; RecoveryButton.Content = "Program backups …  ›";
         }
         _refresh.Tick += (_, _) => RefreshActions();
         Loaded += async (_, _) => { FitWorkArea(); _refresh.Start(); if (autoLoad) await ReloadAsync(); };
@@ -75,7 +76,20 @@ public partial class UpdateManagerWindow : Window
         Closing += (_, e) => { if (_working) e.Cancel = true; };
         Closed += (_, _) => { _closed = true; _refresh.Stop(); _cancel.Cancel(); _cancel.Dispose(); };
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { CloseWindow(this, new()); e.Handled = true; } };
+        UnifiedDialogAppearance.Resources(this, palette);
+        Resources["DialogEnglish"] = english;
         ApplyView();
+        UnifiedDialogAppearance.Button(this, HeaderCloseButton, DialogButtonKind.Close);
+        UnifiedDialogAppearance.Button(this, CloseButton, DialogButtonKind.Danger);
+        UnifiedDialogAppearance.Button(this, DeleteBackupButton, DialogButtonKind.Danger);
+        foreach (var button in new[] { BackButton, NotesUp, NotesDown, ChangesButton, RecoveryButton, InstallButton })
+            UnifiedDialogAppearance.Button(this, button, DialogButtonKind.Primary);
+        Resources["DialogEnglish"] = english;
+        DialogFrame.Padding = new Thickness(20);
+        RootLayout.RowDefinitions[0].MinHeight = 66;
+        HeaderText.Margin = new Thickness(0, 0, 100, 0);
+        foreach (var button in new[] { ChangesButton, RecoveryButton, InstallButton, CloseButton, DeleteBackupButton })
+            button.Height = button.MinHeight = 40;
     }
 
     internal async Task ReloadAsync()
@@ -104,7 +118,7 @@ public partial class UpdateManagerWindow : Window
         _notes = false; ApplyNavigation();
         Bolt.Visibility = Visibility.Visible;
         HeaderText.Text = _recovery ? (_english ? "Select a backup" : "Sicherung auswählen")
-            : (_english ? "Updates and recovery" : "Updates und Wiederherstellung");
+            : (_english ? "Updates and program backups" : "Updates und Programmsicherungen");
         ListHeading.Text = _recovery ? (_english ? "Select a backup" : "Sicherung auswählen") : (_english ? "Select a version" : "Version auswählen");
         ListHint.Text = _recovery ? (_english ? "The previous EXE is saved before each update." : "Vor jedem Update wird die bisherige EXE gesichert.")
             : (_english ? "Compatible published versions with an update function." : "Kompatible veröffentlichte Versionen mit Updatefunktion.");
@@ -258,10 +272,10 @@ public partial class UpdateManagerWindow : Window
         InstallButton.Visibility = _notes ? Visibility.Collapsed : Visibility.Visible;
         FooterButtons.Columns = _notes ? 1 : ActualWidth < 380 ? 1 : 2;
         DetailActions.Columns = _recovery && ActualWidth >= 420 ? 2 : 1;
-        CloseButton.Style = (Style)FindResource(_notes || _recovery ? "ActionButton" : "DangerButton");
+        UnifiedDialogAppearance.Button(this, CloseButton, _notes || _recovery ? DialogButtonKind.Primary : DialogButtonKind.Danger);
         HeaderText.Text = _notes ? (_english ? "Version changes" : "Änderungen der Version")
             : _recovery ? (_english ? "Select a backup" : "Sicherung auswählen")
-            : (_english ? "Updates and recovery" : "Updates und Wiederherstellung");
+            : (_english ? "Updates and program backups" : "Updates und Programmsicherungen");
         CloseButton.Content = _notes ? (_english ? "← Back to overview" : "← Zurück zur Übersicht")
             : _recovery ? (_english ? "Back to updates" : "Zurück zu Updates") : (_english ? "Close" : "Schließen");
         BodyScroll.ScrollToTop();
@@ -306,7 +320,7 @@ public partial class UpdateManagerWindow : Window
         var availableWidth = Math.Max(240, Math.Min(area.Width - 24, ownerWidth));
         var availableHeight = Math.Max(240, Math.Min(area.Height - 24, ownerHeight));
         MinWidth = Math.Min(420, availableWidth); MinHeight = Math.Min(400, availableHeight);
-        Width = Math.Max(MinWidth, Math.Min(620, availableWidth));
+        Width = Math.Max(MinWidth, Math.Min(548, availableWidth));
         Height = Math.Max(MinHeight, Math.Min(480, availableHeight));
         var centerX = Owner is { ActualWidth: > 0 } ? Owner.Left + Owner.ActualWidth / 2 : area.Left + area.Width / 2;
         var centerY = Owner is { ActualHeight: > 0 } ? Owner.Top + Owner.ActualHeight / 2 : area.Top + area.Height / 2;
@@ -326,7 +340,7 @@ public partial class UpdateManagerWindow : Window
     {
         if (BodyGrid is null) return;
         FitListHeight();
-        HeaderText.FontSize = ActualWidth < 480 ? 17 : 21;
+        HeaderText.FontSize = 19;
         BodyScroll.ToolTip = _english ? "Scroll for more entries." : "Für weitere Einträge scrollen.";
         ApplyNavigation();
     }

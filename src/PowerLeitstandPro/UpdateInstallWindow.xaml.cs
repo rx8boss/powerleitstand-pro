@@ -48,12 +48,15 @@ public partial class UpdateInstallWindow : Window
         System.Windows.Automation.AutomationProperties.SetName(HeaderCloseButton, CancelCaption.Text);
         System.Windows.Automation.AutomationProperties.SetName(ConfirmButton, ConfirmCaption.Text);
         System.Windows.Automation.AutomationProperties.SetName(CancelButton, CancelCaption.Text);
-        Loaded += (_, _) =>
-        {
-            if (Owner is null) return;
-            Width = Math.Min(Width, Math.Max(MinWidth, Owner.ActualWidth - 32));
-            Height = Math.Min(Height, Math.Max(MinHeight, Owner.ActualHeight - 32));
-        };
+        UnifiedDialogAppearance.Resources(this, palette);
+        HeaderCloseButton.Tag = "UnifiedHeaderClose";
+        UnifiedDialogAppearance.Buttons(this, palette);
+        RestartText.Margin = new Thickness(0, 0, 0, 8);
+        SafetyText.Margin = new Thickness(0); SafetyText.FontSize = 13;
+        var body = DialogLayout.Stack(DialogLayout.Field(InstalledCaption, InstalledText, palette),
+            DialogLayout.Field(TargetCaption, TargetText, palette), RestartText, SafetyText, OlderVersionText);
+        DialogLayout.Compose(this, DialogFrame, palette, HeaderText.Text, english, body,
+            DialogLayout.Actions(ConfirmButton, CancelButton), HeaderCloseButton);
     }
 
     private void Confirm(object sender, RoutedEventArgs e) => DialogResult = true;

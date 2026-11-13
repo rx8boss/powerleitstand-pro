@@ -15,6 +15,15 @@ namespace PowerControlProWpf;
 
 internal static class ThemedMessageBox
 {
+    internal static MessageBoxResult ShowInLanguage(bool english, string message, string title,
+        MessageBoxButton buttons, MessageBoxImage icon)
+    {
+        var main = Application.Current?.MainWindow as MainWindow;
+        var dialog = new ThemedMessageBoxWindow(message, title, buttons, icon,
+            ThemePalette.For(main?.CurrentThemeName ?? "Standard"), english);
+        if (main is { IsLoaded: true }) dialog.Owner = main;
+        dialog.ShowDialog(); return dialog.Result;
+    }
     internal static bool ShowElevationPrompt(MainWindow owner)
     {
         var english = owner.IsEnglish;
@@ -35,12 +44,16 @@ internal static class ThemedMessageBox
         Show(Application.Current?.MainWindow, message, title, buttons, icon);
 
     internal static MessageBoxResult Show(Window? owner, string message, string title = "PowerLeitstand PRO",
-        MessageBoxButton buttons = MessageBoxButton.OK, MessageBoxImage icon = MessageBoxImage.None)
+        MessageBoxButton buttons = MessageBoxButton.OK, MessageBoxImage icon = MessageBoxImage.None,
+        bool fitHeightToOwner = true)
     {
         var main = owner as MainWindow ?? Application.Current?.MainWindow as MainWindow;
+        var context = owner;
+        while (context is not null && !context.Resources.Contains("DialogPalette")) context = context.Owner;
         var dialog = new ThemedMessageBoxWindow(message, title, buttons, icon,
-            owner is UpdateManagerWindow manager ? manager.CurrentPalette : ThemePalette.For(main?.CurrentThemeName ?? "Standard"),
-            owner is UpdateManagerWindow updateManager ? updateManager.IsEnglish : main?.IsEnglish ?? false);
+            context?.Resources["DialogPalette"] as ThemePalette ?? (owner is UpdateManagerWindow manager ? manager.CurrentPalette : ThemePalette.For(main?.CurrentThemeName ?? "Standard")),
+            context?.Resources["DialogEnglish"] is bool language ? language : owner is UpdateManagerWindow updateManager ? updateManager.IsEnglish : main?.IsEnglish ?? false,
+            fitHeightToOwner);
         if (owner is { IsLoaded: true }) dialog.Owner = owner;
         dialog.ShowDialog();
         return dialog.Result;
@@ -51,13 +64,21 @@ public partial class ThemedMessageBoxWindow : Window
 {
     private readonly MessageBoxButton _buttons;
     private readonly ThemePalette _palette;
+    private readonly MessageBoxImage _icon;
     internal MessageBoxResult Result { get; private set; }
 
     internal ThemedMessageBoxWindow(string message, string title, MessageBoxButton buttons,
         MessageBoxImage icon, ThemePalette palette, bool english)
+        : this(message, title, buttons, icon, palette, english, fitHeightToOwner: true)
+    {
+    }
+
+    internal ThemedMessageBoxWindow(string message, string title, MessageBoxButton buttons,
+        MessageBoxImage icon, ThemePalette palette, bool english, bool fitHeightToOwner)
     {
         InitializeComponent();
         _palette = palette;
+        _icon = icon;
         ClassicCancelAppearance.RegisterDialog(this, palette);
         _buttons = buttons;
         Result = buttons == MessageBoxButton.OK ? MessageBoxResult.OK : MessageBoxResult.No;
@@ -66,6 +87,7 @@ public partial class ThemedMessageBoxWindow : Window
         var logDeletion = buttons == MessageBoxButton.YesNo && deleting &&
             (lower.Contains("protokoll") || lower.Contains("log"));
         var stoppingRepair = lower.Contains("laufende windows-reparatur abbrechen") ||
+                             lower.Contains("laufende windows-reparatur beenden") ||
                              lower.Contains("stop this running windows repair");
         var action = icon == MessageBoxImage.Question
             ? lower.Contains("windows sperren") || lower.Contains("lock windows") ? "lock"
@@ -152,7 +174,7 @@ public partial class ThemedMessageBoxWindow : Window
         {
             var confirmCaption = deleting
                 ? english ? "Delete" : "Löschen"
-                : stoppingRepair ? english ? "Stop repair" : "Abbrechen"
+                : stoppingRepair ? english ? "Stop repair" : "Reparatur beenden"
                 : action switch
                 {
                     "lock" => english ? "Lock" : "Sperren",
@@ -165,12 +187,12 @@ public partial class ThemedMessageBoxWindow : Window
                 deleting ? "delete" : stoppingRepair ? "cancel" : action ?? "confirm",
                 deleting || stoppingRepair ? System.Windows.Media.Brushes.White : (Brush)Resources["DialogIconBrush"]);
             CancelButton.Content = stoppingRepair
-                ? CreateActionContent(english ? "Continue" : "Fortsetzen", "continue", (Brush)Resources["DialogIconBrush"])
+                ? CreateActionContent(english ? "Continue" : "Fortfahren", "continue", (Brush)Resources["DialogIconBrush"])
                 : CreateActionContent(english ? "Cancel" : "Abbrechen", "cancel",
                     (Brush)Resources["DialogDangerBorder"]);
             System.Windows.Automation.AutomationProperties.SetName(ConfirmButton, confirmCaption);
             System.Windows.Automation.AutomationProperties.SetName(CancelButton,
-                stoppingRepair ? english ? "Continue" : "Fortsetzen" : english ? "Cancel" : "Abbrechen");
+                stoppingRepair ? english ? "Continue" : "Fortfahren" : english ? "Cancel" : "Abbrechen");
             if (deleting || stoppingRepair)
             {
                 ConfirmButton.Style = (Style)FindResource("DangerButton");
@@ -185,6 +207,10 @@ public partial class ThemedMessageBoxWindow : Window
         {
             throw new NotSupportedException($"Unsupported dialog buttons: {buttons}");
         }
+        ApplyUnified(english, actionTitle == "PowerLeitstand PRO"
+            ? icon == MessageBoxImage.Error ? (english ? "Error" : "Fehler")
+            : buttons == MessageBoxButton.YesNo ? (english ? "Confirm action" : "Aktion bestätigen")
+            : (english ? "Notice" : "Hinweis") : actionTitle, fitHeightToOwner);
     }
 
     internal void ConfigureElevationPrompt(bool english)
@@ -207,7 +233,44 @@ public partial class ThemedMessageBoxWindow : Window
         System.Windows.Automation.AutomationProperties.SetName(ConfirmButton,
             english ? "Restart as administrator" : "Als Administrator neu starten");
         System.Windows.Automation.AutomationProperties.SetName(CancelButton, english ? "Cancel" : "Abbrechen");
+        ApplyUnified(english, DialogTitle.Text);
     }
+
+    private void ApplyUnified(bool english, string title, bool fitHeightToOwner = true)
+    {
+        var deleting = DialogMessage.Text.Contains("löschen", StringComparison.OrdinalIgnoreCase) || DialogMessage.Text.Contains("delete", StringComparison.OrdinalIgnoreCase);
+        if (deleting && (title == "Aktion bestätigen" || title == "Confirm action" || title == "PowerLeitstand PRO"))
+            title = DialogMessage.Text.Contains("protokoll", StringComparison.OrdinalIgnoreCase) || DialogMessage.Text.Contains("log", StringComparison.OrdinalIgnoreCase)
+                ? english ? "Delete event log?" : "Ereignisprotokoll löschen?"
+                : DialogMessage.Text.Contains("Sicherung", StringComparison.OrdinalIgnoreCase) || DialogMessage.Text.Contains("backup", StringComparison.OrdinalIgnoreCase)
+                    ? english ? "Delete program backup?" : "Programmsicherung löschen?"
+                    : english ? "Confirm deletion?" : "Löschen bestätigen?";
+        DialogMessage.Margin = new Thickness(0); DialogMessage.FontSize = 14;
+        DialogMessage.LineHeight = 20; DialogMessage.TextWrapping = TextWrapping.Wrap;
+        DialogLayout.Take(DialogMessage);
+        var body = new StackPanel();
+        if (_icon is MessageBoxImage.Warning or MessageBoxImage.Error or MessageBoxImage.Information)
+        {
+            var card = new Grid(); card.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) }); card.ColumnDefinitions.Add(new ColumnDefinition());
+            var brush = (Brush)Resources["DialogIconBrush"];
+            card.Children.Add(new TextBlock { Text = _icon == MessageBoxImage.Information ? "i" : "!", FontSize = 24, FontWeight = FontWeights.SemiBold, Foreground = brush });
+            var content = new StackPanel();
+            content.Children.Add(new TextBlock
+            {
+                Text = deleting ? english ? "Permanently delete" : "Endgültig löschen" : _icon == MessageBoxImage.Error ? english ? "Operation failed" : "Vorgang fehlgeschlagen" : english ? "Please note" : "Bitte beachten",
+                TextWrapping = TextWrapping.Wrap, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = brush, Margin = new Thickness(0, 0, 0, 6)
+            });
+            content.Children.Add(DialogMessage); Grid.SetColumn(content, 1); card.Children.Add(content);
+            body.Children.Add(new Border { Child = card, Background = Solid(_palette.Colors[3]), BorderBrush = Solid(_palette.Colors[8]), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7), Padding = new Thickness(12) });
+        }
+        else body.Children.Add(DialogMessage);
+        if (deleting)
+            body.Children.Add(new TextBlock { Text = english ? "This action cannot be undone." : "Dieser Vorgang kann nicht rückgängig gemacht werden.", FontSize = 13, Foreground = Solid(_palette.Colors[6]), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
+        var footer = _buttons == MessageBoxButton.OK ? DialogLayout.Actions(CancelButton) : DialogLayout.Actions(ConfirmButton, CancelButton);
+        DialogLayout.Compose(this, DialogFrame, _palette, title, english, body, footer, fitHeightToOwner: fitHeightToOwner);
+    }
+
+    private static Brush Solid(string hex) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
 
     private void ApplyReferenceDesign(string kind)
     {

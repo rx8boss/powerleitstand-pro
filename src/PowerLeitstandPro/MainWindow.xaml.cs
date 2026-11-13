@@ -49,6 +49,10 @@ public partial class MainWindow : Window
     private string? _timerAction;
     private int _pageIndex;
     private bool _english;
+    private bool _startupBackgroundStarted;
+    private WindowsUpdatesPage? _updatesPage;
+    internal Func<WindowsUpdatesPage> UpdatesPageFactory { private get; set; } = () => new WindowsUpdatesPage();
+    private readonly Dictionary<string, BitmapImage> _themeIcons = new(StringComparer.OrdinalIgnoreCase);
     private bool _repairRunning;
     private CancellationTokenSource? _repairCancellation;
     private double _repairPercent;
@@ -62,7 +66,10 @@ public partial class MainWindow : Window
     private readonly Dictionary<Border, ReferenceCardDecoration> _referenceCardDecorations = new();
     private Grid _userReferenceStripes = null!;
     private Grid _repairReferenceStripes = null!;
-    private readonly AppSettings _settings = AppSettings.Load();
+    private readonly AppSettings _settings;
+    private (string Theme, bool English)? _settingsAppearance;
+    private Task<IReadOnlyList<UserEntry>>? _usersLoadTask;
+    private bool _windowClosed;
     private int _effectiveSizeIndex = 3;
     private ScrollViewer? _compactScrollHost;
     private readonly DispatcherTimer _placementSaveTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
@@ -76,13 +83,17 @@ public partial class MainWindow : Window
     private enum UpdateCheckState { Checking, Current, Available, Failed }
     private readonly string _logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Power Control PRO", "logs");
     private readonly object _logLock = new();
+    private readonly AppLogStore _eventLogs;
     private string LogFilePath => Path.Combine(_logDirectory, "events.log");
     private string RepairLogFilePath => Path.Combine(_logDirectory, "repair.log");
     internal bool IsTimerActive => _timer.IsEnabled;
-    internal bool IsBusy => _timer.IsEnabled || _repairRunning || _updateInProgress;
+    private bool _windowsUpdateInProgress;
+    internal bool IsBusy => _timer.IsEnabled || _repairRunning || _updateInProgress || _windowsUpdateInProgress;
     internal TraySnapshot GetTraySnapshot() => new(IsBusy, IsTimerActive, _repairRunning,
         CountdownLabel(Math.Max(0, (int)Math.Ceiling((_timerDeadline - DateTimeOffset.UtcNow).TotalSeconds))),
-        _timerAction is null ? "" : TimerActionDispatcher.Label(_timerAction, _english));
+        _timerAction is null ? "" : TimerActionDispatcher.Label(_timerAction, _english),
+        IsVisible && WindowState != WindowState.Minimized,
+        _repairRunning && _repairCancellation?.IsCancellationRequested == true);
     internal void AbortTrayTimer() => AbortTimer(this, new RoutedEventArgs());
     internal bool IsEnglish => _english;
     internal string CurrentThemeName => SelectedTheme();
@@ -91,23 +102,37 @@ public partial class MainWindow : Window
 
     public MainWindow() : this(null) { }
 
-    internal MainWindow(string? testDirectory)
+    internal MainWindow(string? testDirectory, AppSettings? settings = null, bool loadUsersForTests = true)
     {
+        _settings = settings ?? AppSettings.Load();
+        StartupTimings.Mark("Window fields initialized");
         if (testDirectory is not null)
         {
             SkipSavedPlacementForTests = true;
             _logDirectory = Path.Combine(testDirectory, "Logs");
         }
+        _eventLogs = new AppLogStore(_logDirectory);
         CrossButtonAppearance.Initialize();
         InitializeComponent();
+        WindowCorners.Apply(this);
+        StartupTimings.Mark("XAML initialized");
+        ContentRendered += async (_, _) =>
+        {
+            if (SkipSavedPlacementForTests || _startupBackgroundStarted) return;
+            _startupBackgroundStarted = true;
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (!IsLoaded) return;
+            LoadUsers(null, null!);
+        };
         StandardLogPreview.ItemsSource = _eventLogEntries;
         _eventLogEntries.CollectionChanged += (_, _) => UpdateCompactLogEmptyState();
         _repairLogEntries.CollectionChanged += (_, _) => UpdateCompactLogEmptyState();
         InitializeReferenceCardDecorations();
         InitializeExpandedLog();
         InitializeLiveDiagnostics();
+        StartupTimings.Mark("Window services configured");
         LayoutUpdated += (_, _) => { UpdateReferenceCardDecorations(); UpdateOptionsViewport(); };
-        Closed += (_, _) => { StopRepairProgressAnimation(); StopNeonPresentation(); };
+        Closed += (_, _) => { _windowClosed = true; _updatesPage?.CancelSearchOnClose(); StopRepairProgressAnimation(); StopNeonPresentation(); };
         InstalledVersionText.Text = $"v{AppVersion.Installed} · WPF";
         _timer.Tick += TimerTick;
         _noticeAutoCloseTimer.Tick += (_, _) => CloseSettingsNotice(this, new RoutedEventArgs());
@@ -130,7 +155,7 @@ public partial class MainWindow : Window
                 ApplySize();
                 WindowPlacementService.CenterOnCursorScreen(this);
             }
-            catch (Exception exception) { Log((_english ? "Could not set window position: " : "Fensterposition konnte nicht gesetzt werden: ") + UiText.Error(exception, _english)); }
+            catch (Exception exception) { LogError((_english ? "Could not set window position: " : "Fensterposition konnte nicht gesetzt werden: ") + UiText.Error(exception, _english)); }
         };
         LocationChanged += (_, _) =>
         {
@@ -145,13 +170,82 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(ShowPendingRepairSummary);
         };
         LoadSettings();
+        StartupTimings.Mark("Settings and initial size");
         ApplyLanguage();
-        Loaded += (_, _) => { ApplyTheme(SelectedTheme()); ApplySize(); };
+        StartupTimings.Mark("Language and dialog appearance");
+        Loaded += (_, _) =>
+        {
+            ApplyTheme(SelectedTheme()); StartupTimings.Mark("Loaded theme applied");
+            ApplySize(); StartupTimings.Mark("Loaded size applied");
+        };
         LoadPersistedLog();
+        StartupTimings.Mark("Event log loaded");
         LoadPersistedRepairLog();
+        StartupTimings.Mark("Repair log loaded");
         if (testDirectory is null) LoadAutoStart();
+        StartupTimings.Mark("Autostart checked");
         Log(_english ? "PowerLeitstand PRO WPF started." : "PowerLeitstand PRO WPF gestartet.");
-        LoadUsers(null, null!);
+        // Test hosts keep their existing fixture-user workflow; real starts load after the first frame.
+        if (testDirectory is not null && loadUsersForTests) LoadUsers(null, null!);
+        StartupTimings.Mark("Window constructor completed");
+    }
+
+    // Page four is prepared after the first frame; its visual assets load when the user opens it.
+    private WindowsUpdatesPage EnsureUpdatesPage()
+    {
+        if (_updatesPage is not null) return _updatesPage;
+        var page = UpdatesPageFactory();
+        page.HostBusy = () => IsBusy;
+        page.WorkStateChanged = active => { _windowsUpdateInProgress = active; SetTimerState(_timer.IsEnabled); };
+        page.WriteLog = Log;
+        page.WriteErrorLog = RecordError;
+        page.ConfigureFirstOpenCheck(() => _settings.CheckUpdatesOnFirstOpen, runOnOpen: !SkipSavedPlacementForTests);
+        page.SetEsuRegistrationConfirmed(_settings.EsuRegistrationConfirmed);
+        page.ConfirmEsuRegistration = () => SetEsuRegistrationConfirmed(true);
+        page.ManufacturerPresentationChanged = () => ApplyTheme(SelectedTheme());
+        page.ProgramOverlayChanged = UpdateNeonOverlayVisibility;
+        page.ConfigureProgramAssets(Path.Combine(Path.GetDirectoryName(_logDirectory)!, "App Icons"));
+        page.SetLanguage(_english);
+        var iconWarmupStarted = false;
+        page.IsVisibleChanged += async (_, _) =>
+        {
+            if (SkipSavedPlacementForTests || !page.IsVisible || iconWarmupStarted) return;
+            iconWarmupStarted = true;
+            try { await page.LoadProgramIconsAsync(); }
+            catch (Exception e) { if (IsLoaded) LogError((_english ? "Program icons unavailable: " : "Programmsymbole nicht verfügbar: ") + UiText.Error(e, _english)); }
+        };
+        // Publish a fully configured page only once. Failed construction remains retryable.
+        _updatesPage = page;
+        var registered = false;
+        try
+        {
+            RegisterName("WindowsUpdatesPage", page);
+            registered = true;
+            WindowsUpdatesHost.Content = page;
+            ApplyTheme(SelectedTheme());
+        }
+        catch
+        {
+            WindowsUpdatesHost.Content = null;
+            if (registered) UnregisterName("WindowsUpdatesPage");
+            _updatesPage = null;
+            throw;
+        }
+        return page;
+    }
+
+    internal async Task PrepareUpdatesPageInBackgroundAsync()
+    {
+        if (SkipSavedPlacementForTests || _windowClosed || !IsLoaded) return;
+        try
+        {
+            var page = EnsureUpdatesPage();
+            await page.RefreshWinGetAsync();
+        }
+        catch (Exception e)
+        {
+            if (!_windowClosed) LogError((_english ? "Background update page preparation unavailable: " : "Update-Seite konnte nicht im Hintergrund vorbereitet werden: ") + UiText.Error(e, _english));
+        }
     }
 
     internal void CenterWindowOnCursorScreen()
@@ -163,7 +257,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            Log((_english ? "Could not center the window: " : "Fenster konnte nicht zentriert werden: ") + UiText.Error(exception, _english));
+            LogError((_english ? "Could not center the window: " : "Fenster konnte nicht zentriert werden: ") + UiText.Error(exception, _english));
         }
     }
 
@@ -173,7 +267,7 @@ public partial class MainWindow : Window
         try { _settings.Save(); }
         catch (Exception exception)
         {
-            Log((_english ? "Window position could not be saved: " : "Fensterposition konnte nicht gespeichert werden: ") + UiText.Error(exception, _english));
+            LogError((_english ? "Window position could not be saved: " : "Fensterposition konnte nicht gespeichert werden: ") + UiText.Error(exception, _english));
         }
     }
 
@@ -189,7 +283,41 @@ public partial class MainWindow : Window
         WarningSoundBox.SelectedItem = WarningSoundBox.Items.OfType<ComboBoxItem>().FirstOrDefault(item => item.Tag?.ToString() == _settings.WarningSound) ?? WarningSoundBox.Items[0];
         WarningVolume.Value = Math.Clamp(_settings.WarningVolume, 0, 100);
         RequestAdministratorOnLaunch.IsChecked = _settings.RequestAdministratorOnLaunch;
+        AutomaticWindowsUpdateSearch.IsChecked = _settings.CheckUpdatesOnFirstOpen;
+        UpdateAutomaticWindowsUpdateSearchLabel();
+        UpdateEsuRestoreButton();
         ApplySize();
+    }
+
+    private void SetEsuRegistrationConfirmed(bool confirmed)
+    {
+        bool previous = _settings.EsuRegistrationConfirmed;
+        _settings.EsuRegistrationConfirmed = confirmed;
+        try { if (!SkipSavedPlacementForTests) _settings.Save(); }
+        catch
+        {
+            _settings.EsuRegistrationConfirmed = previous;
+            throw;
+        }
+
+        UpdateEsuRestoreButton();
+        _updatesPage?.SetEsuRegistrationConfirmed(confirmed);
+    }
+
+    private void UpdateEsuRestoreButton()
+    {
+        RestoreEsuCardButton.Content = _english ? "Show ESU card" : "ESU einblenden";
+        RestoreEsuCardButton.Visibility = _settings.EsuRegistrationConfirmed ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void RestoreEsuCard(object sender, RoutedEventArgs e)
+    {
+        try { SetEsuRegistrationConfirmed(false); }
+        catch (Exception exception)
+        {
+            MessageBox.Show((_english ? "Could not save the ESU setting: " : "ESU-Einstellung konnte nicht gespeichert werden: ") + UiText.Error(exception, _english),
+                "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void SaveSettings()
@@ -203,10 +331,26 @@ public partial class MainWindow : Window
         _settings.WarningVolume = (int)Math.Round(WarningVolume.Value);
         _settings.RequestAdministratorOnLaunch = RequestAdministratorOnLaunch.IsChecked == true;
         try { _settings.Save(); }
-        catch (Exception exception) { Log((_english ? "Settings could not be saved: " : "Einstellungen konnten nicht gespeichert werden: ") + UiText.Error(exception, _english)); }
+        catch (Exception exception) { LogError((_english ? "Settings could not be saved: " : "Einstellungen konnten nicht gespeichert werden: ") + UiText.Error(exception, _english)); }
     }
 
     private void SaveSettingsChanged(object s, RoutedEventArgs e) => SaveSettings();
+
+    private void ToggleAutomaticWindowsUpdateSearch(object sender, RoutedEventArgs e)
+    {
+        _settings.CheckUpdatesOnFirstOpen = AutomaticWindowsUpdateSearch.IsChecked == true;
+        UpdateAutomaticWindowsUpdateSearchLabel();
+        SaveSettings();
+    }
+
+    private void UpdateAutomaticWindowsUpdateSearchLabel()
+    {
+        WindowsUpdateSearchTitle.Text = _english ? "Windows and driver\nupdate search" : "Windows- und\nTreiberupdatesuche";
+        string state = AutomaticWindowsUpdateSearch.IsChecked == true ? (_english ? "On" : "An") : (_english ? "Off" : "Aus");
+        AutomaticWindowsUpdateSearch.Content = (_english ? "On first opening · " : "Beim ersten Öffnen · ") + state;
+        System.Windows.Automation.AutomationProperties.SetName(AutomaticWindowsUpdateSearch,
+            _english ? "Check for Windows and driver updates on first opening" : "Beim ersten Öffnen nach Windows- und Treiberupdates suchen");
+    }
 
     internal async Task CheckForUpdatesOnStartupAsync()
     {
@@ -226,7 +370,7 @@ public partial class MainWindow : Window
             if (sequence != _updateCheckSequence) return;
             _updateCheckFailedConnection = exception is HttpRequestException or TaskCanceledException;
             SetUpdateCheckState(UpdateCheckState.Failed);
-            Log((_english ? "Background update check failed: " : "Update-Prüfung im Hintergrund fehlgeschlagen: ") + UiText.Error(exception, _english));
+            LogError((_english ? "Background update check failed: " : "Update-Prüfung im Hintergrund fehlgeschlagen: ") + UiText.Error(exception, _english));
         }
     }
 
@@ -335,6 +479,7 @@ public partial class MainWindow : Window
         CheckUpdatesButton.IsEnabled = false;
         ++_updateCheckSequence;
         _updateInProgress = true;
+        UpdateActivityIndicator();
         try
         {
             var manager = new UpdateManagerWindow(ThemePalette.For(SelectedTheme()), _english,
@@ -361,11 +506,11 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            Log((_english ? "Version change failed: " : "Versionswechsel fehlgeschlagen: ") + UiText.Error(exception, _english));
+            LogError((_english ? "Version change failed: " : "Versionswechsel fehlgeschlagen: ") + UiText.Error(exception, _english));
             MessageBox.Show((_english ? "The version change could not be completed: " : "Der Versionswechsel konnte nicht abgeschlossen werden: ") + UiText.Error(exception, _english),
                 "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally { _updateInProgress = false; CheckUpdatesButton.IsEnabled = true; }
+        finally { _updateInProgress = false; CheckUpdatesButton.IsEnabled = true; UpdateActivityIndicator(); }
     }
     private void WarningSoundChanged(object s, SelectionChangedEventArgs e) => SaveSettings();
     private void WarningVolumeChanged(object s, RoutedPropertyChangedEventArgs<double> e)
@@ -396,6 +541,9 @@ public partial class MainWindow : Window
             MinHeight = 620;
             ConfigureCompactScrolling(false);
         }
+        if (SettingsRows is not null)
+            for (int row = 0; row < SettingsRows.RowDefinitions.Count; row++)
+                if (row != 8) SettingsRows.RowDefinitions[row].Height = new GridLength(_effectiveSizeIndex == 0 ? 35 : 38);
         if (IsLoaded) ApplyLayoutScale();
     }
 
@@ -435,19 +583,23 @@ public partial class MainWindow : Window
         PageStatusBarRow.Height = new GridLength(105);
         HeaderLayout.ColumnDefinitions[0].Width = new GridLength(245 * factor);
         HeaderLayout.ColumnDefinitions[2].Width = new GridLength(205 * factor);
-        FooterLayout.ColumnDefinitions[0].Width = new GridLength(175);
-        FooterLayout.ColumnDefinitions[2].Width = new GridLength(175);
+        var footerSideWidth = _effectiveSizeIndex >= 2 ? 220 : 175;
+        FooterLayout.ColumnDefinitions[0].Width = new GridLength(footerSideWidth);
+        FooterLayout.ColumnDefinitions[2].Width = new GridLength(footerSideWidth);
+        var programInfo = _updatesPage?.ProgramView?.Info?.Frame;
 
         foreach (var textBlock in FindVisualChildren<TextBlock>(Root))
         {
-            if (IsInside(textBlock, SettingsPanel) || IsInside(textBlock, SettingsNoticePanel) || IsInside(textBlock, LogBox) || IsInside(textBlock, UserLogBox) || IsInside(textBlock, RepairLogBox) || IsInside(textBlock, UserList)) continue;
+            if (programInfo is not null && IsInside(textBlock, programInfo)) continue;
+            if (IsInside(textBlock, WindowsUpdatesHost) || IsInside(textBlock, SettingsPanel) || IsInside(textBlock, SettingsNoticePanel) || IsInside(textBlock, LogBox) || IsInside(textBlock, UserLogBox) || IsInside(textBlock, RepairLogBox) || IsInside(textBlock, UserList)) continue;
             if (!_baseTextSizes.TryGetValue(textBlock, out var baseSize))
                 _baseTextSizes[textBlock] = baseSize = textBlock.FontSize;
             textBlock.FontSize = Math.Round(baseSize * factor);
         }
         foreach (var button in FindVisualChildren<Button>(Root))
         {
-            if (IsInside(button, SettingsPanel) || IsInside(button, SettingsNoticePanel) || IsInside(button, LogBox) || IsInside(button, UserLogBox) || IsInside(button, RepairLogBox) || IsInside(button, UserList)) continue;
+            if (programInfo is not null && IsInside(button, programInfo)) continue;
+            if (IsInside(button, WindowsUpdatesHost) || IsInside(button, SettingsPanel) || IsInside(button, SettingsNoticePanel) || IsInside(button, LogBox) || IsInside(button, UserLogBox) || IsInside(button, RepairLogBox) || IsInside(button, UserList)) continue;
             if (!_baseButtonSizes.TryGetValue(button, out var baseSize))
                 _baseButtonSizes[button] = baseSize = button.FontSize;
             button.FontSize = Math.Round(baseSize * factor);
@@ -463,6 +615,7 @@ public partial class MainWindow : Window
         AdminRightsBadge.Height = 31 * factor;
         foreach (var icon in FindVisualChildren<Image>(Root))
         {
+            if (programInfo is not null && IsInside(icon, programInfo)) continue;
             if (IsInside(icon, SettingsPanel) || IsInside(icon, SettingsNoticePanel)) continue;
             if (!_baseImageSizes.TryGetValue(icon, out var baseSize))
                 _baseImageSizes[icon] = baseSize = (icon.Width, icon.Height);
@@ -498,20 +651,17 @@ public partial class MainWindow : Window
         CurrentUserText.FontSize = Math.Round(14 * factor);
         CurrentUserRole.FontSize = Math.Round(12 * factor);
         AdminRightsStatus.FontSize = Math.Round(10 * factor);
-        RepairExplanation.FontSize = Math.Round(13 * factor);
         RepairProgressLabel.FontSize = Math.Round(14 * factor);
         RepairTimeText.FontSize = RepairResult.FontSize = Math.Round(13 * factor);
-        RepairDismSub.FontSize = RepairSfcSub.FontSize = Math.Round(12 * factor);
-        foreach (var button in new[] { RepairDismButton, RepairSfcButton, RepairCancelButton,
+        foreach (var button in new[] { RepairCancelButton,
                      CreateUserButton, EditUserButton, RefreshUsersButton, ClearRepairLogButton, OpenRepairLogButton })
             button.FontSize = Math.Round(12 * factor);
         foreach (var button in new[] { CreateUserButton, EditUserButton, RefreshUsersButton })
             button.FontSize = Math.Round(13 * factor);
         LogBox.Height = (compact ? 112 : 120) * factor;
         UserLogBox.Height = double.NaN;
-        RepairDismButton.Height = RepairSfcButton.Height = RepairCancelButton.Height = (compact ? 40 : 44) * factor;
-        RepairActionRow.ColumnDefinitions[4].Width = new GridLength(140 * factor);
-        RepairProgress.Height = 11 * factor;
+        RepairCancelButton.Height = (compact ? 31 : 34) * factor;
+        RepairProgress.Height = compact ? 30 : 34;
         OpenRepairLogButton.Height = 30 * factor;
         ClearRepairLogButton.Height = 30 * factor;
         ShowRepairProtocolButton.Height = (compact ? 31 : 34) * factor;
@@ -592,10 +742,10 @@ public partial class MainWindow : Window
             : new GridLength(0);
         UserLegacyDetails.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
         RepairLegacyDetails.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
-        RepairPage.RowDefinitions[0].Height = new GridLength(standard ? 1 : 1.04, GridUnitType.Star);
-        RepairPage.RowDefinitions[1].Height = standard ? new GridLength(0) : new GridLength(0.96, GridUnitType.Star);
-        RepairProgress.Height = standard ? (_effectiveSizeIndex <= 1 ? 13 : 15)
-            : 11 * (_effectiveSizeIndex switch { 2 => 1050.0 / 900, 3 => 1200.0 / 900, _ => 1.0 });
+        RepairPage.RowDefinitions[0].Height = new GridLength(standard ? 1 : 2.25, GridUnitType.Star);
+        RepairPage.RowDefinitions[1].Height = standard ? new GridLength(0) : new GridLength(0.75, GridUnitType.Star);
+        RepairProgress.Height = _effectiveSizeIndex <= 1 ? 30 : 34;
+        UpdateRepairTileLayout();
         UserPage.RowDefinitions[0].Height = standard ? new GridLength(1, GridUnitType.Star) : new GridLength(1.04, GridUnitType.Star);
         UserPage.RowDefinitions[1].Height = standard ? new GridLength(0) : new GridLength(0.96, GridUnitType.Star);
         UserCardSurface.SetResourceReference(Border.BackgroundProperty,
@@ -610,6 +760,9 @@ public partial class MainWindow : Window
             oldCardPart.Visibility = standard ? Visibility.Collapsed : Visibility.Visible;
         var factor = _effectiveSizeIndex switch { 2 => 1050.0 / 900, 3 => 1200.0 / 900, _ => 1.0 };
         var compact = _effectiveSizeIndex == 0;
+
+        var repairPadding = (compact ? 12 : 14) * factor;
+        SetCardPadding(RepairCardSurface, new Thickness(repairPadding, repairPadding, repairPadding, 7 * factor));
 
         foreach (var (element, position) in _originalHomePositions)
         {
@@ -878,22 +1031,22 @@ public partial class MainWindow : Window
 
     private void Log(string text)
     {
-        var entry = $"[{DateTime.Now:dd.MM.yyyy, HH:mm:ss}] {text}";
+        var entry = _eventLogs.Event(text);
+        if (entry is null) return;
+        DisplayLogEntry(entry);
+    }
+    internal void RecordError(AppLogError error)
+    {
+        var entry = _eventLogs.Error(error);
+        if (entry is not null) DisplayLogEntry(entry);
+    }
+    private void LogError(string text, [System.Runtime.CompilerServices.CallerMemberName] string operation = "")
+        => RecordError(new("PowerLeitstand PRO", operation, text));
+    private void DisplayLogEntry(string entry)
+    {
         AddLogEntry(entry);
         if (StandardLogPreview.Items.Count > 0)
             StandardLogPreview.ScrollIntoView(StandardLogPreview.Items[0]);
-        try
-        {
-            lock (_logLock)
-            {
-                Directory.CreateDirectory(_logDirectory);
-                File.AppendAllText(LogFilePath, entry + Environment.NewLine);
-            }
-        }
-        catch
-        {
-            // Das Programm bleibt nutzbar, falls Windows den Logordner vorübergehend sperrt.
-        }
     }
 
     private void UpdateStandardMetricLabels()
@@ -1048,7 +1201,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            Log((_english ? "Action failed: " : "Aktion fehlgeschlagen: ") + UiText.Error(exception, _english));
+            LogError((_english ? "Action failed: " : "Aktion fehlgeschlagen: ") + UiText.Error(exception, _english));
             MessageBox.Show((_english ? "Windows could not perform this action: " : "Windows konnte die Aktion nicht ausführen: ") + UiText.Error(exception, _english), "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -1115,9 +1268,12 @@ public partial class MainWindow : Window
 
     private void SetTimerState(bool active)
     {
+        UpdateActivityIndicator();
         (System.Windows.Application.Current as App)?.UpdateTrayTimerState(IsBusy);
-        RepairDismButton.IsEnabled = RepairSfcButton.IsEnabled = !IsBusy;
-        CreateUserButton.IsEnabled = AdminRightsBadge.IsEnabled = !_repairRunning;
+        UpdateRepairTileAvailability();
+        CreateUserButton.IsEnabled = AdminRightsBadge.IsEnabled = !_repairRunning && !_windowsUpdateInProgress;
+        EditUserButton.IsEnabled = !_windowsUpdateInProgress && UserList.SelectedItem is UserEntry;
+        _updatesPage?.RefreshAvailability();
         AbortTimerButton.IsEnabled = active;
         ShutdownButton.IsEnabled = RestartButton.IsEnabled = LogoutButton.IsEnabled = LockButton.IsEnabled = !IsBusy;
         TimerShutdown.IsEnabled = TimerLock.IsEnabled = TimerRestart.IsEnabled = !IsBusy;
@@ -1127,6 +1283,9 @@ public partial class MainWindow : Window
         if (active) AbortCountdown.Text = (_english ? "Remaining: " : "Noch: ") + CountdownLabel(Math.Max(0, (int)Math.Ceiling((_timerDeadline - DateTimeOffset.UtcNow).TotalSeconds)));
         StatusText.Text = active ? (_english ? "Timer active" : "Timer aktiv")
             : _repairRunning ? (_english ? "Repair running" : "Reparatur läuft")
+            : _windowsUpdateInProgress ? _updatesPage?.ExternalOperationLabel(_english) ?? (_updatesPage?.ManufacturerView?.IsWorking == true
+                ? (_english ? "Manufacturer software active" : "Hersteller-Software aktiv")
+                : (_english ? "Windows updates active" : "Windows-Updates aktiv"))
             : (_english ? "Ready" : "Bereit");
         UserStatusText.Text = RepairStatusText.Text = StatusText.Text;
         StatusSymbol.Text = UserStatusSymbol.Text = RepairStatusSymbol.Text = IsBusy ? "◷" : "✓";
@@ -1139,10 +1298,17 @@ public partial class MainWindow : Window
         if (!active) StatusDetail.Text = UserStatusSub.Text = RepairStatusSub.Text = _repairRunning
             ? (_english ? "Windows repair active" : "Windows-Reparatur aktiv")
             : (_english ? "No action active" : "Keine Aktion aktiv");
-        if (!active) UpdateRepairStatus();
+        if (!active && !_windowsUpdateInProgress) UpdateRepairStatus();
     }
 
     private string TimerLabel() => TimerLabel(_seconds);
+    private void UpdateActivityIndicator()
+    {
+        ActivityStatusAppearance.Update(ActivityStatusIndicator, ThemePalette.For(SelectedTheme()), IsBusy,
+            _updatesPage?.ExternalOperationLabel(_english) ?? (_updatesPage?.ManufacturerView?.IsWorking == true ? (_english ? "Manufacturer software active" : "Hersteller-Software aktiv")
+                : ActivityStatusAppearance.Description(_english, _timer.IsEnabled, _repairRunning,
+                    _repairCancellation?.IsCancellationRequested == true, _updateInProgress || _windowsUpdateInProgress)));
+    }
     private static string CountdownLabel(int seconds) => TimeSpan.FromSeconds(seconds).ToString(seconds >= 3600 ? @"hh\:mm\:ss" : @"mm\:ss");
     private string TimerLabel(int seconds)
     {
@@ -1160,37 +1326,56 @@ public partial class MainWindow : Window
 
     private void SwitchPage(object s, RoutedEventArgs e)
     {
-        _pageIndex = Math.Clamp(_pageIndex + (ReferenceEquals(s, PagePrevious) ? -1 : 1), 0, 2);
+        ShowPage(_pageIndex + (ReferenceEquals(s, PagePrevious) ? -1 : 1));
+    }
+
+    private void ShowPage(int index)
+    {
+        var target = Math.Clamp(index, 0, 3);
+        // Keep the current page and navigation state until lazy construction succeeds.
+        if (target == 3)
+        {
+            try { EnsureUpdatesPage(); }
+            catch (Exception exception) when (exception is not (OutOfMemoryException or AccessViolationException or SEHException))
+            {
+                LogError((_english ? "Windows updates could not be opened: " : "Windows-Updates konnten nicht geöffnet werden: ") + UiText.Error(exception, _english));
+                NavigationDiagnostics.Write(_logDirectory, "Windows updates view initialization failed", exception);
+                if (!SkipSavedPlacementForTests)
+                    MessageBox.Show(this, _english
+                        ? "The Windows updates view could not be loaded. The current page remains open. Please try again.\n\n" + UiText.Error(exception, true)
+                        : "Windows-Updates konnten nicht geladen werden. Die bisherige Seite bleibt geöffnet. Bitte erneut versuchen.\n\n" + UiText.Error(exception, false),
+                        "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+        }
+        _pageIndex = target;
         HomePage.Visibility = _pageIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
         UserPage.Visibility = _pageIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         RepairPage.Visibility = _pageIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
+        WindowsUpdatesHost.Visibility = _pageIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
+        QueueNeonRefresh();
         UpdatePageNavigation();
-        // Die Seite wechselt sofort; die Windows-Abfrage erfolgt nur auf Klick auf Aktualisieren.
     }
 
     private void UpdatePageNavigation()
     {
-        PageIndicator.Text = $"{_pageIndex + 1} / 3";
+        PageIndicator.Text = $"{_pageIndex + 1} / 4";
         PagePrevious.IsEnabled = _pageIndex > 0;
-        PageNext.IsEnabled = _pageIndex < 2;
+        PageNext.IsEnabled = _pageIndex < 3;
         UpdateCompactLogContext();
     }
 
     internal void ShowRepairPage()
     {
-        _pageIndex = 2;
-        HomePage.Visibility = UserPage.Visibility = Visibility.Collapsed;
-        RepairPage.Visibility = Visibility.Visible;
-        UpdatePageNavigation();
+        ShowPage(2);
     }
 
     internal void ShowUsersPage()
     {
-        _pageIndex = 1;
-        HomePage.Visibility = RepairPage.Visibility = Visibility.Collapsed;
-        UserPage.Visibility = Visibility.Visible;
-        UpdatePageNavigation();
+        ShowPage(1);
     }
+
+    internal void ShowWindowsUpdatesPage() => ShowPage(3);
 
     private void ToggleSettings(object s, RoutedEventArgs e)
     {
@@ -1200,7 +1385,7 @@ public partial class MainWindow : Window
 
     private void SetSettingsOverlay(bool showOptions, bool showNotice)
     {
-        if (showOptions) LoadAutoStart();
+        if (showOptions && !SkipSavedPlacementForTests) LoadAutoStart();
         if (!showNotice && SettingsNoticePopup.IsOpen) CloseSettingsNotice(this, new RoutedEventArgs());
         SettingsShell.Visibility = SettingsPanel.Visibility = showOptions ? Visibility.Visible : Visibility.Collapsed;
         SettingsBackdrop.Visibility = showOptions ? Visibility.Visible : Visibility.Collapsed;
@@ -1208,7 +1393,7 @@ public partial class MainWindow : Window
         UpdateStatus.Visibility = showOptions && _updateCheckState != UpdateCheckState.Checking
             ? Visibility.Visible : Visibility.Collapsed;
         var pageInputEnabled = !showOptions;
-        HomePage.IsHitTestVisible = UserPage.IsHitTestVisible = RepairPage.IsHitTestVisible = PageNavigation.IsHitTestVisible = pageInputEnabled;
+        HomePage.IsHitTestVisible = UserPage.IsHitTestVisible = RepairPage.IsHitTestVisible = WindowsUpdatesHost.IsHitTestVisible = PageNavigation.IsHitTestVisible = pageInputEnabled;
     }
     private void Minimize(object s, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void CloseApp(object s, RoutedEventArgs e) => Close();
@@ -1272,6 +1457,8 @@ public partial class MainWindow : Window
 
     private void ApplyLanguage()
     {
+        _updatesPage?.SetLanguage(_english);
+        System.Windows.Automation.AutomationProperties.SetName(RepairProgress, _english ? "Repair progress" : "Reparaturfortschritt");
         HeaderMinimizeButton.ToolTip = _english ? "Minimize" : "Minimieren";
         HeaderCloseButton.ToolTip = _english ? "Quit" : "Beenden";
         System.Windows.Automation.AutomationProperties.SetName(PagePrevious, _english ? "Previous page" : "Vorherige Seite");
@@ -1330,15 +1517,10 @@ public partial class MainWindow : Window
         EditUserButton.ToolTip = _english ? "Edit selected user" : "Ausgewählten Benutzer bearbeiten";
         RefreshUsersButton.ToolTip = _english ? "Refresh user list" : "Benutzerliste aktualisieren";
         UpdateTitle.Text = _english ? "Updates" : "Updates";
+        UpdateAutomaticWindowsUpdateSearchLabel();
+        UpdateEsuRestoreButton();
         CheckUpdatesLabel.Text = _english ? "Updates …" : "Updates …";
-        RepairTitle.Text = _english ? "Windows repair" : "Windows-Reparatur";
-        RepairHeaderSub.Text = _english ? "Check and repair system files" : "Systemdateien prüfen und reparieren";
-        RepairExplanation.Text = _english
-            ? "Run DISM first, then SFC. Windows will not restart automatically."
-            : "Zuerst DISM, danach SFC ausführen. Es wird nichts automatisch neu gestartet.";
-        RepairDismSub.Text = _english ? "Repair Windows image" : "Windows-Abbild reparieren";
-        RepairSfcSub.Text = _english ? "Check system files" : "Systemdateien prüfen";
-        RepairCancelLabel.Text = _english ? "Cancel" : "Abbrechen";
+        BuildRepairToolGroups();
         RepairLogTitle.Text = "Log PRO";
         RepairLogSub.Text = _english ? "Repair log" : "Reparaturprotokoll";
         OpenRepairLogLabel.Text = _english ? "Open folder" : "Ordner öffnen";
@@ -1352,7 +1534,7 @@ public partial class MainWindow : Window
             RepairProgressLabel.Text = _english ? "Repair cancelled." : "Reparatur abgebrochen.";
         else if (_lastRepairExitCode is int repairCode)
         {
-            _lastRepairSummary = RepairResultSummary.Create(_repairCommand?.StartsWith("SFC", StringComparison.Ordinal) == true ? "sfc" : "dism",
+            _lastRepairSummary = RepairResultSummary.Create(_selectedRepairTool?.Id ?? "dism",
                 repairCode, false, _repairOutput.ToString(), GetRepairFailureHint(null), _repairWatch.Elapsed, _english);
             RepairProgressLabel.Text = _lastRepairSummary.Title;
             RepairResult.Text = _lastRepairSummary.Message;
@@ -1397,6 +1579,7 @@ public partial class MainWindow : Window
         TimerValue.Text = TimerLabel();
         UpdateCurrentUserLabel();
         SetUpdateCheckState(_updateCheckState);
+        ApplySettingsDialogAppearance();
         if (IsLoaded) (System.Windows.Application.Current as App)?.UpdateTrayPresentation(SelectedTheme(), _english);
     }
 
@@ -1414,7 +1597,7 @@ public partial class MainWindow : Window
             ? (_english ? "Autostart could not be verified: " : "Autostart konnte nicht bestätigt werden: ") + UiText.Translate(status.Error!, _english)
             : status.Enabled == true ? status.Command : _english ? "Autostart disabled" : "Autostart deaktiviert";
         if (status.Updated) Log(_english ? "Autostart updated to the current program file." : "Autostart auf die aktuelle Programmdatei angepasst.");
-        if (status.Error is not null) Log((_english ? "Autostart check failed: " : "Autostart-Prüfung fehlgeschlagen: ") + UiText.Translate(status.Error!, _english));
+        if (status.Error is not null) LogError((_english ? "Autostart check failed: " : "Autostart-Prüfung fehlgeschlagen: ") + UiText.Translate(status.Error!, _english));
     }
 
     private void ToggleAutoStart(object s, RoutedEventArgs e)
@@ -1510,9 +1693,17 @@ public partial class MainWindow : Window
         var glowHex = palette.Glow ?? (name == "Standard" ? colors[7] : null);
         var glowColor = glowHex is null ? Colors.Transparent : (Color)ColorConverter.ConvertFromString(glowHex);
         var glowOpacity = name == "Standard" ? 0.23 : palette.GlowOpacity;
-        Resources["NeonGlow"] = new System.Windows.Media.Effects.DropShadowEffect { Color = glowColor, ShadowDepth = 0, BlurRadius = 15, Opacity = glowOpacity };
-        Resources["NeonIconGlow"] = new System.Windows.Media.Effects.DropShadowEffect { Color = glowColor, ShadowDepth = 0, BlurRadius = 6, Opacity = glowOpacity * 0.7 };
+        Resources["OuterOutlineBrush"] = palette.IsNeon
+            ? new SolidColorBrush(BlendColor(card, glowColor, .38)) : Resources["AccentBrush"];
+        if (!palette.IsNeon || _neonColor != glowColor)
+        {
+            Resources["NeonGlow"] = new System.Windows.Media.Effects.DropShadowEffect { Color = glowColor, ShadowDepth = 0, BlurRadius = 15, Opacity = glowOpacity };
+            Resources["NeonIconGlow"] = new System.Windows.Media.Effects.DropShadowEffect { Color = glowColor, ShadowDepth = 0, BlurRadius = 6, Opacity = glowOpacity * 0.7 };
+        }
         System.Windows.Documents.TextElement.SetFontFamily(Root, new System.Windows.Media.FontFamily(palette.FontFamily));
+        if (_updatesPage is not null) _updatesPage.FontFamily = new System.Windows.Media.FontFamily(palette.FontFamily);
+        _updatesPage?.ApplyProgressPalette(palette);
+        RepairProgress.ApplyPalette(palette);
         ClearLogButton.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, "ActionTextBrush");
         var cardRadius = new CornerRadius(name == "Classic" ? 8 : 13);
         foreach (var border in FindVisualChildren<Border>(Root))
@@ -1524,12 +1715,32 @@ public partial class MainWindow : Window
         SettingsHalo.CornerRadius = SettingsPanel.CornerRadius;
         SwitchIconSet(palette.IconSet);
         ApplyReferencePalette(name, palette);
+        ApplyRepairTilePalette(name, palette);
         ApplyHomeLayout(name);
         ApplyPageNavigationTheme(name);
         ApplyClassicCancelTheme(name);
         ConfigureNeonPresentation(palette);
+        UpdateActivityIndicator();
+        ApplySettingsDialogAppearance();
         if (_diagnosticsKind is not null) RefreshDiagnosticsHover();
         (System.Windows.Application.Current as App)?.UpdateTrayPresentation(name, _english);
+    }
+
+    private void ApplySettingsDialogAppearance()
+    {
+        var appearance = (Theme: SelectedTheme(), English: _english);
+        if (_settingsAppearance == appearance) return;
+        var palette = ThemePalette.For(appearance.Theme);
+        UnifiedDialogAppearance.Resources(this, palette);
+        DialogAppearance.ApplySurface(this, SettingsPanel, palette);
+        SettingsPanel.SetResourceReference(Border.BackgroundProperty, "DialogSurface");
+        var layout = (Grid)SettingsPanel.Child;
+        UnifiedDialogAppearance.ReplaceHeader(this, layout, _english ? "Options" : "Optionen", _english,
+            height: 56, closeAction: () => ToggleSettings(this, new RoutedEventArgs()));
+        foreach (var header in layout.Children.OfType<Grid>().Where(child => Grid.GetRow(child) == 0))
+            header.Margin = new Thickness(12, 0, 10, 0);
+        UnifiedDialogAppearance.Button(this, DoneButton, DialogButtonKind.Primary);
+        _settingsAppearance = appearance;
     }
 
     private static Color BlendColor(Color first, Color second, double amount) => Color.FromRgb(
@@ -1546,7 +1757,11 @@ public partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(source) || !source.Contains("/icons/", StringComparison.OrdinalIgnoreCase)) continue;
             var file = Path.GetFileName(source);
             var resource = new Uri($"pack://application:,,,/Assets/icons/{set}/{file}", UriKind.Absolute);
-            image.Source = new BitmapImage(resource);
+            if (!_themeIcons.TryGetValue(resource.AbsoluteUri, out var bitmap))
+            {
+                bitmap = new BitmapImage(resource); bitmap.Freeze(); _themeIcons[resource.AbsoluteUri] = bitmap;
+            }
+            image.Source = bitmap;
             if (set == "neon" && image.Width >= 25)
                 image.SetResourceReference(UIElement.EffectProperty, "NeonIconGlow");
             else image.ClearValue(UIElement.EffectProperty);
@@ -1601,17 +1816,20 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            Log((_english ? "Warning sound failed: " : "Warnton fehlgeschlagen: ") + UiText.Error(exception, _english));
+            LogError((_english ? "Warning sound failed: " : "Warnton fehlgeschlagen: ") + UiText.Error(exception, _english));
             return false;
         }
     }
 
     private async void LoadUsers(object? s, RoutedEventArgs e)
     {
+        if (_usersLoadTask is not null || _windowClosed) return;
         RefreshUsersButton.IsEnabled = false;
+        var read = _usersLoadTask = Task.Run(() => ReadLocalUsers());
         try
         {
-            var users = await Task.Run(() => ReadLocalUsers());
+            var users = await read;
+            if (_windowClosed) return;
             UserList.Items.Clear();
             foreach (var user in users) UserList.Items.Add(user);
             UpdateCurrentUserLabel(users);
@@ -1619,10 +1837,11 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            Log((_english ? "User overview failed: " : "Benutzerübersicht fehlgeschlagen: ") + UiText.Error(exception, _english));
+            if (_windowClosed) return;
+            LogError((_english ? "User overview failed: " : "Benutzerübersicht fehlgeschlagen: ") + UiText.Error(exception, _english));
             MessageBox.Show((_english ? "Local users could not be loaded: " : "Lokale Benutzer konnten nicht geladen werden: ") + UiText.Error(exception, _english), "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
-        finally { RefreshUsersButton.IsEnabled = true; }
+        finally { _usersLoadTask = null; if (!_windowClosed) RefreshUsersButton.IsEnabled = true; }
     }
 
     private void UpdateCurrentUserLabel(IReadOnlyList<UserEntry>? users = null)
@@ -1662,7 +1881,7 @@ public partial class MainWindow : Window
             : Resources[elevated ? "ReadyBrush" : "WarningBrush"];
     }
 
-    private void UserSelectionChanged(object s, SelectionChangedEventArgs e) => EditUserButton.IsEnabled = UserList.SelectedItem is UserEntry;
+    private void UserSelectionChanged(object s, SelectionChangedEventArgs e) => EditUserButton.IsEnabled = !_windowsUpdateInProgress && UserList.SelectedItem is UserEntry;
 
     private void UserListSizeChanged(object s, SizeChangedEventArgs e) => SizeUserColumns();
 
@@ -1678,7 +1897,7 @@ public partial class MainWindow : Window
 
     private async void CreateUser(object s, RoutedEventArgs e)
     {
-        if (_repairRunning) return;
+        if (_repairRunning || _windowsUpdateInProgress) return;
         if (!RequireUserAdmin()) return;
         var dialog = new UserEditorDialog(this, null);
         if (dialog.ShowDialog() != true || dialog.Values is not { } values) return;
@@ -1686,7 +1905,7 @@ public partial class MainWindow : Window
         if (values.WithoutPassword)
             createQuestion += _english ? " This account will have no password. Windows security policy may reject it." : " Dieses Konto hat kein Kennwort. Die Windows-Sicherheitsrichtlinie kann das ablehnen.";
         if (MessageBox.Show(createQuestion, "PowerLeitstand PRO", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        if (_repairRunning) return;
+        if (_repairRunning || _windowsUpdateInProgress) return;
         try
         {
             await Task.Run(() => LocalUserManager.Create(values.Name, values.Password, values.FullName, values.Description, values.WithoutPassword, values.Enabled, values.Administrator));
@@ -1698,7 +1917,7 @@ public partial class MainWindow : Window
             var detail = _english
                 ? "Windows rejected the empty password under its password policy. Create the account with a password or change the policy separately."
                 : "Windows hat das leere Kennwort wegen der Kennwortrichtlinie abgelehnt. Erstelle das Konto mit Kennwort oder ändere die Richtlinie separat.";
-            Log((_english ? "Account creation failed for " : "Kontoerstellung fehlgeschlagen für ") + values.Name + ": " + detail);
+            LogError((_english ? "Account creation failed for " : "Kontoerstellung fehlgeschlagen für ") + values.Name + ": " + detail);
             MessageBox.Show(detail, "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (Exception exception) { UserEditError(values.Name, exception); }
@@ -1780,7 +1999,7 @@ public partial class MainWindow : Window
 
     private void OpenAdminStatus(object s, RoutedEventArgs e)
     {
-        if (_repairRunning) return;
+        if (_repairRunning || _windowsUpdateInProgress) return;
         if (IsAdmin())
         {
             MessageBox.Show(_english ? "The app is running with administrator rights." : "Die App läuft mit Administratorrechten.",
@@ -1792,6 +2011,7 @@ public partial class MainWindow : Window
 
     private bool RequireUserAdmin()
     {
+        if (_windowsUpdateInProgress) return false;
         if (IsAdmin()) return true;
         RequestElevation(openUsersPage: true);
         return false;
@@ -1799,7 +2019,7 @@ public partial class MainWindow : Window
 
     private void RequestElevation(bool openUsersPage)
     {
-        if (_repairRunning) return;
+        if (_repairRunning || _windowsUpdateInProgress) return;
         if (!ThemedMessageBox.ShowElevationPrompt(this)) return;
         if (IsBusy)
         {
@@ -1828,7 +2048,7 @@ public partial class MainWindow : Window
 
     private void UserEditError(string name, Exception exception)
     {
-        Log((_english ? "Account management failed for " : "Kontoverwaltung fehlgeschlagen für ") + name + ": " + UiText.Error(exception, _english));
+        LogError((_english ? "Account management failed for " : "Kontoverwaltung fehlgeschlagen für ") + name + ": " + UiText.Error(exception, _english));
         MessageBox.Show((_english ? "Windows could not complete the account change. The account may have been partially changed: " : "Windows konnte die Kontoänderung nicht vollständig ausführen. Das Konto kann teilweise geändert worden sein: ") + UiText.Error(exception, _english), "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Error);
         LoadUsers(null, null!);
     }
@@ -1865,11 +2085,11 @@ public partial class MainWindow : Window
     {
         const string usersCommand = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-LocalUser | Select-Object Name,FullName,Enabled,Description,@{Name='SidValue';Expression={$_.SID.Value}} | ConvertTo-Json -Compress";
         const string adminsCommand = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-LocalGroupMember -SID S-1-5-32-544 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | ConvertTo-Json -Compress";
-        using var users = JsonDocument.Parse(RunCaptured("powershell.exe", $"-NoProfile -NonInteractive -Command \"{usersCommand}\""));
+        using var users = JsonDocument.Parse(RunCaptured($"-NoProfile -NonInteractive -Command \"{usersCommand}\""));
         var adminNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            using var admins = JsonDocument.Parse(RunCaptured("powershell.exe", $"-NoProfile -NonInteractive -Command \"{adminsCommand}\""));
+            using var admins = JsonDocument.Parse(RunCaptured($"-NoProfile -NonInteractive -Command \"{adminsCommand}\""));
             var names = admins.RootElement.ValueKind == JsonValueKind.Array ? admins.RootElement.EnumerateArray().Select(item => item.GetString() ?? string.Empty) : new[] { admins.RootElement.GetString() ?? string.Empty };
             foreach (var name in names) adminNames.Add(name);
         }
@@ -1892,18 +2112,16 @@ public partial class MainWindow : Window
         }).OrderBy(user => user.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    private static string RunCaptured(string file, string arguments)
+    private static string RunCaptured(string arguments)
     {
-        using var process = Process.Start(new ProcessStartInfo(file, arguments) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8 }) ?? throw new InvalidOperationException();
-        var output = process.StandardOutput.ReadToEnd();
-        if (!process.WaitForExit(5000)) { process.Kill(); throw new TimeoutException("Windows-Benutzerabfrage hat zu lange gedauert."); }
-        if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output)) throw new InvalidOperationException();
-        return output;
+        var file = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        // Runs only inside the background user query. Both pipes and the process share the deadline.
+        return UserQueryProcess.ReadAsync(new ProcessStartInfo(file, arguments), TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
     }
 
     private static bool IsAdmin() => ElevationService.IsElevated();
 
-    public void ExecuteTrayAction(string action)
+    internal void ExecuteTrayAction(string action, Action<PowerAction>? execute = null)
     {
         Dispatcher.Invoke(() =>
         {
@@ -1912,16 +2130,17 @@ public partial class MainWindow : Window
                 MessageBox.Show(_english ? "Finish the active timer or repair first." : "Bitte zuerst den aktiven Timer oder die Reparatur beenden.", "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+            var run = execute ?? ExecuteAction;
             switch (action)
             {
-                case "shutdown": ShutdownNow(this, new RoutedEventArgs()); break;
-                case "restart": RestartNow(this, new RoutedEventArgs()); break;
-                case "logout": LogoutNow(this, new RoutedEventArgs()); break;
-                case "lock": LockNow(this, new RoutedEventArgs()); break;
+                case "shutdown": run(PowerAction.Shutdown); break;
+                case "restart": run(PowerAction.Restart); break;
+                case "logout": run(PowerAction.SignOut); break;
+                case "lock": run(PowerAction.Lock); break;
             }
         });
     }
-    private void Window_Closing(object? s, CancelEventArgs e) { if (!IsBusy) return; e.Cancel = true; MessageBox.Show(_english ? "Finish the active timer or repair first." : "Bitte zuerst den aktiven Timer oder die Reparatur beenden.", "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    private void Window_Closing(object? s, CancelEventArgs e) { if (!IsBusy) return; e.Cancel = true; MessageBox.Show(_english ? "Please finish the active operation first." : "Bitte zuerst den laufenden Vorgang beenden.", "PowerLeitstand PRO", MessageBoxButton.OK, MessageBoxImage.Warning); }
 
 }
 
@@ -2053,14 +2272,12 @@ internal sealed class PasswordResetDialog : Window
             _second.Clear();
             _passwordFields.Visibility = Visibility.Collapsed;
             _error.Visibility = Visibility.Collapsed;
-            Top += (Height - 284) / 2;
-            Height = 284;
+            InvalidateMeasure();
         };
         _removePassword.Unchecked += (_, _) =>
         {
             _passwordFields.Visibility = Visibility.Visible;
-            Top -= (370 - Height) / 2;
-            Height = 370;
+            InvalidateMeasure();
             _first.Focus();
         };
         var pinPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 0) };
@@ -2113,6 +2330,7 @@ internal sealed class PasswordResetDialog : Window
         var confirmLabel = (TextBlock)confirmContent.Children[1];
         _removePassword.Checked += (_, _) =>
         {
+            UnifiedDialogAppearance.Button(this, confirm, DialogButtonKind.Danger);
             confirmLabel.Text = english ? "Remove password" : "Kennwort entfernen";
             confirm.Background = danger;
             confirm.BorderBrush = dangerBorder;
@@ -2121,6 +2339,7 @@ internal sealed class PasswordResetDialog : Window
         };
         _removePassword.Unchecked += (_, _) =>
         {
+            UnifiedDialogAppearance.Button(this, confirm, DialogButtonKind.Primary);
             confirmLabel.Text = english ? "Change password" : "Kennwort ändern";
             confirm.Background = button;
             confirm.BorderBrush = accent;
@@ -2135,6 +2354,8 @@ internal sealed class PasswordResetDialog : Window
         layout.Children.Add(actions);
         root.Child = layout;
         Content = root;
+        DialogLayout.Compose(this, root, ThemePalette.For((owner as MainWindow)?.CurrentThemeName ?? "Standard"),
+            Title, english, DialogLayout.Take(body), DialogLayout.Actions(confirm, cancel));
         Loaded += (_, _) => _first.Focus();
     }
 

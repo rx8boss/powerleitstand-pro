@@ -32,6 +32,7 @@ internal static class UpdateReleaseCatalog
 
     internal static async Task<IReadOnlyList<UpdateRelease>> LoadAsync(CancellationToken token)
     {
+        using var connection = new OnlineRequest(token); token = connection.Token;
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
         client.DefaultRequestHeaders.UserAgent.ParseAdd(AppVersion.UserAgent);
         var result = new List<UpdateRelease>();

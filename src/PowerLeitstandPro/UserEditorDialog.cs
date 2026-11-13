@@ -171,26 +171,27 @@ internal sealed class UserEditorDialog : Window
         }
         else
         {
-            var row = NewRow(rowHeight);
-            var accountActions = new Grid { Margin = new Thickness(7, 0, 7, 0) };
+            var row = NewRow(40);
+            row.BorderThickness = new Thickness(0); row.Margin = new Thickness(0, 0, 0, 8);
+            var accountActions = new Grid();
             accountActions.ColumnDefinitions.Add(new ColumnDefinition());
             accountActions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(7) });
             accountActions.ColumnDefinitions.Add(new ColumnDefinition());
             var reset = new Button
             {
-                Height = 29, HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+                Height = 40, HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
                 Background = _button, BorderBrush = _accent,
                 BorderThickness = new Thickness(1.5), Style = owner.FindResource("UserToolbarButton") as Style,
-                Content = ButtonContent(Key, Tr("Kennwort zurücksetzen", "Reset password"), _accent, _text, 15, 11)
+                Content = ButtonContent(Key, Tr("Kennwort zurücksetzen", "Reset password"), _accent, _text, 16, 13)
             };
             reset.Click += (_, _) => { ResetPasswordRequested = true; DialogResult = true; };
             accountActions.Children.Add(reset);
             var delete = new Button
             {
-                Height = 29, HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+                Height = 40, HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
                 Background = _danger, BorderBrush = _dangerBorder,
                 BorderThickness = new Thickness(1.5), Style = owner.FindResource("UserToolbarButton") as Style,
-                Content = ButtonContent(Trash, Tr("Löschen", "Delete"), Brushes.White, Brushes.White, 16, 11)
+                Content = ButtonContent(Trash, Tr("Löschen", "Delete"), Brushes.White, Brushes.White, 16, 13)
             };
             delete.Click += (_, _) => { DeleteRequested = true; DialogResult = true; };
             Grid.SetColumn(delete, 2);
@@ -238,7 +239,40 @@ internal sealed class UserEditorDialog : Window
         layout.Children.Add(footer);
         root.Child = layout;
         Content = root;
+        formBorder.BorderThickness = new Thickness(0); formBorder.Background = Brushes.Transparent;
+        var body = DialogLayout.Stack(formBorder, _error);
+        DialogLayout.Compose(this, root, ThemePalette.For(owner.CurrentThemeName), Title, _english, body,
+            DialogLayout.Actions(save, cancel));
+        if (_creating) CompactCreateLayout(root, form, body, save, cancel);
         Loaded += (_, _) => (_creating ? _name : _fullName).Focus();
+    }
+
+    private static void CompactCreateLayout(Border frame, StackPanel form, StackPanel body, Button save, Button cancel)
+    {
+        foreach (var border in form.Children.OfType<Border>())
+        {
+            if (border.Child is StackPanel fields && fields.Children.Count == 2 && fields.Children[1] is Border input)
+            {
+                border.Margin = new Thickness(0, 0, 0, 6);
+                input.Height = 32;
+                input.Margin = new Thickness(0, 3, 0, 0);
+                ((TextBlock)fields.Children[0]).FontSize = 11.5;
+            }
+            else if (border.Child is Grid row)
+            {
+                border.Height = double.NaN;
+                row.Height = 32;
+                border.Margin = new Thickness(0, 3, 0, 0);
+            }
+        }
+        frame.Padding = new Thickness(16);
+        var layout = (Grid)frame.Child;
+        layout.RowDefinitions[0].MinHeight = 58;
+        var header = layout.Children.OfType<FrameworkElement>().First(element => Grid.GetRow(element) == 0);
+        header.Margin = new Thickness(0, 0, 0, 8);
+        header.MinHeight = 58;
+        if (body.Parent is ScrollViewer scroll) scroll.Margin = new Thickness(0, 0, 0, 10);
+        save.Height = save.MinHeight = cancel.Height = cancel.MinHeight = 36;
     }
 
     private string Tr(string german, string english) => _english ? english : german;
@@ -319,7 +353,7 @@ internal sealed class UserEditorDialog : Window
         field.Background = Brushes.Transparent;
         field.Foreground = _text;
         field.BorderThickness = new Thickness(0);
-        field.FontSize = 12;
+        field.FontSize = 14;
         field.Padding = new Thickness(8, 3, 6, 3);
         field.VerticalContentAlignment = VerticalAlignment.Center;
         inner.Children.Add(field);
@@ -338,6 +372,17 @@ internal sealed class UserEditorDialog : Window
         row.Children.Add(input);
         border.Child = row;
         form.Children.Add(border);
+        StackInput(border, input, label);
+    }
+
+    private void StackInput(Border border, Border input, string label)
+    {
+        DialogLayout.Take(input); input.Height = 40; input.Margin = new Thickness(0, 5, 0, 0);
+        border.Height = double.NaN; border.BorderThickness = new Thickness(0); border.Margin = new Thickness(0, 0, 0, 12);
+        border.Child = new StackPanel
+        {
+            Children = { new TextBlock { Text = label, FontSize = 12, Foreground = _subtle, TextWrapping = TextWrapping.Wrap }, input }
+        };
     }
 
     private void AddPasswordRow(StackPanel form, string label, PasswordBox hidden, string hint, int height, MainWindow owner)
@@ -422,10 +467,38 @@ internal sealed class UserEditorDialog : Window
         border.Child = row;
         form.Children.Add(border);
         _passwordRows.Add(border);
+        eye.Width = 30; eye.Height = eye.MinHeight = 28;
+        StackInput(border, inputShell, label);
     }
 
     private void AddSwitchRow(StackPanel form, string label, string icon, CheckBox check, int height, MainWindow owner)
     {
+        if (ReferenceEquals(check, _enabled) || ReferenceEquals(check, _administrator))
+        {
+            UnifiedDialogAppearance.Resources(this, ThemePalette.For(owner.CurrentThemeName));
+            var statusRow = new Grid { Height = 40 };
+            statusRow.ColumnDefinitions.Add(new ColumnDefinition());
+            statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+            statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+            statusRow.Children.Add(new TextBlock { Text = label, Foreground = _text, FontSize = 13, VerticalAlignment = VerticalAlignment.Center });
+            check.Style = (Style)FindResource("DialogStatusSwitch"); check.Width = 42; check.Height = 23;
+            check.VerticalAlignment = VerticalAlignment.Center;
+            System.Windows.Automation.AutomationProperties.SetName(check, label);
+            Grid.SetColumn(check, 1); statusRow.Children.Add(check);
+            var state = new TextBlock { FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+            Grid.SetColumn(state, 2); statusRow.Children.Add(state);
+            void Update()
+            {
+                bool on = check.IsChecked == true;
+                state.Text = on ? Tr("An", "On") : Tr("Aus", "Off");
+                bool light = owner.CurrentThemeName is "Classic" or "Linux Mint";
+                state.Foreground = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(on ? light ? "#167A4E" : "#29CDA3" : light ? "#9C203D" : "#FF8495"));
+                System.Windows.Automation.AutomationProperties.SetHelpText(check, state.Text);
+            }
+            check.Checked += (_, _) => Update(); check.Unchecked += (_, _) => Update(); Update();
+            form.Children.Add(new Border { Child = statusRow, Padding = new Thickness(12, 0, 12, 0), Background = _input, BorderBrush = _border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7), Margin = new Thickness(0, 4, 0, 0) });
+            return;
+        }
         var border = NewRow(height);
         var row = RowGrid(height, label, icon);
         check.Style = owner.FindResource("SettingsSwitch") as Style;
@@ -458,7 +531,7 @@ internal sealed class UserEditorDialog : Window
         if (_error.Visibility != Visibility.Visible)
         {
             _error.Visibility = Visibility.Visible;
-            if (!_creating) Height = MaxHeight = MinHeight = 369;
+            if (!_creating) { MaxHeight = Math.Max(MaxHeight, Height + 24); Height += 24; }
         }
     }
 }

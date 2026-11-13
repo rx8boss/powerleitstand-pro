@@ -14,11 +14,13 @@ public partial class MainWindow
     private int? _lastRepairExitCode;
     private bool _lastRepairCancelled;
     private readonly Stopwatch _repairWatch = new();
+    private string _repairErrorSession = Guid.NewGuid().ToString("N");
     private readonly RepairTimeEstimator _repairTimeEstimator = new();
     private readonly DispatcherTimer _repairClock = new() { Interval = TimeSpan.FromSeconds(1) };
     private RepairResultSummary? _pendingRepairSummary;
     private RepairResultSummary? _lastRepairSummary;
     private bool _repairResultDialogOpen;
+    private RepairNetworkRequest? _selectedNetworkRequest;
 
     private void LoadPersistedRepairLog()
     {
@@ -41,10 +43,16 @@ public partial class MainWindow
     private void AppendRepairLog(string line, string level = "INFO")
     {
         var entry = new RepairLogEntry(DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"),
-            _repairCommand?.StartsWith("DISM", StringComparison.Ordinal) == true ? "DISM" :
-            _repairCommand?.StartsWith("SFC", StringComparison.Ordinal) == true ? "SFC" : "SYSTEM",
+            _selectedRepairTool?.Executable switch
+            {
+                "dism.exe" => "DISM", "sfc.exe" => "SFC", "chkdsk.exe" => "CHKDSK",
+                "ipconfig.exe" => "DNS", "pnputil.exe" => "PnPUtil",
+                "powershell.exe" when _selectedRepairTool?.ShowsDiagnosticOutput == true => _selectedRepairTool.Caption,
+                "powershell.exe" => "Windows Update", _ => "SYSTEM"
+            },
             level, line.Replace('\r', ' ').Replace('\n', ' '));
         AddRepairLogEntry(entry);
+        if (level == "FEHLER") RecordError(new(entry.Phase, "Windows-Reparatur", line, OperationId: _repairErrorSession));
         try
         {
             Directory.CreateDirectory(_logDirectory);
@@ -71,25 +79,66 @@ public partial class MainWindow
         while (_repairLogEntries.Count > 500) _repairLogEntries.RemoveAt(_repairLogEntries.Count - 1);
     }
 
-    private void StartDismRepair(object sender, RoutedEventArgs e) => _ = StartRepairAsync("dism");
-    private void StartSfcRepair(object sender, RoutedEventArgs e) => _ = StartRepairAsync("sfc");
-
-    private async Task StartRepairAsync(string mode)
+    private async Task StartRepairAsync(RepairTool tool, RepairNetworkAdapter? adapter = null, RepairNetworkRequest? request = null)
     {
         if (IsBusy) return;
-        var command = mode == "dism" ? "DISM /Online /Cleanup-Image /RestoreHealth" : "SFC /scannow";
-        var confirmation = new RepairConfirmWindow(command, ThemePalette.For(SelectedTheme()), _english)
+        string? networkConfiguration = null;
+        if (request is null)
         {
-            Owner = this
-        };
-        if (confirmation.ShowDialog() != true) return;
+            var confirmation = new RepairConfirmWindow(tool, ThemePalette.For(SelectedTheme()), _english,
+                reports: DiagnosticReportsFor(tool), networkAdapters: adapter is null ? null : [adapter], selectAdapter: adapter is not null) { Owner = this };
+            if (confirmation.ShowDialog() != true) return;
+            request = confirmation.NetworkRequest;
+            networkConfiguration = confirmation.NetworkConfiguration;
+        }
+        if (IsBusy || !IsAdmin()) return;
 
+        if (tool.OpensWindow)
+        {
+            var launch = Stopwatch.StartNew();
+            try
+            {
+                var executable = Path.Combine(Environment.SystemDirectory, tool.Executable);
+                var startInfo = new ProcessStartInfo(executable, tool.Arguments)
+                {
+                    WorkingDirectory = Environment.SystemDirectory,
+                    UseShellExecute = false
+                };
+                using var process = Process.Start(startInfo);
+                SaveDiagnosticReport(tool, DiagnosticReportStatus.Opened, launch.Elapsed,
+                    _english ? "Windows displays the results in its own window." : "Windows zeigt die Ergebnisse im eigenen Fenster.", "");
+            }
+            catch (Win32Exception ex)
+            {
+                var message = UiText.Error(ex, _english);
+                SaveDiagnosticReport(tool, DiagnosticReportStatus.Failed, launch.Elapsed, message, "");
+                MessageBox.Show(this, message, tool.Title(_english), MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            return;
+        }
+
+        var mode = tool.Id;
+        var command = tool.Caption;
+        _selectedRepairTool = tool;
+        _selectedNetworkRequest = request;
+        UpdateRepairRunLabels();
+        RepairLiveOutput.Clear();
+        RepairToolScroll.Visibility = Visibility.Collapsed;
+        RepairRunningPanel.Visibility = Visibility.Visible;
         _repairCancellation = new CancellationTokenSource();
         _repairRunning = true;
+        _repairErrorSession = Guid.NewGuid().ToString("N");
         UpdateCompactLogActionState();
         _repairPercent = 0;
+        _repairHasMeasuredProgress = false;
         _repairCommand = command;
         _repairOutput.Clear();
+        if (networkConfiguration is not null)
+        {
+            _repairOutput.AppendLine(_english ? "IP and DNS configuration before the reset" : "IP- und DNS-Konfiguration vor dem Reset");
+            _repairOutput.AppendLine(networkConfiguration);
+            _repairOutput.AppendLine();
+        }
         _lastRepairExitCode = null;
         _lastRepairCancelled = false;
         _lastRepairSummary = null;
@@ -108,12 +157,25 @@ public partial class MainWindow
         RepairResult.Text = "";
         RepairCancelButton.IsEnabled = false; // Erst nach Verbindung mit dem Administrator-Hilfsprozess.
         SetTimerState(_timer.IsEnabled);
-        AppendRepairLog((_english ? "Started: " : "Gestartet: ") + command);
-        Log((_english ? "Repair started: " : "Reparatur gestartet: ") + command);
 
         int? exitCode = null;
         string? failure = null;
         var cancelled = false;
+        var driverInventory = mode == "driver-packages";
+        var outputLimit = driverInventory ? RepairDriverQuery.OutputLimit : 40_000;
+        var outputTruncated = false;
+        void AppendResultOutput(string line)
+        {
+            if (_repairOutput.Length < outputLimit)
+                _repairOutput.AppendLine(line);
+            else if (driverInventory && !outputTruncated)
+            {
+                _repairOutput.AppendLine(_english ? "Output limit reached. Further packages are omitted."
+                    : "Ausgabegrenze erreicht. Weitere Pakete werden ausgelassen.");
+                outputTruncated = true;
+            }
+        }
+
         try
         {
             await RepairEngine.RunElevatedAsync(mode, message =>
@@ -121,35 +183,44 @@ public partial class MainWindow
                 switch (message.Kind)
                 {
                     case "start":
-                        RepairCancelButton.IsEnabled = true;
+                        if (tool.ReportFolder is null) Log((_english ? "Repair started: " : "Reparatur gestartet: ") + command);
+                        RepairCancelButton.IsEnabled = !tool.IsNetworkAction && _repairCancellation?.IsCancellationRequested != true;
                         AppendRepairLog(message.Text);
+                        if (_repairCancellation?.IsCancellationRequested != true)
+                            RepairProgressLabel.Text = _english ? "Other repair actions are locked during this operation."
+                                : "Weitere Reparaturaktionen sind während des Vorgangs gesperrt.";
                         break;
                     case "output":
-                        if (RepairProgressParser.TryReadPercent(message.Text, out var percent))
+                        if (!tool.ShowsDiagnosticOutput && RepairProgressParser.TryReadPercent(message.Text, out var percent))
                         {
+                            if (!_repairHasMeasuredProgress || percent > _repairPercent) AppendRepairLiveOutput(message.Text);
+                            _repairHasMeasuredProgress = true;
                             if (percent > _repairPercent) _repairTimeEstimator.Add(_repairWatch.Elapsed, percent);
                             _repairPercent = Math.Max(_repairPercent, percent);
                             RepairProgress.Value = _repairPercent;
                             UpdateRepairProgressAnimation();
-                            RepairProgressLabel.Text = $"{command}: {_repairPercent:0.#} %";
+
                             UpdateRepairTime();
                             UpdateRepairStatus();
                         }
                         else if (!string.IsNullOrWhiteSpace(message.Text))
                         {
-                            AppendRepairLog(message.Text);
-                            if (_repairOutput.Length < 40000) _repairOutput.AppendLine(message.Text);
+                            AppendRepairLiveOutput(message.Text);
+                            if (tool.ReportFolder is null) AppendRepairLog(message.Text);
+                            AppendResultOutput(message.Text);
                         }
                         break;
                     case "details":
                         if (!string.IsNullOrWhiteSpace(message.Text))
                         {
-                            AppendRepairLog(message.Text);
-                            if (_repairOutput.Length < 40000) _repairOutput.AppendLine(message.Text);
+                            AppendRepairLiveOutput(message.Text);
+                            if (tool.ReportFolder is null) AppendRepairLog(message.Text);
+                            AppendResultOutput(message.Text);
                         }
                         break;
                     case "error":
                         failure = message.Text;
+                        AppendRepairLiveOutput(message.Text);
                         AppendRepairLog(message.Text, "FEHLER");
                         break;
                     case "exit":
@@ -161,7 +232,7 @@ public partial class MainWindow
                         AppendRepairLog(_english ? "Repair cancelled by user." : "Reparatur vom Benutzer abgebrochen.", "ABBRUCH");
                         break;
                 }
-            }, _repairCancellation.Token);
+            }, _repairCancellation.Token, _english, _selectedNetworkRequest);
 
             if (cancelled)
             {
@@ -169,7 +240,7 @@ public partial class MainWindow
                 RepairProgressLabel.Text = _english ? "Repair cancelled." : "Reparatur abgebrochen.";
                 RepairResult.Text = _english ? "No completion notification is sent for a manual cancellation."
                     : "Bei manuellem Abbruch wird keine Abschluss-Benachrichtigung gesendet.";
-                Log(RepairProgressLabel.Text);
+                if (tool.ReportFolder is null) Log(RepairProgressLabel.Text);
             }
             else
             {
@@ -177,20 +248,14 @@ public partial class MainWindow
                 _lastRepairSummary = RepairResultSummary.Create(mode, _lastRepairExitCode, false,
                     _repairOutput.ToString(), GetRepairFailureHint(failure), _repairWatch.Elapsed, _english);
                 var success = _lastRepairSummary.IsSuccess;
-                if (exitCode == 0) { _repairPercent = 100; RepairProgress.Value = 100; }
+                if (exitCode == 0) { _repairHasMeasuredProgress = true; _repairPercent = 100; RepairProgress.Value = 100; }
                 RepairProgressLabel.Text = _lastRepairSummary.Title;
                 RepairResult.Text = _lastRepairSummary.Message;
                 AppendRepairLog(RepairProgressLabel.Text, success ? "ERFOLG" : "FEHLER");
                 if (!success) AppendRepairLog(RepairResult.Text, "HINWEIS");
-                Log(RepairProgressLabel.Text);
+                if (tool.ReportFolder is null) Log(RepairProgressLabel.Text);
                 NotifyRepairCompletion(success, RepairProgressLabel.Text);
             }
-        }
-        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
-        {
-            _lastRepairCancelled = true;
-            RepairProgressLabel.Text = _english ? "Administrator request cancelled." : "Administratorabfrage abgebrochen.";
-            AppendRepairLog(RepairProgressLabel.Text, "ABBRUCH");
         }
         catch (OperationCanceledException) when (_repairCancellation?.IsCancellationRequested == true)
         {
@@ -221,6 +286,8 @@ public partial class MainWindow
             _repairWatch.Stop();
             RepairCancelButton.IsEnabled = false;
             _repairRunning = false;
+            RepairRunningPanel.Visibility = Visibility.Collapsed;
+            RepairToolScroll.Visibility = Visibility.Visible;
             UpdateRepairProgressAnimation();
             UpdateCompactLogActionState();
             UpdateRepairTime();
@@ -230,11 +297,55 @@ public partial class MainWindow
             _lastRepairSummary ??= RepairResultSummary.Create(mode, _lastRepairExitCode,
                 _lastRepairCancelled, _repairOutput.ToString(), RepairResult.Text, _repairWatch.Elapsed, _english);
             SetTimerState(_timer.IsEnabled);
+            if (_repairCategory == 3 && tool.IsNetworkAction) BuildNetworkView();
             UpdateRepairStatus();
+            if (tool.ReportFolder is not null)
+            {
+                var reportStatus = _lastRepairSummary.WasCancelled ? DiagnosticReportStatus.Cancelled
+                    : !_lastRepairSummary.IsSuccess ? DiagnosticReportStatus.Failed
+                    : _lastRepairSummary.Output is "" ? DiagnosticReportStatus.Empty : DiagnosticReportStatus.Completed;
+                SaveDiagnosticReport(tool, reportStatus, _repairWatch.Elapsed, _lastRepairSummary.Message, _repairOutput.ToString());
+            }
             _pendingRepairSummary = _lastRepairSummary;
             ShowPendingRepairSummary();
         }
     }
+
+    private DiagnosticReportStore? DiagnosticReportsFor(RepairTool? tool) =>
+        tool?.ReportFolder is { } folder ? new DiagnosticReportStore(_logDirectory, folder) : null;
+
+    private void SaveDiagnosticReport(RepairTool tool, DiagnosticReportStatus status, TimeSpan elapsed, string message, string output)
+    {
+        var store = DiagnosticReportsFor(tool);
+        if (store is null) return;
+        try
+        {
+            var date = DateTimeOffset.Now;
+            var result = status switch
+            {
+                DiagnosticReportStatus.Opened => _english ? "Windows tool opened" : "Windows-Werkzeug geöffnet",
+                DiagnosticReportStatus.Completed => _english ? "Completed" : "Abgeschlossen",
+                DiagnosticReportStatus.Empty => _english ? "No matches" : "Keine Treffer",
+                DiagnosticReportStatus.Failed => _english ? "Failed" : "Fehlgeschlagen",
+                _ => _english ? "Cancelled" : "Abgebrochen"
+            };
+            var duration = elapsed.ToString(@"hh\:mm\:ss");
+            var contents = string.Join(Environment.NewLine, tool.Title(_english), date.ToString("O"),
+                "Status: " + result, (_english ? "Duration: " : "Laufzeit: ") + duration,
+                "", _english ? "Command" : "Befehl", tool.CommandFor(_english, tool.NeedsAdapter ? _selectedNetworkRequest : null),
+                "", _english ? "Result" : "Ergebnis", message, "", output);
+            var (report, cleanupFailures) = store.Save(status, contents);
+            Log($"{tool.Title(_english)} · {result} · {Path.Combine(store.RelativeFolder, report.FileName)}");
+            if (cleanupFailures > 0)
+                LogError(_english ? "Older diagnostic reports could not all be removed." : "Ältere Diagnoseprotokolle konnten nicht vollständig entfernt werden.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            LogError((_english ? "The diagnostic report could not be saved. " : "Das Diagnoseprotokoll konnte nicht gespeichert werden. ") +
+                UiText.Error(ex, _english));
+        }
+    }
+
 
     private void RepairClockTick(object? sender, EventArgs e) => UpdateRepairTime();
 
@@ -243,7 +354,7 @@ public partial class MainWindow
         var elapsed = _repairWatch.Elapsed;
         var clock = elapsed.ToString(elapsed.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss");
         var prefix = (_english ? "Elapsed " : "Laufzeit ") + clock;
-        if (_repairRunning && _repairCommand?.StartsWith("SFC", StringComparison.Ordinal) == true)
+        if (_repairRunning && _selectedRepairTool?.Executable == "sfc.exe")
         {
             RepairTimeText.Text = prefix;
             return;
@@ -273,7 +384,8 @@ public partial class MainWindow
         _repairResultDialogOpen = true;
         try
         {
-            var dialog = new RepairResultWindow(summary, ThemePalette.For(SelectedTheme()), _english) { Owner = this };
+            var dialog = new RepairResultWindow(summary, ThemePalette.For(SelectedTheme()), _english,
+                DiagnosticReportsFor(_selectedRepairTool), _selectedRepairTool?.Title(_english)) { Owner = this };
             if (dialog.ShowDialog() == true && summary.CanRestart)
                 ConfirmAndExecute(PowerAction.Restart);
         }
@@ -305,6 +417,8 @@ public partial class MainWindow
 
     private string GetRepairFailureHint(string? failure)
     {
+        if (_selectedRepairTool?.ShowsDiagnosticOutput == true)
+            return failure ?? (_english ? "Check the diagnostic output." : "Prüfe die Diagnoseausgabe.");
         var output = _repairOutput.ToString();
         if (output.Contains("0x800f081f", StringComparison.OrdinalIgnoreCase) ||
             output.Contains("0x800f0906", StringComparison.OrdinalIgnoreCase))
@@ -320,16 +434,24 @@ public partial class MainWindow
 
     private void CancelRepair(object sender, RoutedEventArgs e)
     {
-        if (!_repairRunning || _repairCancellation is null || _repairCancellation.IsCancellationRequested) return;
-        var question = _english
-            ? "Stop this running Windows repair? Interrupting a repair may leave the operation incomplete."
-            : "Laufende Windows-Reparatur abbrechen? Ein Abbruch kann den Reparaturvorgang unvollständig lassen.";
+        if (!_repairRunning || _selectedRepairTool?.IsNetworkAction == true ||
+            _repairCancellation is not { IsCancellationRequested: false } operation) return;
+        var question = _selectedRepairTool?.IsReset == true
+            ? (_english ? "Stop the operation? A cache reset already underway will finish restoring service states before stopping."
+                : "Vorgang beenden? Beim laufenden Cache-Reset werden zuerst die Dienste wiederhergestellt.")
+            : _selectedRepairTool?.IsRepair == true
+                ? (_english ? "Stop this running Windows repair? It may be left incomplete."
+                    : "Laufende Windows-Reparatur beenden? Der Vorgang kann unvollständig bleiben.")
+                : (_english ? "Stop this operation?" : "Vorgang beenden?");
         if (MessageBox.Show(this, question, "PowerLeitstand PRO", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        if (!_repairRunning || !ReferenceEquals(_repairCancellation, operation)) return;
         RepairCancelButton.IsEnabled = false;
-        RepairProgressLabel.Text = _english ? "Stopping repair…" : "Reparatur wird abgebrochen…";
+        RepairProgressLabel.Text = _english ? "Stopping operation…" : "Vorgang wird beendet…";
         AppendRepairLog(RepairProgressLabel.Text);
-        _repairCancellation.Cancel();
+        operation.Cancel();
+        UpdateActivityIndicator();
+        (System.Windows.Application.Current as App)?.UpdateTrayTimerState(true);
     }
 
     private void OpenRepairLog(object sender, RoutedEventArgs e)
@@ -351,11 +473,12 @@ public partial class MainWindow
 
     private void UpdateRepairStatus()
     {
+        UpdateActivityIndicator();
         if (_timer.IsEnabled) return;
         string title, detail, symbol, brush;
         if (_repairRunning)
         {
-            title = _repairCommand?.StartsWith("SFC", StringComparison.Ordinal) == true ? "SFC" : "DISM";
+            title = _selectedRepairTool?.Title(_english) ?? "DISM";
             title += _english ? " running" : " läuft";
             detail = _repairPercent >= 100 ? (_english ? "100 % · checking result…" : "100 % · Ergebnis wird geprüft…")
                 : _repairPercent > 0 ? (_english ? $"{_repairPercent:0.#} % completed" : $"{_repairPercent:0.#} % abgeschlossen")

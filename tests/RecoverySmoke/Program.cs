@@ -59,6 +59,20 @@ try
         { Assert(File.ReadAllText(backup) == "old" && !restoredStarted, scenario + " retains recovery backup"); }
         finally { held?.Dispose(); }
     }
+    var partialTarget = Path.Combine(root, "partial.exe");
+    var partialStage = Path.Combine(root, "partial.new");
+    var partialBackup = Path.Combine(root, "partial.persistent");
+    File.WriteAllText(partialTarget, "original"); File.WriteAllText(partialStage, "candidate"); File.WriteAllText(partialBackup, "original");
+    bool partialRestart = false;
+    var partial = await UpdateRecovery.InstallAsync(partialTarget, partialStage, partialBackup,
+        () => throw new Exception("A partial exchange must not start the candidate."), () => Task.CompletedTask,
+        () => partialRestart = true, retainBackup: true, replaceFile: () =>
+        {
+            File.Delete(partialTarget);
+            throw new IOException("Simulated partial Windows file replacement", unchecked((int)0x80070498));
+        });
+    Assert(partial.Restored && partialRestart && File.ReadAllText(partialTarget) == "original" && File.Exists(partialBackup)
+        && !Directory.EnumerateFiles(root, "*.restore").Any(), "partial exchange restores missing target from persistent backup");
     var blocked = Path.Combine(root, "blocked.exe"); var input = Path.Combine(root, "input.new"); var saved = Path.Combine(root, "saved.bak");
     File.WriteAllText(blocked, "old"); File.WriteAllText(input, "new");
     using (var held = new FileStream(blocked, FileMode.Open, FileAccess.Read, FileShare.Read))

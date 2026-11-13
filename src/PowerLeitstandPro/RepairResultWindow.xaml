@@ -67,21 +67,23 @@
       </Grid>
       <Border x:Name="ResultCard" Grid.Row="1" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
               BorderThickness="1" CornerRadius="7" Padding="10" Margin="0,7,0,0">
+        <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
         <StackPanel>
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
+          <Grid Margin="0,0,0,7"><Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition/></Grid.ColumnDefinitions>
             <Border x:Name="ResultBadge" Width="38" Height="38" CornerRadius="19" BorderThickness="2.5"
                     BorderBrush="{DynamicResource ReadyBrush}" Margin="0,0,10,0">
               <TextBlock x:Name="ResultSymbol" Text="✓" FontSize="24" FontWeight="Bold"
                          Foreground="{DynamicResource ReadyBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
-            <TextBlock x:Name="ResultTitle" FontSize="16" FontWeight="Bold" TextWrapping="Wrap"
-                       Foreground="{DynamicResource ReadyBrush}" VerticalAlignment="Center" Width="315"/>
-          </StackPanel>
+            <TextBlock x:Name="ResultTitle" Grid.Column="1" FontSize="16" FontWeight="Bold" TextWrapping="Wrap"
+                       Foreground="{DynamicResource ReadyBrush}" VerticalAlignment="Center"/>
+          </Grid>
           <TextBlock x:Name="ResultMessage" FontSize="12.5" Foreground="{DynamicResource TextBrush}"
-                     TextWrapping="Wrap" MaxHeight="80"/>
+                     TextWrapping="Wrap"/>
           <TextBlock x:Name="ResultDetail" FontSize="11.5" Foreground="{DynamicResource SubtleTextBrush}"
                      Margin="0,7,0,0" TextWrapping="Wrap"/>
         </StackPanel>
+        </ScrollViewer>
       </Border>
       <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Button x:Name="LaterButton" Grid.Column="0" Height="33" Margin="0,0,5,0" Click="CloseDialog"

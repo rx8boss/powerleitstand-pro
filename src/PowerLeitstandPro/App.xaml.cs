@@ -16,15 +16,34 @@ public partial class App : System.Windows.Application
     private bool _english;
     private bool _updateBalloonActive;
     private bool _activationPending;
+    private readonly DispatcherTimer _trayClickTimer = new();
+    private long _ignoreTrayClickUntil;
+    private bool _trayClickTimerConfigured;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        DispatcherUnhandledException += (_, failure) => LogUnhandledError(failure.Exception, "UI");
+        AppDomain.CurrentDomain.UnhandledException += (_, failure) =>
+        { if (failure.ExceptionObject is Exception error) LogUnhandledError(error, "Runtime"); };
+        if (Environment.GetEnvironmentVariable("POWERLEITSTAND_STARTUP_TRACE") is { Length: > 0 } timingPath)
+            StartupTimings.Begin(timingPath);
         base.OnStartup(e);
-        _english = AppSettings.Load().Language == "en";
+        StartupTimings.Mark("Application startup");
+        if (e.Args.Length > 0 && e.Args[0] == "--windows-update-helper")
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            try { await WindowsUpdateService.RunHelperAsync(e.Args); }
+            catch (Exception exception) { System.Diagnostics.Trace.TraceError(exception.ToString()); }
+            finally { Shutdown(); }
+            return;
+        }
+        var startupSettings = AppSettings.Load();
+        _english = startupSettings.Language == "en";
         if (e.Args.Length > 0 && e.Args[0] == "--repair-helper")
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try { await RepairEngine.RunHelperAsync(e.Args); }
+            catch (Exception exception) { System.Diagnostics.Trace.TraceError(exception.ToString()); }
             finally { Shutdown(); }
             return;
         }
@@ -54,13 +73,15 @@ public partial class App : System.Windows.Application
         }
         catch (Exception exception)
         {
+            LogUnhandledError(exception, "Startup");
             System.Windows.MessageBox.Show((_english ? "Application startup could not be coordinated:\n" : "Programmstart konnte nicht koordiniert werden:\n") + UiText.Error(exception, _english), "PowerLeitstand PRO");
             Shutdown(); return;
         }
         var trayStart = e.Args.Contains("--tray", StringComparer.OrdinalIgnoreCase);
+        StartupTimings.Mark("Single instance acquired");
         string? elevationError = null;
         if (!trayStart && !e.Args.Contains("--elevation-attempted", StringComparer.OrdinalIgnoreCase) &&
-            AppSettings.Load().RequestAdministratorOnLaunch && !ElevationService.IsElevated())
+            startupSettings.RequestAdministratorOnLaunch && !ElevationService.IsElevated())
         {
             try
             {
@@ -70,7 +91,12 @@ public partial class App : System.Windows.Application
             catch (Exception exception) { elevationError = exception.Message; }
         }
         SetCurrentProcessExplicitAppUserModelID("com.powerleitstandpro.desktop.wpf");
-        _mainWindow = new MainWindow();
+        _mainWindow = new MainWindow(null, startupSettings);
+        _mainWindow.ContentRendered += (_, _) =>
+        {
+            StartupTimings.Mark("First content rendered"); StartupTimings.Save();
+            Dispatcher.BeginInvoke(() => { StartupTimings.Mark("Dispatcher idle"); StartupTimings.Save(); }, DispatcherPriority.ApplicationIdle);
+        };
         MainWindow = _mainWindow;
         _mainWindow.StateChanged += (_, _) =>
         {
@@ -83,7 +109,26 @@ public partial class App : System.Windows.Application
                 });
         };
         CreateTrayIcon();
-        _ = _mainWindow.CheckForUpdatesOnStartupAsync();
+        StartupTimings.Mark("Tray icon created");
+        bool updateCheckStarted = false;
+        _mainWindow.ContentRendered += async (_, _) =>
+        {
+            if (updateCheckStarted) return;
+            updateCheckStarted = true;
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (_mainWindow.IsLoaded) await _mainWindow.CheckForUpdatesOnStartupAsync();
+        };
+        bool pageFourPreparationStarted = false;
+        _mainWindow.ContentRendered += async (_, _) =>
+        {
+            if (pageFourPreparationStarted) return;
+            pageFourPreparationStarted = true;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            await Task.Delay(1500);
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            if (_mainWindow.IsLoaded && _mainWindow.IsVisible)
+                await _mainWindow.PrepareUpdatesPageInBackgroundAsync();
+        };
         if (e.Args.Contains("--page-users", StringComparer.OrdinalIgnoreCase)) _mainWindow.ShowUsersPage();
         if (e.Args.Contains("--update-ready", StringComparer.Ordinal))
         {
@@ -112,8 +157,9 @@ public partial class App : System.Windows.Application
             using (var icon = new System.Drawing.Icon(resource.Stream)) _ownedIcon = (System.Drawing.Icon)icon.Clone();
         }
         _trayIcon = new Forms.NotifyIcon { Icon = _ownedIcon ?? System.Drawing.SystemIcons.Application, Text = "PowerLeitstand PRO", Visible = true };
-        _trayIcon.MouseClick += (_, e) => { if (e.Button is Forms.MouseButtons.Left or Forms.MouseButtons.Right) ShowTrayMenu(); };
-        _trayIcon.DoubleClick += (_, _) => { _trayWindow?.Dismiss(); RestoreWindow(); };
+        ConfigureTrayClickTimer();
+        _trayIcon.MouseClick += (_, e) => HandleTrayClick(e.Button);
+        _trayIcon.MouseDoubleClick += (_, e) => { if (e.Button == Forms.MouseButtons.Left) HandleTrayDoubleClick(); };
         _trayIcon.BalloonTipClicked += (_, _) =>
         {
             RestoreWindow();
@@ -133,16 +179,43 @@ public partial class App : System.Windows.Application
         popup.ShowAtCursor();
     }
 
+    internal void HandleTrayClick(Forms.MouseButtons button)
+    {
+        if (button == Forms.MouseButtons.Right) { _trayClickTimer.Stop(); ShowTrayMenu(); return; }
+        if (button != Forms.MouseButtons.Left || Environment.TickCount64 < _ignoreTrayClickUntil) return;
+        ConfigureTrayClickTimer();
+        _trayClickTimer.Stop(); _trayClickTimer.Start();
+    }
+
+    private void ConfigureTrayClickTimer()
+    {
+        if (_trayClickTimerConfigured) return;
+        _trayClickTimerConfigured = true;
+        _trayClickTimer.Interval = TimeSpan.FromMilliseconds(Forms.SystemInformation.DoubleClickTime + 30);
+        _trayClickTimer.Tick += (_, _) => { _trayClickTimer.Stop(); ShowTrayMenu(); };
+    }
+
+    internal void HandleTrayDoubleClick()
+    {
+        _trayClickTimer.Stop();
+        _ignoreTrayClickUntil = Environment.TickCount64 + Forms.SystemInformation.DoubleClickTime;
+        _trayWindow?.Dismiss(); RestoreWindow();
+    }
+
     private void DispatchTrayAction(string action)
     {
         if (_mainWindow is null) return;
         if (action == "open") { RestoreWindow(); return; }
+        if (action == "minimize")
+        {
+            _mainWindow.WindowState = WindowState.Minimized;
+            _mainWindow.ShowInTaskbar = false; _mainWindow.Hide();
+            return;
+        }
         if (action == "center") { RestoreWindow(); _mainWindow.CenterWindowOnCursorScreen(); return; }
         if (action == "cancel") { _mainWindow.AbortTrayTimer(); return; }
         if (_mainWindow.IsBusy) return;
         if (action == "exit") { _mainWindow.Close(); return; }
-        // Existing themed confirmations need a visible owner even when invoked from the tray.
-        RestoreWindow();
         _mainWindow.ExecuteTrayAction(action);
     }
 
@@ -175,6 +248,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _trayClickTimer.Stop();
         _trayWindow?.Dismiss();
         if (_trayIcon is not null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
         _ownedIcon?.Dispose();

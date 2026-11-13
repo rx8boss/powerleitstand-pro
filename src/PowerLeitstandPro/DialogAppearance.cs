@@ -45,6 +45,7 @@ internal static class DialogAppearance
         if (palette.IsNeon)
             frame.Effect = new System.Windows.Media.Effects.DropShadowEffect
             { Color = (Color)ColorConverter.ConvertFromString(palette.Glow!), ShadowDepth = 0, BlurRadius = 15, Opacity = palette.GlowOpacity };
+        else frame.Effect = null;
     }
 
     internal static void ApplyRedButton(Button button, Style style)

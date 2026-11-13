@@ -34,6 +34,7 @@ internal static class CrossButtonAppearance
 
     internal static void Initialize()
     {
+        AppToolTips.Initialize();
         if (_initialized) return;
         _initialized = true;
         EventManager.RegisterClassHandler(typeof(Button), FrameworkElement.LoadedEvent,
