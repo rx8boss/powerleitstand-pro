@@ -771,7 +771,7 @@ internal sealed partial class ProgramCatalogView : UserControl
                     catch (OperationCanceledException) when (_stopping) { OperationPanel?.State(entry.Id, L("Gestoppt", "Stopped")); break; }
                     catch (Exception error)
                     {
-                        string message = UiText.Error(error, _english); OperationPanel?.State(entry.Id, L("Schließen fehlgeschlagen · siehe Protokoll", "Could not close · see log"));
+                        string message = UiText.Error(error, _english); OperationPanel?.State(entry.Id, L("Bitte schließen und Update erneut starten", "Close the app and retry the update"));
                         new ProgramOperationLog(entry.Name, L("Update vorbereiten", "Prepare update"), _english, WriteLog, WriteErrorLog).Error(message, "0x" + error.HResult.ToString("X8")); continue;
                     }
                 }

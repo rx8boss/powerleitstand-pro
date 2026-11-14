@@ -243,7 +243,7 @@ internal sealed class ProgramPathResolver
         return new(System.IO.Path.GetDirectoryName(chosen.Candidate.Path), chosen.Candidate.Path, chosen.Candidate.Source, Scope(registration), chosen.File.Version);
     }
 
-    internal static bool IdentityMatches(ProgramPathRegistration registration, ProgramEntry? entry, string path,
+    internal static bool IdentityMatches(ProgramPathRegistration? registration, ProgramEntry? entry, string path,
         ProgramPathFile file, bool anchored, Func<string, bool>? trustedEmptyPublisher = null)
     {
         if (HelperDescription.IsMatch(file.Description) || Helper.IsMatch(System.IO.Path.GetFileNameWithoutExtension(path))) return false;
@@ -257,9 +257,19 @@ internal sealed class ProgramPathResolver
                 && rule.SignedPublisher is not null && trustedEmptyPublisher?.Invoke(path) == true;
         }
         return entry is not null ? ProgramLocalInventory.Matches(entry, file.Product, file.Publisher)
-            : Clean(registration.Name) == Clean(file.Product) && Clean(registration.Publisher).Length > 0
+            : registration is not null && Clean(registration.Name) == Clean(file.Product) && Clean(registration.Publisher).Length > 0
                 && Clean(registration.Publisher) == Clean(file.Publisher);
     }
+    internal static bool HasExecutableRule(ProgramEntry entry) => Rules.ContainsKey(entry.Id);
+
+    internal static bool IsKnownExecutableName(ProgramEntry entry, string path) =>
+        Rules.TryGetValue(entry.Id, out var rule)
+        && rule.Files.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
+
+    internal bool MatchesKnownExecutable(ProgramEntry entry, string path) =>
+        IsKnownExecutableName(entry, path) && Inspect(path) is { } file
+        && IdentityMatches(null, entry, path, file, anchored: false);
+
     private bool TrustedEmptyPublisher(ProgramEntry? entry, string path)
     {
         if (entry is null || !Rules.TryGetValue(entry.Id, out var rule) || rule.SignedPublisher is not { } publisher) return false;

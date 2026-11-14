@@ -24,13 +24,19 @@ internal static class ProgramApplicationCloser
     private static string Key(string text) => Regex.Replace(text, @"[^\p{L}\p{N}]", "").ToUpperInvariant();
     internal static bool MatchesPath(ProgramEntry entry, ProgramInstallation? proof, string path)
     {
-        if (proof?.Path is not { } location || !Path.IsPathFullyQualified(location) || !Path.IsPathFullyQualified(path)) return false;
+        if (proof?.LocationEvidence?.Alternatives is { Count: > 0 } || proof?.ManagedCopies is { Count: > 1 }
+            || proof?.Path is not { } location || !Path.IsPathFullyQualified(location) || !Path.IsPathFullyQualified(path)) return false;
         location = Path.GetFullPath(location).TrimEnd(Path.DirectorySeparatorChar); path = Path.GetFullPath(path);
         if (location.Equals(path, StringComparison.OrdinalIgnoreCase)) return true;
         if (proof.Source is not ("Registry" or "WinGet")) return false;
         string? root = Directory.Exists(location) ? location : Path.GetDirectoryName(location);
         // Squirrel can keep an old app-* process alive next to the selected newer copy.
         if (root is not null && Regex.IsMatch(Path.GetFileName(root), @"^app-\d+(?:\.\d+)+$")) root = Path.GetDirectoryName(root);
+        // Opera also runs browser processes from numbered subfolders beside its launcher.
+        if (root is not null && entry.Id is "opera" or "opera-gx"
+            && Regex.IsMatch(Path.GetFileName(root), @"^\d+(?:\.\d+)+$")
+            && Path.GetDirectoryName(root) is { } parent && Key(Path.GetFileName(parent)) == Key(entry.Name))
+            root = parent;
         if (root is null || !Directory.Exists(root) || root.Equals(Path.GetPathRoot(root)?.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return false;
         string rootKey = Key(Path.GetFileName(root));
         if (rootKey != Key(entry.Name) && rootKey != Key(Path.GetFileNameWithoutExtension(path))) return false;
@@ -51,8 +57,10 @@ internal static class ProgramApplicationCloser
     internal static IReadOnlyList<Instance> Find(ProgramEntry entry, ProgramInstallation? proof, CancellationToken token)
     {
         var found = new List<Instance>(); var identities = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        var resolver = ProgramPathResolver.HasExecutableRule(entry) ? new ProgramPathResolver() : null;
         using var current = Process.GetCurrentProcess(); using var owner = WindowsIdentity.GetCurrent(); string? sid = owner.User?.Value;
-        bool anchored = proof?.Path is { } location && (File.Exists(location) || Directory.Exists(location)
+        bool anchored = proof?.LocationEvidence?.Alternatives is not { Count: > 0 } && proof?.ManagedCopies is not { Count: > 1 }
+            && proof?.Path is { } location && (File.Exists(location) || Directory.Exists(location)
             && Key(Path.GetFileName(location.TrimEnd('\\'))) == Key(entry.Name) && MatchesPath(entry, proof, Path.Combine(location, "_scope_check_.exe")));
         foreach (var process in Process.GetProcesses())
         using (process)
@@ -64,9 +72,10 @@ internal static class ProgramApplicationCloser
                 string? path = process.MainModule?.FileName;
                 if (path is null || path.Equals(Environment.ProcessPath, StringComparison.OrdinalIgnoreCase)
                     || path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.Windows).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) continue;
+                if (resolver is not null && !ProgramPathResolver.IsKnownExecutableName(entry, path)) continue;
                 bool scoped = MatchesPath(entry, proof, path);
                 if (!scoped && anchored) continue;
-                if (!identities.TryGetValue(path, out bool matches)) identities[path] = matches = Identity(entry, path);
+                if (!identities.TryGetValue(path, out bool matches)) identities[path] = matches = resolver?.MatchesKnownExecutable(entry, path) ?? Identity(entry, path);
                 if (!matches)
                 {
                     if (scoped) throw new IOException("Das laufende Programm konnte nicht sicher zugeordnet werden. Bitte das Programm selbst schließen.");

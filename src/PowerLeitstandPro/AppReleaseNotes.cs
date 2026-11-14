@@ -6,21 +6,17 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
-        Neu in Version 1.1.7 – App-Updates und Programminstallation
+        Neu in Version 1.1.8 – Programme vor dem Update schließen
 
-        • Ein Klick auf die Glocke sucht nach einem App-Update. Ist PowerLeitstand aktuell, erscheint kurz ein Hinweis unter der Glocke. Ist ein Update verfügbar, öffnet sich der Update-Dialog.
-        • Die Programminstallation zeigt an, ob die angeforderte Desktop-Verknüpfung erstellt wurde. Für AdwCleaner wird die ausführbare Datei auch im WinGet-Paketordner gesucht. Im Detaildialog installierter Programme lässt sich eine Verknüpfung nachträglich erstellen, wenn das Programm eindeutig zugeordnet werden kann.
-        • Bei einer Sammelinstallation teilen sich geeignete neue WinGet-Programme, die systemweit installiert werden, eine Windows-Adminabfrage.
-        • Die Schließen- und Abbruchsymbole in Dialogen reagieren einheitlicher, wenn der Mauszeiger darüberliegt.
+        • Alle Updates im Programmkatalog nutzen dieselbe Prozessprüfung. PowerLeitstand versucht, eindeutig zugeordnete Programme des angemeldeten Benutzers geordnet zu schließen. Die Prüfung berücksichtigt die Dateimerkmale von Node.js, Opera und Opera GX.
+        • Bleibt ein Programm offen oder ist seine Zuordnung unklar, nennt die Ergebniszeile den nächsten Schritt. Weitere ausgewählte Updates laufen in der Warteschlange weiter.
         """;
 
     internal const string English = """
-        New in version 1.1.7 – App updates and program installation
+        New in version 1.1.8 – Closing programs before updates
 
-        • Clicking the bell checks for an app update. If PowerLeitstand is up to date, a brief message appears below the bell. If an update is available, the update dialog opens.
-        • Program installation reports whether the requested desktop shortcut was created. AdwCleaner’s executable is also looked up in the WinGet package folder. A shortcut can be added from the details of an installed program when its executable can be identified unambiguously.
-        • In a batch installation, eligible new WinGet programs installed for all users share one Windows administrator prompt.
-        • Close and cancel icons in dialogs respond more consistently on hover.
+        • All updates in the program catalog use the same process checks. PowerLeitstand tries to close programs gracefully when they are unambiguously linked to the selected installation and signed-in user. The checks recognize the executable metadata of Node.js, Opera, and Opera GX.
+        • If a program stays open or its process cannot be matched safely, its result row explains what to do next. Other selected updates continue through the queue.
         """;
 
     internal const string Current = "## Deutsch\n" + German + "\n\n## English\n" + English;

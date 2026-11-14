@@ -55,7 +55,7 @@ internal static class ProgramScopedUpdateTests
     internal static int Ui(App app, string output)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher)); UiSoundService.MuteForTests = true;
-        int checks = 0, installs = 0, localReads = 0, lists = 0, confirmations = 0, changeTargetAtRead = 0; string available = "2.0"; bool failedSource = false;
+        int checks = 0, installs = 0, localReads = 0, lists = 0, confirmations = 0, changeTargetAtRead = 0; string available = "2.0"; bool failedSource = false, failClose = false; string? refuseToClose = null; int closeChecks = 0;
         void Assert(bool ok, string message) { if (!ok) throw new Exception(message); checks++; }
         var discord = ProgramCatalog.Entries.Single(e => e.PackageId == "Discord.Discord");
         var firefox = ProgramCatalog.Entries.Single(e => e.Id == "firefox");
@@ -94,6 +94,11 @@ internal static class ProgramScopedUpdateTests
             {
                 localReads++;if(localReads==changeTargetAtRead)available="3.0";Assert(entries.Length>0 && entries.All(e=>allowed.Contains(e.Id)),"Local inventory is bounded to the update selection");
                 return Task.FromResult(entries.ToDictionary(e=>e.Id,e=>new ProgramInstallation(versions[e.Id],"Registry")));
+            },closeApplications:(entry, _, _) =>
+            {
+                Assert(allowed.Contains(entry.Id), "Only a selected program may be closed");
+                closeChecks++;
+                return failClose || refuseToClose == entry.Id ? Task.FromException<bool>(new IOException("Fixture still running")) : Task.FromResult(true);
             });
             view.Service=service;view.ConfirmForTests=_=>{confirmations++;return true;};
             void Seed()
@@ -118,6 +123,13 @@ internal static class ProgramScopedUpdateTests
             Assert(logs.Any(t=>t.Contains("Installation/Update bestätigt")),"Update completes with verified result instead of returning to another full scan");
             int beforeBackground=localReads;Wait(view.CheckInBackgroundAsync(DateTime.UtcNow.AddHours(1)));
             Assert(localReads==beforeBackground && !view.BackgroundChecking,"An open update result blocks unrelated periodic background scans");
+            Assert(closeChecks == 1, "A successful graceful close is followed by the verified installer");
+            versions[discord.Id] = "1.0"; Seed(); failClose = true;
+            Wait(view.InstallEntriesAsync([discord], updatesOnly: true)); failClose = false;
+            Assert(installs == 1 && closeChecks == 2
+                && UnifiedDialogAppearance.Children<TextBlock>(view.OperationPanel!.Frame)
+                    .Any(text => text.Text == "Bitte schließen und Update erneut starten"),
+                "A blocked close skips the installer and shows the recovery action on the affected row");
             versions[discord.Id]="1.0";Seed();allowed.Add(firefox.Id);view.ConfirmForTests=_=>{confirmations++;return false;};Wait(view.InstallEntriesAsync([discord,firefox],updatesOnly:true));allowed.Remove(firefox.Id);
             Assert(confirmations==1 && installs==1 && !view.IsWorking && !view.SelectionOpen && view.OperationPanel is null,"Batch cancellation still requires confirmation and releases selection without an installer");
             Seed();changeTargetAtRead=localReads+2;view.ConfirmForTests=_=>throw new Exception("An individual update must not ask for confirmation");Wait(view.InstallEntriesAsync([discord],updatesOnly:true));changeTargetAtRead=0;
@@ -151,6 +163,14 @@ internal static class ProgramScopedUpdateTests
                 view.ConfirmForTests=null;int prior=installs;Wait(view.InstallEntriesAsync([discord],updatesOnly:true));
                 Assert(installs==prior+1&&!view.SelectionOpen&&!UnifiedDialogAppearance.Children<Grid>(root).Any(g=>Panel.GetZIndex(g)==6000),"The real single-update route has no confirmation overlay in compact/large DE/EN");
             }
+            available = "2.0"; versions[discord.Id] = versions[firefox.Id] = "1.0"; Seed();
+            allowed.Add(firefox.Id);
+            view.ConfirmForTests = _ => true;
+            refuseToClose = discord.Id;
+            int beforeBlockedBatch = installs;
+            Wait(view.InstallEntriesAsync([discord, firefox], updatesOnly: true));
+            Assert(installs == beforeBlockedBatch + 1 && versions[discord.Id] == "1.0" && versions[firefox.Id] == "2.0",
+                "A program that remains open does not block the next selected update");
             var managedProof=new ProgramInstallation("1.0","Scoop",WinGetCompatible:false,
                 ManagedCopies:[new("Scoop","7zip","2.0",output,"User",null,output)]);
             typeof(ProgramCatalogView).GetProperty("Inventory",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(view,

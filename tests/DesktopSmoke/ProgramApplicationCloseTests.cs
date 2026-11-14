@@ -25,6 +25,48 @@ internal static class ProgramApplicationCloseTests
         var proof=new ProgramInstallation("1.0.2","Registry",Path.Combine(root,"app-1.0.2","Discord.exe"));
         Assert(ProgramApplicationCloser.MatchesPath(discord,proof,Path.Combine(root,"app-1.0.1","Discord.exe")),"Squirrel's older running copy is scoped to the same registered app root");
         Assert(!ProgramApplicationCloser.MatchesPath(discord,proof,Path.Combine(output,"DiscordCanary","app-1.0.1","Discord.exe")),"A different channel outside the registered root is not targeted");
+        foreach (var (id, folder, file, product, publisher) in new[]
+        {
+            ("node-js", "nodejs", "node.exe", "Node.js", "Node.js"),
+            ("opera", "Opera", "opera.exe", "Opera Internet Browser", "Opera Software"),
+            ("opera-gx", "Opera GX", "opera.exe", "Opera GX Internet Browser", "Opera Software")
+        })
+        {
+            var app = ProgramCatalog.Entries.Single(e => e.Id == id);
+            var appRoot = Directory.CreateDirectory(Path.Combine(output, folder)).FullName;
+            var versionDir = Directory.CreateDirectory(Path.Combine(appRoot, "1.2.3")).FullName;
+            var appProof = new ProgramInstallation("1.2.3", "Registry", Path.Combine(versionDir, file));
+            var runningFile = Path.Combine(appRoot, file);
+            var metadata = new ProgramPathFile(product, publisher, "1.2.3", product);
+            Assert(ProgramPathResolver.IsKnownExecutableName(app, runningFile)
+                && ProgramPathResolver.IdentityMatches(null, app, runningFile, metadata, anchored: false), id + " accepts executable metadata");
+            Assert(!ProgramPathResolver.IsKnownExecutableName(app, Path.Combine(appRoot, "update.exe")), id + " ignores unrelated helpers");
+            Assert(!ProgramPathResolver.IdentityMatches(null, app, runningFile, metadata with { Publisher = "Other" }, anchored: false), id + " rejects a different publisher");
+            Assert(!ProgramApplicationCloser.MatchesPath(app, appProof, Path.Combine(output, "Other", file)), id + " never targets a separate copy");
+            if (id != "node-js")
+            {
+                var otherProduct = id == "opera" ? "Opera GX Internet Browser" : "Opera Internet Browser";
+                Assert(ProgramApplicationCloser.MatchesPath(app, appProof, runningFile), id + " matches its launcher and version subfolders");
+                Assert(!ProgramPathResolver.IdentityMatches(null, app, runningFile, metadata with { Product = otherProduct }, anchored: false), id + " distinguishes browser editions");
+            }
+        }
+        foreach (var app in ProgramCatalog.Entries)
+        {
+            var appRoot = Path.Combine(output, app.Id);
+            var executablePath = Path.Combine(appRoot, "fixture.exe");
+            var proven = new ProgramInstallation("1.2.3", "SelectedFile", executablePath);
+            Assert(ProgramApplicationCloser.MatchesPath(app, proven, executablePath), app.Id + " accepts an explicitly verified path");
+            Assert(!ProgramApplicationCloser.MatchesPath(app, proven, Path.Combine(output, "Other", "fixture.exe")), app.Id + " rejects a separate copy");
+            Assert(!ProgramApplicationCloser.MatchesPath(app, proven with
+            {
+                LocationEvidence = new(appRoot, null, "Fixture", "User", Alternatives: [executablePath, Path.Combine(appRoot, "other.exe")])
+            }, executablePath), app.Id + " rejects ambiguous inventory paths");
+        }
+        var notepad = ProgramCatalog.Entries.Single(e => e.Id == "notepad");
+        Assert(ProgramPathResolver.HasExecutableRule(notepad)
+            && ProgramPathResolver.IdentityMatches(null, notepad, "notepad++.exe",
+                new("Notepad++", "Don HO don.h@free.fr", "1.2.3", "Notepad++"), anchored: false),
+            "The shared executable rules include other catalog programs such as Notepad++");
         string desktop=Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         Assert(!ProgramApplicationCloser.MatchesPath(discord,new("1.0","Portable",Path.Combine(desktop,"Discord.exe"),false),Path.Combine(desktop,"Other.exe")),"A portable EXE never owns other programs sharing Desktop");
         Assert(!ProgramApplicationCloser.MatchesPath(discord,new("1.0","Registry",desktop),Path.Combine(desktop,"Discord.exe")),"A broad registered folder is not an application root");
