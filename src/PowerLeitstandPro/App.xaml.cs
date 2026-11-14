@@ -37,6 +37,14 @@ public partial class App : System.Windows.Application
             finally { Shutdown(); }
             return;
         }
+        if (e.Args.Length > 0 && e.Args[0] == "--program-install-helper")
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            try { await ProgramInstallElevation.RunHelperAsync(e.Args); }
+            catch (Exception exception) { System.Diagnostics.Trace.TraceError(exception.ToString()); }
+            finally { Shutdown(); }
+            return;
+        }
         var startupSettings = AppSettings.Load();
         _english = startupSettings.Language == "en";
         if (e.Args.Length > 0 && e.Args[0] == "--repair-helper")

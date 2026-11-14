@@ -47,6 +47,8 @@ internal static class AnimatedProgressTests
                     void Call(string name, params object[] values) => typeof(MainWindow).GetMethod(name, flags)!.Invoke(main, values);
                     var themes = (ComboBox)main.FindName("ThemeBox"); themes.SelectedItem = themes.Items.OfType<ComboBoxItem>().Single(item => item.Tag?.ToString() == theme);
                     main.Show(); main.ShowRepairPage(); Pump();
+                    ((UIElement)main.FindName("RepairToolScroll")).Visibility = Visibility.Collapsed;
+                    ((UIElement)main.FindName("RepairRunningPanel")).Visibility = Visibility.Visible;
                     var bar = (AnimatedProgressBar)main.FindName("RepairProgress");
                     foreach (var english in new[] { false, true })
                     {

@@ -15,7 +15,7 @@ internal static class ProgramDestinationPolicy
         if (option.Installer is null)
             return L("Die Installation erfolgt über die Herstellerseite. Den Zielordner bestimmt der dort angebotene Installer.",
                 "Installation uses the publisher website. Its installer determines the destination.");
-        if (option.Installer is not { CanInstall: true, VersionSource: "WinGet", TargetProof: not null, GitHubUpdate: null, PortableUpdate: null, ManagedPackage: null })
+        if (option.Installer is not { CanInstall: true, VersionSource: "WinGet", TargetProof: { SupportsLocation: true }, GitHubUpdate: null, PortableUpdate: null, ManagedPackage: null })
             return L("Freie Ordnerwahl für diesen Installer nicht bestätigt. Es wird der vom Hersteller oder Windows verwaltete Standardort verwendet.",
                 "Custom folders are not confirmed for this installer. The publisher or Windows manages the default location.");
         if (option.Installer.TargetProof.PackageId != option.Installer.Id || option.Installer.TargetProof.Version != option.Installer.Version)

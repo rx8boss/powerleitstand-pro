@@ -76,16 +76,16 @@ internal static class ProgramOnlineTests
                         Assert(view.ShowManualMark(entry.Id) && view.CanMark(entry.Id), "Unknown installation and unknown version enable manual confirmation");
                         if (theme.StartsWith("Neon"))
                         {
-                            var frames = (List<(AdornerLayer, NeonFrameAdorner)>)typeof(MainWindow).GetField("_neonFrames", flags)!.GetValue(main)!;
-                            Assert(frames.Count > 0 && frames.All(x => x.Item2.Opacity == 0), "Neon adorners cannot paint over an open hover card");
-                            foreach (var item in frames) item.Item2.Strength = 1;
+                            var frames = (Dictionary<Border, (AdornerLayer, NeonFrameAdorner)>)typeof(MainWindow).GetField("_neonFrames", flags)!.GetValue(main)!;
+                            Assert(frames.Count > 0 && frames.All(x => x.Value.Item2.Opacity == (ReferenceEquals(x.Key, main.Template.FindName("OuterWindowOutline", main)) ? 1 : 0)), "Neon adorners cannot paint over an open hover card");
+                            foreach (var item in frames.Values) item.Item2.Strength = 1;
                             if (!english && size is 1 or 4) Save(main, theme.Replace(' ', '-') + "-Hover-" + size);
                         }
                         view.CloseInfo();
                         if (theme.StartsWith("Neon"))
                         {
-                            var frames = (List<(AdornerLayer, NeonFrameAdorner)>)typeof(MainWindow).GetField("_neonFrames", flags)!.GetValue(main)!;
-                            Assert(frames.All(x => x.Item2.Opacity == 1), "Closing hover restores neon frames");
+                            var frames = (Dictionary<Border, (AdornerLayer, NeonFrameAdorner)>)typeof(MainWindow).GetField("_neonFrames", flags)!.GetValue(main)!;
+                            Assert(frames.Values.All(x => x.Item2.Opacity == 1), "Closing hover restores neon frames");
                         }
                         view.ShowInfo(entry, view, false); Wait(view.Info!.Loading); view.ConnectionChanged(false); Pump();
                         Assert(view.Info?.IsOpen != true && view.HasOverlay, "Connection loss closes an existing info card instead of stacking unreadable overlays");

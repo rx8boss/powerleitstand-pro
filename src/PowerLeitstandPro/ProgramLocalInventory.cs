@@ -101,7 +101,19 @@ internal static class ProgramLocalInventory
                             var sdk = Regex.Match(item?.GetValue("DisplayName") as string ?? "", @"\.NET SDK (\d+\.\d+\.\d+)");
                             if (sdk.Success) version = sdk.Groups[1].Value;
                         }
-                        var location = locations.Resolve(ProgramPathResolver.Registration(item!, child, name, publisher!, version, hive, view), entry, token);
+                        var registration = ProgramPathResolver.Registration(item!, child, name, publisher!, version, hive, view);
+                        var location = locations.Resolve(registration, entry, token);
+                        if (entry.PackageId is not null
+                            && string.Equals(item!.GetValue("WinGetPackageIdentifier") as string, entry.PackageId, StringComparison.OrdinalIgnoreCase)
+                            && item.GetValue("WinGetSourceIdentifier") as string == "Microsoft.Winget.Source_8wekyb3d8bbwe"
+                            && item.GetValue("WinGetInstallerType") as string == "portable")
+                        {
+                            var target = item.GetValue("PortableTargetFullPath") as string;
+                            if (locations.ResolveWinGetPortable(registration, entry, target) is { } registeredPortable)
+                                location = registeredPortable;
+                            else if (entry.Id == "adwcleaner" && AdwCleanerWinGetExecutable(version, registration.InstallLocation, target) is { } executable)
+                                location = new(Path.GetDirectoryName(executable), executable, "WinGet portable", hive == RegistryHive.CurrentUser ? "User" : "Machine", version);
+                        }
                         var path = location?.Path;
                         if (version is null && location?.Executable is not null) version = location.FileVersion;
                         if (entry.Id == "net-sdk") path = ExistingDirectory(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "sdk", version ?? ""));
@@ -144,7 +156,7 @@ internal static class ProgramLocalInventory
         ["autoruns"] = new(["Autoruns64.exe", "Autoruns.exe", "Autoruns64a.exe"], "Sysinternals autoruns", @"Sysinternals(?: - www\.sysinternals\.com)?|Microsoft Corporation"),
         ["melonloader"] = new(["MelonLoader.Installer.exe"], @"MelonLoader\.Installer", @"discord\.gg/2Wn3N2P|LavaGang"),
         ["geek-uninstaller"] = new(["geek.exe"], "Geek[- ]Uninstaller", "Geek Uninstaller"),
-        ["adwcleaner"] = new(["adwcleaner.exe", "adwcleaner_*.exe"], "AdwCleaner", "Malwarebytes"),
+        ["adwcleaner"] = new(["adwcleaner.exe", "adwcleaner_*.exe"], "AdwCleaner", @"Malwarebytes(?: Inc\.?)?"),
         ["rufus"] = new(["rufus.exe", "rufus-*.exe"], "Rufus", "Akeo(?: Consulting)?"),
         ["extra-ventoy-ventoy"] = new([@"ventoy\Ventoy2Disk.exe", "Ventoy2Disk.exe"], "Ventoy", "Ventoy", true),
         ["tukui-client"] = new(["Tukui Client.exe", "TukuiClient.exe"], "Tukui Client", "Tukui(?:.org)?", true),
@@ -158,6 +170,51 @@ internal static class ProgramLocalInventory
     internal static bool MatchesPortable(string id, string? product, string? company) => Portable.TryGetValue(id, out var rule)
         && Regex.IsMatch(product ?? "", "^(?:" + rule.Products + ")$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
         && (rule.EmptyCompany && string.IsNullOrWhiteSpace(company) || Regex.IsMatch(company?.Trim() ?? "", "^(?:" + rule.Companies + ")$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+    internal static string? AdwCleanerWinGetExecutable(string? version, string? registered, string? exactTarget = null)
+    {
+        const string folder = "Malwarebytes.AdwCleaner_Microsoft.Winget.Source_8wekyb3d8bbwe";
+        var directories = new[]
+        {
+            registered,
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WinGet", "Packages", folder),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WinGet", "Packages", folder),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "WinGet", "Packages", folder)
+        };
+        return AdwCleanerExecutable(version, Directory.Exists(registered) ? [registered] : directories, path =>
+        {
+            var file = FileVersionInfo.GetVersionInfo(path);
+            return (file.ProductName, file.CompanyName, PortableVersion("adwcleaner", path, file));
+        }, exactTarget);
+    }
+
+    internal static string? AdwCleanerExecutable(string? version, IEnumerable<string?> directories,
+        Func<string, (string? Product, string? Publisher, string? Version)> inspect, string? exactTarget = null)
+    {
+        if (version is null) return null;
+        var matches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var directory in directories.OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!Path.IsPathFullyQualified(directory) || !Directory.Exists(directory)) continue;
+            try
+            {
+                var files = exactTarget is not null && Path.IsPathFullyQualified(exactTarget)
+                    && ProgramPathResolver.InDirectory(directory, exactTarget) && File.Exists(exactTarget)
+                    ? new[] { exactTarget } : Directory.EnumerateFiles(directory, "adwcleaner*.exe").Take(32);
+                foreach (var file in files)
+                {
+                    if (!Regex.IsMatch(Path.GetFileName(file), @"\Aadwcleaner(?:_[\d.]+)?\.exe\z", RegexOptions.IgnoreCase)
+                        || !ProgramPortableUpdates.PlainPath(file)) continue;
+                    var metadata = inspect(file);
+                    if (MatchesPortable("adwcleaner", metadata.Product, metadata.Publisher)
+                        && metadata.Version is not null && ProgramPathResolver.VersionFits(version, metadata.Version))
+                        matches.Add(file);
+                }
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or SecurityException) { }
+        }
+        return matches.Count == 1 ? matches.Single() : null;
+    }
+
     internal static IEnumerable<string> PortableRoots()
     {
         string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

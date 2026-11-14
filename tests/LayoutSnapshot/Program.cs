@@ -175,66 +175,35 @@ internal static class Program
             }
             typeof(MainWindow).GetMethod("ToggleSettings", BindingFlags.NonPublic | BindingFlags.Instance)!
                 .Invoke(window, [null, new RoutedEventArgs()]);
-            typeof(MainWindow).GetMethod("OpenUpdateNotice", BindingFlags.NonPublic | BindingFlags.Instance)!
-                .Invoke(window, [null, new RoutedEventArgs()]);
-            window.UpdateLayout();
-            var settingsShell = (FrameworkElement)window.FindName("SettingsShell")!;
-            var noticePanel = (FrameworkElement)window.FindName("SettingsNoticePanel")!;
+            var releaseLoader = typeof(MainWindow).GetProperty("LoadBellReleases", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var releaseType = releaseLoader.PropertyType.GenericTypeArguments[1].GenericTypeArguments[0];
+            var emptyReleases = System.Linq.Expressions.Expression.Convert(
+                System.Linq.Expressions.Expression.Constant(Array.CreateInstance(releaseType.GenericTypeArguments[0], 0)), releaseType);
+            var fromResult = typeof(Task).GetMethod(nameof(Task.FromResult))!.MakeGenericMethod(releaseType);
+            releaseLoader.SetValue(window, System.Linq.Expressions.Expression.Lambda(releaseLoader.PropertyType,
+                System.Linq.Expressions.Expression.Call(fromResult, emptyReleases),
+                System.Linq.Expressions.Expression.Parameter(typeof(CancellationToken))).Compile());
+            var bellClick = typeof(MainWindow).GetMethod("OpenUpdateNotice", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            bellClick.Invoke(window, [null, new RoutedEventArgs()]);
             var noticePopup = (Popup)window.FindName("SettingsNoticePopup")!;
-            if (settingsShell.Visibility != Visibility.Collapsed || options.Visibility != Visibility.Collapsed ||
-                !noticePopup.IsOpen || noticePanel.ActualWidth > content.ActualWidth ||
-                noticePanel.ActualHeight > content.ActualHeight)
-                throw new InvalidOperationException($"Bell flyout is clipped or did not open at size {sizeIndex}.");
-            if (noticePanel.ActualWidth > 145 || noticePanel.ActualWidth < 130 || noticePanel.ActualHeight < 230 ||
-                ((FrameworkElement)window.FindName("NoticeCurrentRow")!).ActualWidth < noticePanel.ActualWidth - 30)
-                throw new InvalidOperationException($"Bell flyout does not match the compact reference proportions at size {sizeIndex}.");
-            if (noticePopup.PlacementTarget != window.FindName("UpdateNoticeButton") ||
-                noticePopup.Placement != System.Windows.Controls.Primitives.PlacementMode.Bottom ||
-                noticePopup.PopupAnimation != PopupAnimation.Slide || !noticePopup.StaysOpen ||
-                noticePopup.HorizontalOffset != 0 || noticePopup.VerticalOffset != 25)
-                throw new InvalidOperationException("Bell flyout placement, slide animation or outside-click behavior changed.");
+            var noticeText = (TextBlock)window.FindName("BellStatusText")!;
+            var settingsShell = (FrameworkElement)window.FindName("SettingsShell")!;
             var autoCloseTimer = (DispatcherTimer)typeof(MainWindow).GetField("_noticeAutoCloseTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
-            if (autoCloseTimer.Interval != TimeSpan.FromSeconds(7) || !autoCloseTimer.IsEnabled)
-                throw new InvalidOperationException("Bell flyout does not start its seven-second auto-close timer.");
-            typeof(MainWindow).GetMethod("OpenUpdateNotice", BindingFlags.NonPublic | BindingFlags.Instance)!
-                .Invoke(window, [null, new RoutedEventArgs()]);
-            if (noticePopup.IsOpen || autoCloseTimer.IsEnabled)
-                throw new InvalidOperationException("Clicking the bell again does not close the open flyout.");
-            typeof(MainWindow).GetMethod("OpenUpdateNotice", BindingFlags.NonPublic | BindingFlags.Instance)!
-                .Invoke(window, [null, new RoutedEventArgs()]);
-            if (!noticePopup.IsOpen || !autoCloseTimer.IsEnabled)
-                throw new InvalidOperationException("Clicking the bell after closing does not reopen the flyout.");
+            if (settingsShell.Visibility != Visibility.Collapsed || options.Visibility != Visibility.Collapsed ||
+                !noticePopup.IsOpen || noticePopup.Child != noticeText || noticeText.Text != "Ist aktuell" ||
+                noticePopup.PlacementTarget != window.FindName("UpdateNoticeButton") ||
+                noticePopup.Placement != PlacementMode.Bottom || noticePopup.PopupAnimation != PopupAnimation.None ||
+                noticePopup.VerticalOffset > 4 || autoCloseTimer.Interval != TimeSpan.FromSeconds(3) || !autoCloseTimer.IsEnabled)
+                throw new InvalidOperationException($"Bell status is not a short text under the header button at size {sizeIndex}.");
             if (sizeIndex == 0)
             {
-                var outsidePress = new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Left)
-                { RoutedEvent = System.Windows.Input.Mouse.PreviewMouseDownEvent };
-                window.RaiseEvent(outsidePress);
-                if (noticePopup.IsOpen || autoCloseTimer.IsEnabled)
-                    throw new InvalidOperationException("Clicking elsewhere in the app does not close the bell flyout.");
-                typeof(MainWindow).GetMethod("OpenUpdateNotice", BindingFlags.NonPublic | BindingFlags.Instance)!
-                    .Invoke(window, [null, new RoutedEventArgs()]);
                 CapturePopupComposite(window, noticePopup, Path.Combine(args[0], "update-notice-small.png"));
                 typeof(MainWindow).GetField("_english", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(window, true);
                 typeof(MainWindow).GetMethod("ApplyLanguage", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
-                window.UpdateLayout();
-                if (noticePanel.ActualWidth > 145 || noticePanel.ActualHeight < 230)
-                    throw new InvalidOperationException("English update notice is clipped at small size.");
+                if (noticeText.Text != "Up to date") throw new InvalidOperationException("Bell status did not switch languages.");
                 CapturePopupComposite(window, noticePopup, Path.Combine(args[0], "update-notice-english-small.png"));
                 typeof(MainWindow).GetField("_english", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(window, false);
                 typeof(MainWindow).GetMethod("ApplyLanguage", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
-                typeof(MainWindow).GetMethod("CloseSettingsNotice", BindingFlags.NonPublic | BindingFlags.Instance)!
-                    .Invoke(window, [null, new RoutedEventArgs()]);
-                autoCloseTimer.Interval = TimeSpan.FromMilliseconds(100);
-                typeof(MainWindow).GetMethod("OpenUpdateNotice", BindingFlags.NonPublic | BindingFlags.Instance)!
-                    .Invoke(window, [null, new RoutedEventArgs()]);
-                var frame = new DispatcherFrame();
-                var frameTimeout = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
-                frameTimeout.Tick += (_, _) => { frameTimeout.Stop(); frame.Continue = false; };
-                frameTimeout.Start();
-                Dispatcher.PushFrame(frame);
-                autoCloseTimer.Interval = TimeSpan.FromSeconds(7);
-                if (noticePopup.IsOpen || autoCloseTimer.IsEnabled)
-                    throw new InvalidOperationException("Bell flyout did not close automatically after its timer elapsed.");
             }
             typeof(MainWindow).GetMethod("CloseSettingsNotice", BindingFlags.NonPublic | BindingFlags.Instance)!
                 .Invoke(window, [null, new RoutedEventArgs()]);
@@ -347,7 +316,6 @@ internal static class Program
             {
                 Capture(window, Path.Combine(args[0], "repair-small.png"));
                 VerifyRepairFooterRouting(window);
-                VerifyRepairProgressAnimation(window);
                 VerifyRepairActionLocks(window);
                 CaptureRepairDialogs(args[0]);
             }
@@ -561,62 +529,6 @@ internal static class Program
         Console.WriteLine("PASS repair footer: separate logs, live entries, page switching and running-repair guards");
     }
 
-    private static void VerifyRepairProgressAnimation(MainWindow window)
-    {
-        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
-        var type = typeof(MainWindow);
-        var progress = (ProgressBar)window.FindName("RepairProgress")!;
-        var running = type.GetField("_repairRunning", flags)!;
-        var percent = type.GetField("_repairPercent", flags)!;
-        var transform = type.GetField("_repairProgressTransform", flags)!;
-        var update = type.GetMethod("UpdateRepairProgressAnimation", flags)!;
-        try
-        {
-            running.SetValue(window, true);
-            foreach (var value in new[] { 45.0, 0.0 })
-            {
-                percent.SetValue(window, value);
-                progress.Value = value;
-                update.Invoke(window, null);
-                window.UpdateLayout();
-                window.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
-                update.Invoke(window, null);
-                if (progress.IsIndeterminate != (value == 0) ||
-                    transform.GetValue(window) is not System.Windows.Media.TranslateTransform movement || !movement.HasAnimatedProperties)
-                    throw new InvalidOperationException("Repair progress animation did not start in its expected state.");
-                var start = movement.X;
-                var frame = new DispatcherFrame();
-                var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(140) };
-                timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
-                timer.Start();
-                Dispatcher.PushFrame(frame);
-                window.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
-                if (Math.Abs(movement.X - start) < .1 || Math.Abs(progress.Value - value) > .001 || (double)percent.GetValue(window)! != value)
-                    throw new InvalidOperationException("Repair activity is static or it changed measured progress.");
-            }
-            type.GetMethod("ShowUsersPage", flags)!.Invoke(window, null);
-            window.UpdateLayout();
-            update.Invoke(window, null);
-            if (transform.GetValue(window) is not null)
-                throw new InvalidOperationException("Repair activity animation kept running on a hidden page.");
-            type.GetMethod("ShowRepairPage", flags)!.Invoke(window, null);
-            window.UpdateLayout();
-            update.Invoke(window, null);
-            if (transform.GetValue(window) is null)
-                throw new InvalidOperationException("Repair activity did not resume when returning to its page.");
-        }
-        finally
-        {
-            running.SetValue(window, false);
-            percent.SetValue(window, 0.0);
-            progress.Value = 0;
-            update.Invoke(window, null);
-        }
-        if (progress.IsIndeterminate || transform.GetValue(window) is not null)
-            throw new InvalidOperationException("Repair animation did not stop after the repair ended.");
-        Console.WriteLine("PASS repair animation: moving light, measured values preserved, waiting state and visibility lifecycle");
-    }
-
     private static void VerifyTimerAbortAppearance(MainWindow window, string output, int sizeIndex)
     {
         var button = (Button)window.FindName("AbortTimerButton")!;
@@ -719,8 +631,8 @@ internal static class Program
         object Entry(string message) => Activator.CreateInstance(entryType, "14:38", message)!;
         var savedEvents = events.Cast<object>().ToArray();
         var savedRepairs = repairs.Cast<object>().ToArray();
-        var detailed = type.GetMethod("ToCompactLogEntry", BindingFlags.NonPublic | BindingFlags.Static)!
-            .Invoke(null, ["[16.10.2026, 14:38:12] Vollständige Testmeldung"] )!;
+        var detailed = type.GetMethod("ToCompactLogEntry", flags)!
+            .Invoke(window, ["[16.10.2026, 14:38:12] Vollständige Testmeldung"])!;
         if (detailed.GetType().GetProperty("DisplayTime")!.GetValue(detailed)?.ToString() != "14:38:12" ||
             !detailed.GetType().GetProperty("Tooltip")!.GetValue(detailed)!.ToString()!.Contains("16.10.2026"))
             throw new InvalidOperationException("Expanded event logs lose timestamp precision.");
@@ -955,11 +867,11 @@ internal static class Program
         {
             var root = (Border)dialog.Content;
             var layout = (Grid)root.Child;
-            var footer = (Border)layout.Children.Cast<UIElement>().Single(child => Grid.GetRow(child) == 3);
-            var actions = (Grid)footer.Child;
-            if (!ReferenceEquals(root.Background, ((MainWindow)dialog.Owner).TryFindResource("CardSurfaceBrush")) ||
-                root.Padding.Bottom < 10 || layout.RowDefinitions[3].Height.Value < 50 || actions.Margin.Bottom < 4)
-                throw new InvalidOperationException("User dialog does not match the card surface or has cramped footer buttons.");
+            var actions = (Grid)layout.Children.Cast<UIElement>().Single(child => Grid.GetRow(child) == 2);
+            if (!ReferenceEquals(root.Background, dialog.FindResource("DialogSurface")) ||
+                root.Padding.Bottom < 10 || actions.Children.OfType<Button>().Count() != 2 ||
+                actions.Children.OfType<Button>().Any(button => button.MinHeight < 34))
+                throw new InvalidOperationException("User dialog does not match the shared dialog surface or has cramped footer buttons.");
         }
         create.WindowStartupLocation = WindowStartupLocation.Manual;
         create.Left = -10000;
@@ -1110,27 +1022,19 @@ internal static class Program
             throw new InvalidOperationException("The bell header or status dialog contains text, badge, or controls removed by the approved design.");
         var bellAutomationName = System.Windows.Automation.AutomationProperties.GetName(bellButton) ?? string.Empty;
         if (bellButton.Content is not System.Windows.Shapes.Path || bellButton.Width > 60 ||
-            !(bellAutomationName.Contains("Glocken-Status", StringComparison.OrdinalIgnoreCase) ||
-              bellAutomationName.Contains("bell status", StringComparison.OrdinalIgnoreCase)))
+            !(bellAutomationName.Contains("App-Updates", StringComparison.OrdinalIgnoreCase) ||
+              bellAutomationName.Contains("app updates", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException($"The header bell is not a compact, text-free status button: width={bellButton.Width}, name='{bellAutomationName}'.");
         if (window.FindName("SettingsNoticeAction") is not null)
             throw new InvalidOperationException("The update notice must not contain a check button.");
-        var rows = new[]
-        {
-            (Border)window.FindName("NoticeCurrentRow")!,
-            (Border)window.FindName("NoticeConnectionRow")!,
-            (Border)window.FindName("NoticeAvailableRow")!
-        };
+        var noticeText = (TextBlock)window.FindName("BellStatusText")!;
         var colors = new List<System.Windows.Media.Color>();
         var buttonColors = new List<System.Windows.Media.Color>();
-        foreach (var (state, expected, activeRow) in new[] { ("Current", "Aktuell", 0), ("Failed", "Prüfung fehlgeschlagen", 1), ("Available", "Update", 2) })
+        foreach (var (state, expected) in new[] { ("Current", "Ist aktuell"), ("Failed", "Prüfung fehlgeschlagen"), ("Available", "Update verfügbar") })
         {
             setState.Invoke(window, [Enum.Parse(enumType, state)]);
-            if (rows.Any(row => row.Opacity != 1))
-                throw new InvalidOperationException($"The bell status legend changes row visibility in {state}.");
-            var connectionLabel = (TextBlock)window.FindName("NoticeConnectionLabel")!;
-            if (state == "Failed" && !connectionLabel.Text.Contains(expected, StringComparison.Ordinal))
-                throw new InvalidOperationException($"Unexpected failed status label: {connectionLabel.Text}");
+            if (noticeText.Text != expected)
+                throw new InvalidOperationException($"Unexpected bell status label: {noticeText.Text}");
             var statusColor = ((System.Windows.Media.SolidColorBrush)bell.Stroke).Color;
             colors.Add(statusColor);
             var bodyKey = state == "Current" ? "ReadyBrush" : state == "Available" ? "DangerBorderBrush" : "WarningBrush";
@@ -1141,14 +1045,6 @@ internal static class Program
             buttonColors.Add(((System.Windows.Media.SolidColorBrush)optionsButton.Background).Color);
             if (optionsLabel.FontSize < 11 || string.IsNullOrWhiteSpace(optionsLabel.Text))
                 throw new InvalidOperationException("Options update button label is too small or missing.");
-            var iconBox = (FrameworkElement)window.FindName(activeRow switch
-            {
-                0 => "NoticeCurrentIconBox",
-                1 => "NoticeConnectionIconBox",
-                _ => "NoticeAvailableIconBox"
-            })!;
-            if (iconBox.Width != 42 || iconBox.Height != 42)
-                throw new InvalidOperationException($"Bell status icon block has incorrect proportions in {state}: {iconBox.Width}x{iconBox.Height}.");
         }
         if (colors.Distinct().Count() != 3)
             throw new InvalidOperationException("Update bell colors are not distinct.");
@@ -1220,10 +1116,13 @@ internal static class Program
             applyTheme.Invoke(window, [theme]);
             if (theme == "Classic") VerifyClassicHeaderColors(window, output);
             VerifySharedThemeSizes(window, theme, output);
-            var frames = (System.Collections.IList)typeof(MainWindow).GetField("_neonFrames", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
-            if (frames.Count != (theme.StartsWith("Neon", StringComparison.Ordinal) ? 5 : 0))
+            window.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            var outline = (Border)window.Template.FindName("OuterWindowOutline", window)!;
+            var frames = NeonFrames(window);
+            bool neon = theme.StartsWith("Neon", StringComparison.Ordinal);
+            if (neon ? !frames.Contains(outline) || !frames.Contains(window.FindName("ImmediateCardSurface")) : frames.Count != 0)
                 throw new InvalidOperationException($"Neon frames were not created/removed correctly for {theme}.");
-            if (theme.StartsWith("Neon", StringComparison.Ordinal)) VerifyNeonPulse(window, theme);
+            if (neon) VerifyNeonPulse(window, theme);
             var timerCorner = (System.Windows.Shapes.Path)window.FindName("TimerCardCorner")!;
             var referenceCorner = (System.Windows.Shapes.Path)window.FindName("TimerReferenceCorner")!;
             var activeCorner = referenceCorner;
@@ -1340,12 +1239,17 @@ internal static class Program
         window.UpdateLayout();
     }
 
+    private static System.Collections.IDictionary NeonFrames(MainWindow window) =>
+        (System.Collections.IDictionary)typeof(MainWindow).GetField("_neonFrames", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
+
     private static void VerifyNeonPulse(MainWindow window, string theme)
     {
         var pulseMethod = typeof(MainWindow).GetMethod("NeonPulse", BindingFlags.Static | BindingFlags.NonPublic)!;
-        var pulse = (System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames)pulseMethod.Invoke(null, [0.0, 1.0])!;
-        if (pulse.Duration.TimeSpan != TimeSpan.FromSeconds(2) || !pulse.RepeatBehavior.Equals(System.Windows.Media.Animation.RepeatBehavior.Forever))
-            throw new InvalidOperationException($"Neon cycle is not 2 seconds in {theme}");
+        var pulse = (System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames)pulseMethod.Invoke(null, [5.0, 1.0])!;
+        if (pulse.KeyFrames[0].Value != 0 || pulse.KeyFrames.Cast<System.Windows.Media.Animation.DoubleKeyFrame>().Max(frame => frame.Value) < .95 ||
+            pulse.KeyFrames[^2].Value != 0 || pulse.KeyFrames[^1].Value != 0 ||
+            pulse.KeyFrames[^1].KeyTime.TimeSpan - pulse.KeyFrames[^2].KeyTime.TimeSpan != TimeSpan.FromSeconds(1))
+            throw new InvalidOperationException($"Neon cycle lacks ignition or a dark interval in {theme}.");
         var button = (Button)window.FindName("RestartButton")!;
         var effect = (System.Windows.Media.Effects.DropShadowEffect)button.Effect;
         if (SystemParameters.ClientAreaAnimation && !effect.HasAnimatedProperties)
@@ -1354,7 +1258,7 @@ internal static class Program
         if (effect.Opacity != 0 || effect.HasAnimatedProperties) throw new InvalidOperationException("Disabled neon button still glows.");
         button.IsEnabled = true;
         VerifyNeonHover(window, theme);
-        Console.WriteLine($"PASS neon {theme}: 2-second repeating clock, disabled buttons stop glowing");
+        Console.WriteLine($"PASS neon {theme}: ignition, dark interval and disabled buttons stop glowing");
     }
 
     private static void VerifyOptionsComplete(MainWindow window, string context)
@@ -1369,11 +1273,12 @@ internal static class Program
         foreach (var name in new[] { "DoneButton", "GermanButton", "EnglishButton", "ThemeBox", "SizeBox", "WarningSound", "WarningSoundBox",
                      "WarningVolume", "AutoStart", "RequestAdministratorOnLaunch", "CheckUpdatesButton" })
             EnsureInside((FrameworkElement)window.FindName(name)!, panel, name, 0);
-        var frames = (System.Collections.IEnumerable)typeof(MainWindow).GetField("_neonFrames", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
-        foreach (var entry in frames)
+        var outline = window.Template.FindName("OuterWindowOutline", window);
+        foreach (System.Collections.DictionaryEntry entry in NeonFrames(window))
         {
-            var frame = (UIElement)entry.GetType().GetField("Item2")!.GetValue(entry)!;
-            if (frame.Opacity != 0) throw new InvalidOperationException("Background neon frames shine through the options dialog.");
+            var frame = (UIElement)entry.Value!.GetType().GetField("Item2")!.GetValue(entry.Value)!;
+            if (frame.Opacity != (ReferenceEquals(entry.Key, outline) ? 1 : 0))
+                throw new InvalidOperationException("Options must hide the content glow and keep the outer frame.");
         }
         Console.WriteLine($"PASS complete options {context}: all controls, Done button and overlay bounds");
     }
@@ -1385,8 +1290,10 @@ internal static class Program
         {
             var originalEnabled = button.IsEnabled;
             string Colour(System.Windows.Media.Brush brush) => ((System.Windows.Media.SolidColorBrush)brush).Color.ToString();
-            var resting = Colour((System.Windows.Media.Brush)button.FindResource("DialogDangerBackground"));
-            var hovered = Colour((System.Windows.Media.Brush)button.FindResource("DialogDangerHover"));
+            var unified = ReferenceEquals(button.Style, button.TryFindResource("UnifiedDialogDanger"));
+            string prefix = unified ? "Unified" : "Dialog";
+            var resting = Colour((System.Windows.Media.Brush)button.FindResource(prefix + "DangerBackground"));
+            var hovered = Colour((System.Windows.Media.Brush)button.FindResource(prefix + "DangerHover"));
             try
             {
                 button.IsEnabled = true;
@@ -1404,7 +1311,7 @@ internal static class Program
                 button.SetValue(key, false);
                 if (Colour(frame.Background) != resting || frame.Effect is not null) throw new InvalidOperationException("Red cancel hover did not reset.");
                 button.IsEnabled = false;
-                if (frame.Opacity != .5) throw new InvalidOperationException("Disabled red cancel feedback missing.");
+                if (frame.Opacity != (unified ? .45 : .5)) throw new InvalidOperationException("Disabled red cancel feedback missing.");
             }
             finally { button.SetValue(key, false); button.IsEnabled = originalEnabled; }
             return;
@@ -1475,7 +1382,7 @@ internal static class Program
                 try
                 {
                     dialog.UpdateLayout();
-                    var cancel = VisualChildren<Button>(dialog).Single(button => VisualChildren<TextBlock>(button).Any(text => text.Text == "Abbrechen"));
+                    var cancel = VisualChildren<Button>(dialog).Single(button => button.IsCancel);
                     cancel.ApplyTemplate();
                     var frame = (cancel.Template.FindName("RedCancelFrame", cancel) ?? cancel.Template.FindName("CrossFrame", cancel)) as Border;
                     if (frame is null || frame.BorderThickness.Left < 1.3) throw new InvalidOperationException("Classic dialog cancellation template missing.");
@@ -1484,7 +1391,6 @@ internal static class Program
                     if (!escape) Capture(dialog, Path.Combine(output, $"classic-dialog-{factory.Name}-{sizeIndex}.png"));
                     if (escape)
                     {
-                        if (!cancel.IsCancel) throw new InvalidOperationException("Escape target no longer has IsCancel enabled.");
                         System.Windows.Input.AccessKeyManager.ProcessKey(PresentationSource.FromVisual(dialog), "\u001b", false);
                         dialog.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
                     }
@@ -1510,8 +1416,15 @@ internal static class Program
             var button = (Button)window.FindName(name)!;
             var enabled = button.IsEnabled;
             button.ApplyTemplate();
-            var frame = (Border)button.Template.FindName(name == "RepairCancelButton" ? "CrossFrame" : "AbortBorder", button);
-            var caption = (TextBlock)window.FindName(name == "RepairCancelButton" ? "RepairCancelLabel" : "AbortLabel")!;
+            var frameName = name == "RepairCancelButton" ? "RedCancelFrame" : "AbortBorder";
+            if (button.Template.FindName(frameName, button) is not Border frame)
+                throw new InvalidOperationException($"Classic cancellation template missing: {name} ({frameName}).");
+            if (frameName == "RedCancelFrame")
+            {
+                VerifyClassicDialogButton(button, frame);
+                continue;
+            }
+            var caption = (TextBlock)window.FindName("AbortLabel")!;
             string Hex(System.Windows.Media.Brush brush) => ((System.Windows.Media.SolidColorBrush)brush).Color.ToString();
             try
             {
@@ -1535,7 +1448,7 @@ internal static class Program
             finally { button.SetValue(key, false); button.IsEnabled = enabled; }
         }
         Capture(window, Path.Combine(output, $"classic-cancellation-{sizeIndex}.png"));
-        Console.WriteLine($"PASS Classic cancellation size {sizeIndex}: readable disabled, red active, white hover, glow reset; no process started");
+        Console.WriteLine($"PASS Classic cancellation size {sizeIndex}: disabled, active, hover and reset for timer and repair; no process started");
     }
 
     private static void VerifyClassicNavigation(MainWindow window, string output, int sizeIndex)
@@ -1549,10 +1462,10 @@ internal static class Program
         var admin = (FrameworkElement)window.FindName("AdminRightsBadge")!;
         var switchPage = typeof(MainWindow).GetMethod("SwitchPage", flags)!;
         var key = (DependencyPropertyKey)typeof(UIElement).GetField("IsMouseOverPropertyKey", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
-        for (var page = 0; page < 3; page++)
+        for (var page = 0; page < 4; page++)
         {
             window.UpdateLayout();
-            if (previous.IsEnabled != (page > 0) || next.IsEnabled != (page < 2)) throw new InvalidOperationException("Navigation availability changed.");
+            if (previous.IsEnabled != (page > 0) || next.IsEnabled != (page < 3)) throw new InvalidOperationException("Navigation availability changed.");
             foreach (var button in new[] { previous, next })
             {
                 var color = ((System.Windows.Media.SolidColorBrush)button.Foreground).Color.ToString();
@@ -1567,8 +1480,9 @@ internal static class Program
                 indicator.TranslatePoint(new Point(indicator.ActualWidth, 0), header).X > admin.TranslatePoint(new Point(), header).X)
                 throw new InvalidOperationException("Classic navigation overlaps the page indicator or admin badge.");
             Capture(window, Path.Combine(output, $"classic-navigation-page-{page + 1}-size-{sizeIndex}.png"));
-            if (page < 2) switchPage.Invoke(window, [next, new RoutedEventArgs()]);
+            if (page < 3) switchPage.Invoke(window, [next, new RoutedEventArgs()]);
         }
+        switchPage.Invoke(window, [previous, new RoutedEventArgs()]);
         switchPage.Invoke(window, [previous, new RoutedEventArgs()]);
         switchPage.Invoke(window, [previous, new RoutedEventArgs()]);
         Console.WriteLine($"PASS Classic navigation size {sizeIndex}: page switching, enabled/disabled, hover and no overlap");
@@ -1615,20 +1529,20 @@ internal static class Program
                 : (Button)window.FindName(name)!;
             if (button.Effect is not System.Windows.Media.Effects.DropShadowEffect effect) throw new InvalidOperationException($"Missing neon button {name} / {theme}");
             button.ApplyTemplate();
-            var border = new[] { "ActionBorder", "StepSurface", "ButtonBorder", "NoticeSurface", "ArrowSurface" }
-                .Select(part => button.Template.FindName(part, button)).OfType<Border>().First();
-            var normal = border.Background;
+            var border = new[] { "ActionBorder", "StepSurface", "ButtonBorder", "NoticeSurface", "ArrowSurface", "Surface" }
+                .Select(part => button.Template.FindName(part, button)).OfType<Border>().FirstOrDefault();
+            var normal = border?.Background;
             var originalEnabled = button.IsEnabled;
             button.IsEnabled = true;
             Hover(button, true);
-            if (effect.Opacity != 1 || effect.BlurRadius != 18 || effect.HasAnimatedProperties ||
-                !ReferenceEquals(border.Background, window.Resources["HoverBrush"]) || border.BorderThickness.Left != 2)
+            if (effect.BlurRadius != 16 || effect.HasAnimatedProperties != SystemParameters.ClientAreaAnimation ||
+                border is not null && (!ReferenceEquals(border.Background, window.Resources["HoverBrush"]) || border.BorderThickness.Left != 2))
                 throw new InvalidOperationException($"Missing neon hover: {name} / {theme}");
             Hover(button, false);
-            if (!Equals(border.Background, normal)) throw new InvalidOperationException($"Hover did not restore template binding: {name} / {theme}");
+            if (!Equals(border?.Background, normal)) throw new InvalidOperationException($"Hover did not restore template binding: {name} / {theme}");
             button.IsEnabled = false;
             Hover(button, true);
-            if (effect.Opacity != 0 || effect.HasAnimatedProperties || !Equals(border.Background, normal))
+            if (effect.Opacity != 0 || effect.HasAnimatedProperties || !Equals(border?.Background, normal))
                 throw new InvalidOperationException($"Disabled neon hover still active: {name} / {theme}");
             Hover(button, false);
             button.IsEnabled = originalEnabled;

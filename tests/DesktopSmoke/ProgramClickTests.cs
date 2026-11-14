@@ -55,7 +55,7 @@ internal static class ProgramClickTests
                 Assert(Math.Abs(center - host.ActualHeight / 2) < 2, "info centered in app");
                 Assert(Math.Abs(info.Frame.ActualWidth - (view.Compact ? 420 : 580)) < 1, "approved wider reference layout applied");
                 Assert(UnifiedDialogAppearance.Children<TextBlock>(info.Frame).Any(t => t.Name == "ProgramInfoDescription" && t.Text.Length > 0), "full info fields retained");
-                Assert(UnifiedDialogAppearance.Children<TextBlock>(info.Frame).Any(t => t.Text == (english ? "Determined by the installer" : "Vom Installer festgelegt")), "unknown default path labelled honestly");
+                Assert(UnifiedDialogAppearance.Children<TextBlock>(info.Frame).Any(t => t.Text == (english ? "Not associated yet" : "Noch nicht zugeordnet")), "unknown default path labelled honestly");
                 var website = UnifiedDialogAppearance.Children<Button>(info.Frame).Single(b => b.Name == "ProgramInfoWebsite");
                 Assert(((TextBlock)website.Content).Text == (english ? "↗ Website" : "↗ Webseite"), "website caption stays short");
                 var scroll = UnifiedDialogAppearance.Children<ScrollViewer>(info.Frame).First(); Assert(scroll.VerticalScrollBarVisibility == ScrollBarVisibility.Hidden, "scrollbars remain invisible");
@@ -83,7 +83,7 @@ internal static class ProgramClickTests
             var chrome = ProgramCatalog.Entries.Single(e => e.Id == "google-chrome"); var work = view.InstallEntriesAsync([chrome]); Pump();
             Assert(view.IsWorking, "update executing retains work lock"); var selectedBefore = view.Selected.ToArray(); view.Select("notepad", true); Assert(view.Selected.SetEquals(selectedBefore), "selection guard rejects changes during work");
             fake.Pending.SetResult(0); Wait(work); Assert(!view.IsWorking && !view.Inventory.HasUpdate(chrome.Id), "update refresh removes completed update from pending list");
-            fake.Updates.Clear(); Wait(view.RefreshAsync()); Assert(view.UpdateButton.Visibility == Visibility.Collapsed, "no updates hides update button");
+            fake.Installed["winrar"] = "7.1"; fake.Updates.Clear(); Wait(view.RefreshAsync()); Assert(view.UpdateButton.Visibility == Visibility.Collapsed, "no updates hides update button");
             view.ShowInfo(entry, view, false); Wait(view.Info!.Loading); var idle = view.Info!;
             Pause(11000); idle.Frame.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.PreviewMouseDownEvent });
             Pause(10500); Assert(idle.IsOpen, "interaction resets timeout rather than closing at original twenty seconds");

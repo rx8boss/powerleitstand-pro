@@ -32,9 +32,6 @@
     <SolidColorBrush x:Key="HoverBrush" Color="#245C87"/>
     <SolidColorBrush x:Key="DangerBrush" Color="#782439"/>
     <SolidColorBrush x:Key="DangerBorderBrush" Color="#FF6388"/>
-    <DropShadowEffect x:Key="ReadyBellGlow" Color="#37D4A2" BlurRadius="10" ShadowDepth="0" Opacity="0.72"/>
-    <DropShadowEffect x:Key="WarningBellGlow" Color="#E8C442" BlurRadius="10" ShadowDepth="0" Opacity="0.68"/>
-    <DropShadowEffect x:Key="DangerBellGlow" Color="#FF6388" BlurRadius="10" ShadowDepth="0" Opacity="0.72"/>
     <LinearGradientBrush x:Key="StandardActionDangerBrush" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#492132" Offset="0"/><GradientStop Color="#431E30" Offset="1"/></LinearGradientBrush>
     <SolidColorBrush x:Key="StandardActionDangerBorderBrush" Color="#FF3455"/>
     <LinearGradientBrush x:Key="StandardActionButtonBrush" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#01365F" Offset="0"/><GradientStop Color="#00335C" Offset="1"/></LinearGradientBrush>
@@ -59,9 +56,6 @@
     <SolidColorBrush x:Key="UpdateCheckCurrentBrush" Color="#165046"/>
     <SolidColorBrush x:Key="UpdateCheckFailedBrush" Color="#514321"/>
     <SolidColorBrush x:Key="UpdateCheckAvailableBrush" Color="#57283A"/>
-    <SolidColorBrush x:Key="NoticeCurrentSurfaceBrush" Color="#1A745D"/>
-    <SolidColorBrush x:Key="NoticeConnectionSurfaceBrush" Color="#5D5F4C"/>
-    <SolidColorBrush x:Key="NoticeAvailableSurfaceBrush" Color="#72475F"/>
     <SolidColorBrush x:Key="SelectionBrush" Color="#245C87"/>
     <SolidColorBrush x:Key="CardBorderBrush" Color="#327DA6"/>
     <SolidColorBrush x:Key="OuterOutlineBrush" Color="#00CFFF"/>
@@ -339,7 +333,7 @@
           <TextBlock x:Name="MottoText" Text="Windows steuern · Aktionen planen · System reparieren" HorizontalAlignment="Center" FontSize="11" Foreground="{DynamicResource HeaderSubtleBrush}" Margin="0,2,0,0"/>
         </StackPanel>
         <Border x:Name="HeaderActionsBorder" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource InputBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="3"><StackPanel Orientation="Horizontal">
-          <Button x:Name="UpdateNoticeButton" Style="{StaticResource HeaderNoticeButton}" Click="OpenUpdateNotice" Margin="0,0,5,0" ToolTip="Glocken-Status anzeigen" AutomationProperties.Name="Glocken-Status anzeigen">
+          <Button x:Name="UpdateNoticeButton" Style="{StaticResource HeaderNoticeButton}" Click="OpenUpdateNotice" Margin="0,0,5,0" ToolTip="Nach App-Updates suchen" AutomationProperties.Name="Nach App-Updates suchen">
             <Path x:Name="UpdateNoticeIcon" Data="M 12,2 C 8.4,2 6.6,5 6.6,8.5 L 6.6,14 L 4.4,17.5 L 19.6,17.5 L 17.4,14 L 17.4,8.5 C 17.4,5 15.6,2 12,2 Z M 9.7,20 C 10.7,22 13.3,22 14.3,20" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="22" Height="22" Stretch="Uniform"/>
           </Button>
           <Button x:Name="SettingsHeaderButton" Style="{StaticResource HeaderButton}" Click="ToggleSettings" Margin="0,0,5,0">
@@ -667,15 +661,11 @@
       </Border>
       </Grid>
       </StackPanel>
-      <Popup x:Name="SettingsNoticePopup" PlacementTarget="{Binding ElementName=UpdateNoticeButton}" Placement="Bottom" HorizontalOffset="0" VerticalOffset="25" StaysOpen="True" AllowsTransparency="True" PopupAnimation="Slide" Closed="BellStatusPopupClosed">
-      <Border x:Name="SettingsNoticePanel" Width="136" Height="238" Padding="8,12" Background="{DynamicResource CardSurfaceBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1.5" CornerRadius="9" Effect="{DynamicResource NeonGlow}" SnapsToDevicePixels="True">
-        <StackPanel>
-          <TextBlock x:Name="SettingsNoticeHeading" Text="Glocken-Status" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Margin="2,0,0,13"/>
-          <Border x:Name="NoticeCurrentRow" Height="50" Background="Transparent" Margin="0,0,0,9"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="NoticeCurrentIconBox" Width="42" Height="42" CornerRadius="9" Background="{DynamicResource NoticeCurrentSurfaceBrush}" BorderBrush="{DynamicResource ReadyBrush}" BorderThickness="1.4" Effect="{DynamicResource ReadyBellGlow}"><Path x:Name="NoticeCurrentIcon" Data="M 12,3 C 8.8,3 7.2,6 7.2,9.5 L 7.2,14.5 C 7.2,16 5.7,17.5 4.5,18.5 L 19.5,18.5 C 18.3,17.5 16.8,16 16.8,14.5 L 16.8,9.5 C 16.8,6 15.2,3 12,3 Z M 10,20.5 C 10.5,22 13.5,22 14,20.5" Stroke="{DynamicResource ReadyBrush}" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="20" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock x:Name="NoticeCurrentLabel" Grid.Column="1" Text="Aktuell" Foreground="{DynamicResource TextBrush}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="8,0,0,0"/></Grid></Border>
-          <Border x:Name="NoticeConnectionRow" Height="50" Background="Transparent" Margin="0,0,0,9"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="NoticeConnectionIconBox" Width="42" Height="42" CornerRadius="9" Background="{DynamicResource NoticeConnectionSurfaceBrush}" BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1.4" Effect="{DynamicResource WarningBellGlow}"><Path x:Name="NoticeConnectionIcon" Data="M 12,3 C 8.8,3 7.2,6 7.2,9.5 L 7.2,14.5 C 7.2,16 5.7,17.5 4.5,18.5 L 19.5,18.5 C 18.3,17.5 16.8,16 16.8,14.5 L 16.8,9.5 C 16.8,6 15.2,3 12,3 Z M 10,20.5 C 10.5,22 13.5,22 14,20.5" Stroke="{DynamicResource WarningBrush}" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="20" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock x:Name="NoticeConnectionLabel" Grid.Column="1" Text="Keine Verbindung" Foreground="{DynamicResource TextBrush}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="8,0,0,0"/></Grid></Border>
-          <Border x:Name="NoticeAvailableRow" Height="50" Background="Transparent"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="NoticeAvailableIconBox" Width="42" Height="42" CornerRadius="9" Background="{DynamicResource NoticeAvailableSurfaceBrush}" BorderBrush="{DynamicResource DangerBorderBrush}" BorderThickness="1.4" Effect="{DynamicResource DangerBellGlow}"><Path x:Name="NoticeAvailableIcon" Data="M 12,3 C 8.8,3 7.2,6 7.2,9.5 L 7.2,14.5 C 7.2,16 5.7,17.5 4.5,18.5 L 19.5,18.5 C 18.3,17.5 16.8,16 16.8,14.5 L 16.8,9.5 C 16.8,6 15.2,3 12,3 Z M 10,20.5 C 10.5,22 13.5,22 14,20.5" Stroke="{DynamicResource DangerBorderBrush}" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="20" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock x:Name="NoticeAvailableLabel" Grid.Column="1" Text="Update verfügbar" Foreground="{DynamicResource TextBrush}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="8,0,0,0"/></Grid></Border>
-        </StackPanel>
-      </Border>
+      <Popup x:Name="SettingsNoticePopup" PlacementTarget="{Binding ElementName=UpdateNoticeButton}"
+             Placement="Bottom" VerticalOffset="2" StaysOpen="True" AllowsTransparency="True" Closed="BellStatusPopupClosed">
+        <TextBlock x:Name="BellStatusText" FontSize="11" FontWeight="SemiBold" TextAlignment="Center"
+                   Foreground="{DynamicResource TextBrush}" IsHitTestVisible="False"
+                   AutomationProperties.LiveSetting="Polite"/>
       </Popup>
     </Grid>
     <Border Grid.Row="2" Background="{DynamicResource FooterBrush}"><Grid x:Name="FooterLayout" Margin="8,0"><Grid.ColumnDefinitions><ColumnDefinition Width="175"/><ColumnDefinition Width="*"/><ColumnDefinition Width="175"/></Grid.ColumnDefinitions>

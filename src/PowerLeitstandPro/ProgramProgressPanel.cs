@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -149,8 +149,9 @@ internal sealed class ProgramProgressPanel : IDisposable
         if (_confirmedLocations.Contains(id) && !confirmed) return;
         if (!_paths.TryGetValue(id, out var label)) return;
         var directory = ProgramLocation.DirectoryOf(path);
-        if (directory is null && label.Visibility == Visibility.Visible) return;
+        if (directory is null && label.Visibility == Visibility.Visible && !_shortcutResults.ContainsKey(id)) return;
         label.Text = directory is null ? L("Installationspfad nicht ermittelbar", "Installation path unavailable") : L("Installationspfad: ", "Installation path: ") + directory;
+        if (_shortcutResults.TryGetValue(id, out var shortcut)) label.Text += "\n" + shortcut;
         label.ToolTip = directory; label.Visibility = Visibility.Visible;
         if (confirmed && directory is not null) _confirmedLocations.Add(id);
     }
@@ -169,6 +170,16 @@ internal sealed class ProgramProgressPanel : IDisposable
         }
         else if (_markers.TryGetValue(id, out var current)) current.Text = "›";
     }
+    private readonly Dictionary<string, string> _shortcutResults = [];
+    internal void ShortcutResult(string id, string message)
+    {
+        if (_paths.TryGetValue(id, out var label))
+        {
+            _shortcutResults[id] = message;
+            Location(id, _view.Inventory.Evidence?.GetValueOrDefault(id)?.Path);
+        }
+    }
+
     internal void Measurement(double? percent) { bool measurable = percent is { } p && double.IsFinite(p); Progress.IsIndeterminate = !measurable; Progress.ShowPercentage = measurable; if (measurable) Progress.Value = Math.Clamp(percent!.Value, 0, 100); }
     internal void Download(ProgramDownload value)
     {

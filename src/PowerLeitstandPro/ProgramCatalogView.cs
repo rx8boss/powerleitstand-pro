@@ -515,6 +515,7 @@ internal sealed partial class ProgramCatalogView : UserControl
         if (entries.Length == 0) return;
         IsWorking = true; _stopping = false; CloseInfo(); WorkStateChanged?.Invoke(true); _prepare = new();
         ProgramOperationLog? activeLog = null;
+        ProgramInstallElevation? elevation = null;
         bool selectionDismissed = false;
         // A selected snapshot authorizes this operation, not the unrelated saved inventory.
         var workInventory = Inventory;
@@ -656,6 +657,27 @@ internal sealed partial class ProgramCatalogView : UserControl
                 OperationPanel?.State(entry.Id, reason);
                 WriteLog?.Invoke(entry.Name + ": " + reason);
             }
+            HashSet<string> elevatedEntries = choices.Count > 1 && Service is ProgramInstallService { UsesWindowsInstallers: true } && !ElevationService.IsElevated()
+                ? choices.Where(c => ProgramInstallElevation.Applies(c, workInventory, allowReinstall)).Select(c => c.Entry.Id).ToHashSet()
+                : [];
+            if (elevatedEntries.Count != 0 && !choices.Any(c => c.Installer?.ManagedPackage?.Target.Scope == "Machine" && !elevatedEntries.Contains(c.Entry.Id)))
+            {
+                _phase = L("Windows-Adminbestätigung für die Auswahl …", "Waiting for Windows administrator approval …");
+                OperationPanel?.Caption(_phase); RefreshAvailability();
+                try { elevation = await ProgramInstallElevation.StartAsync(_prepare.Token); }
+                catch (Exception error) when (error is System.IO.IOException or System.ComponentModel.Win32Exception)
+                {
+                    foreach (var choice in choices) OperationPanel?.State(choice.Entry.Id, L("Adminstart fehlgeschlagen · siehe Protokoll", "Administrator start failed · see log"));
+                    throw;
+                }
+                if (elevation is null)
+                {
+                    foreach (var choice in choices)
+                        OperationPanel?.State(choice.Entry.Id, L("Adminabfrage abgebrochen · nicht gestartet", "Administrator prompt cancelled · not started"));
+                    _stopping = true;
+                    return;
+                }
+            }
             if (Service is ProgramInstallService && choices.Any(c => c.Installer?.ManagedPackage?.Target.Scope == "Machine") && !ElevationService.IsElevated())
             {
                 string notice = L("Diese Paketauswahl benötigt Administratorrechte. Die App jetzt mit der Windows-Bestätigung neu starten? Anschließend bitte die gewünschte Auswahl erneut prüfen und bestätigen. Es wurde noch keine Programminstallation gestartet.", "This package selection needs administrator privileges. Restart the app with the Windows confirmation now? Afterwards, check and confirm the selection again. No application installation has started yet.");
@@ -689,10 +711,9 @@ internal sealed partial class ProgramCatalogView : UserControl
                         OperationPanel?.Step(entry.Id, new(ProgramStep.Finish, ProgramStepState.Active));
                         new ProgramPortableStore(Assets.PortableFile).Remember(entry.Id, executable);
                         RecordInstalled(entry.Id);
-                        if (choice.DesktopShortcut) CreateDesktopShortcut(entry, executable);
                         string configured = entry.Id == "vlc" ? L("ZIP eingerichtet", "ZIP configured") : L("Portable eingerichtet", "Portable configured");
                         WriteLog?.Invoke(entry.Name + ": " + configured + ": " + executable);
-                        Selected.Remove(entry.Id); Inventory = await Service.InspectAsync(CancellationToken.None); OperationPanel?.Location(entry.Id, executable); OperationPanel?.State(entry.Id, configured); RenderTiles();
+                        Selected.Remove(entry.Id); Inventory = await Service.InspectAsync(CancellationToken.None); OperationPanel?.Location(entry.Id, executable); if (choice.DesktopShortcut) OperationPanel?.ShortcutResult(entry.Id, CreateDesktopShortcut(entry, executable)); OperationPanel?.State(entry.Id, configured); RenderTiles();
                     }
                     catch (OperationCanceledException) when (_stopping) { OperationPanel?.State(entry.Id, L("Gestoppt", "Stopped")); break; }
                     catch (Exception e) { OperationPanel?.State(entry.Id, L("Fehler · siehe Protokoll", "Error · see log")); WriteLog?.Invoke(entry.Name + ": " + UiText.Error(e, _english)); }
@@ -774,16 +795,24 @@ internal sealed partial class ProgramCatalogView : UserControl
                 if (source is not null) source.StepChanged += OnStep;
                 if (downloadSource is not null) downloadSource.DownloadChanged += OnDownload;
                 if (diagnosticSource is not null) diagnosticSource.Diagnostic += OnDiagnostic;
-                try { code = update ? await Service.UpgradeAsync(entry, package, () => { })
-                    : reinstall && Service is ProgramInstallService direct ? await direct.ReinstallAsync(entry, package, Inventory, () => { }, _prepare.Token)
-                    : choice.TargetPath is { } destination && Service is ProgramInstallService installer ? await installer.InstallAtAsync(entry, package, destination, () => { }, _prepare.Token)
-                    : await Service.InstallAsync(entry, package, () => { }); }
+                try
+                {
+                    if (elevation is not null && elevatedEntries.Contains(entry.Id))
+                    {
+                        var tracker = new ProgramWinGetSteps(OnStep, package.Id, OnDownload);
+                        code = await elevation.InstallAsync(choice, line => { tracker.Line(line); operationLog.Output(line); }, _prepare.Token);
+                    }
+                    else code = update ? await Service.UpgradeAsync(entry, package, () => { })
+                        : reinstall && Service is ProgramInstallService direct ? await direct.ReinstallAsync(entry, package, Inventory, () => { }, _prepare.Token)
+                        : choice.TargetPath is { } destination && Service is ProgramInstallService installer ? await installer.InstallAtAsync(entry, package, destination, () => { }, _prepare.Token)
+                        : await Service.InstallAsync(entry, package, () => { });
+                }
                 catch (OperationCanceledException) when (_stopping) { OperationPanel?.State(entry.Id, L("Gestoppt", "Stopped")); break; }
                 catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223)
                 { OperationPanel?.State(entry.Id, L("Abgebrochen", "Cancelled")); operationLog.Event(entry.Name + L(": Vom Benutzer abgebrochen.", ": Cancelled by the user.")); continue; }
                 catch (Exception e) { OperationPanel?.State(entry.Id, L("Fehler · siehe Protokoll", "Error · see log")); operationLog.Error(UiText.Error(e, _english), "0x" + e.HResult.ToString("X8")); continue; }
                 finally { if (source is not null) source.StepChanged -= OnStep; if (downloadSource is not null) downloadSource.DownloadChanged -= OnDownload; if (diagnosticSource is not null) diagnosticSource.Diagnostic -= OnDiagnostic; }
-                if (Service is ProgramInstallService { LastInstallOutput.Length: > 0 } backend) operationLog.Output(backend.LastInstallOutput);
+                if (!elevatedEntries.Contains(entry.Id) && Service is ProgramInstallService { LastInstallOutput.Length: > 0 } backend) operationLog.Output(backend.LastInstallOutput);
                 operationLog.ProcessEnded(code);
                 operationLog.Event(entry.Name + ": " + ProgramInstallService.PackageSource(package, _english) + L(" beendet, Code ", " exited, code ") + "0x" + code.ToString("X8"));
                 if (code == 0 && package.ManagedPackage is null) OperationPanel?.Step(entry.Id, new(ProgramStep.Install, ProgramStepState.Done));
@@ -826,8 +855,8 @@ internal sealed partial class ProgramCatalogView : UserControl
                     if (!update && !reinstall && choice.DesktopShortcut)
                     {
                         var proof = workInventory.Evidence?.GetValueOrDefault(entry.Id);
-                        CreateDesktopShortcut(entry, proof?.LocationEvidence?.Alternatives is { Count: > 0 } || proof?.ManagedCopies is { Count: > 1 }
-                            ? null : proof?.LocationEvidence?.Executable ?? proof?.Path);
+                        string? executable = await Task.Run(() => DesktopExecutable(entry, proof));
+                        OperationPanel?.ShortcutResult(entry.Id, CreateDesktopShortcut(entry, executable));
                     }
                     Selected.Remove(entry.Id); WriteLog?.Invoke(entry.Name + (reinstall ? L(": Neuinstallation bestätigt.", ": reinstallation verified.") : L(": Installation/Update bestätigt.", ": installation/update verified.")));
                 }
@@ -851,6 +880,7 @@ internal sealed partial class ProgramCatalogView : UserControl
         finally
         {
             if (entries.Any(e => e.Id == "tukui-client") && Service is ProgramInstallService tukuiService) tukuiService.ClearTukuiPackage();
+            if (elevation is not null) await elevation.DisposeAsync();
             _prepare?.Dispose(); _prepare = null; IsWorking = false; _progress.IsRunning = false; _progress.Visibility = Visibility.Collapsed;
             if (selectionDismissed) { OperationPanel?.Dispose(); OperationPanel = null; }
             else OperationPanel?.Finish(_stopping);

@@ -281,7 +281,7 @@ internal sealed class UserEditorDialog : Window
     private static Path IconPath(string data, double size, Brush color, bool filled, Thickness margin) =>
         new()
         {
-            Data = Geometry.Parse(data), Width = size, Height = size, Stretch = Stretch.Uniform,
+            Data = Geometry.Parse(data), Tag = data == Cross ? "DialogCross" : null, Width = size, Height = size, Stretch = Stretch.Uniform,
             Fill = filled ? color : Brushes.Transparent, Stroke = color, StrokeThickness = filled ? 0.5 : 1.8,
             StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
             VerticalAlignment = VerticalAlignment.Center, Margin = margin

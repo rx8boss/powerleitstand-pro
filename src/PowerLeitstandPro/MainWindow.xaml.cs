@@ -40,7 +40,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<CompactLogEntry> _eventLogEntries = new();
     private readonly ObservableCollection<CompactLogEntry> _repairLogEntries = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
-    private readonly DispatcherTimer _noticeAutoCloseTimer = new() { Interval = TimeSpan.FromSeconds(7) };
+    private readonly DispatcherTimer _noticeAutoCloseTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private int _seconds = 300;
     private DateTimeOffset _timerDeadline;
     private int _nextWarningSecond = 10;
@@ -80,6 +80,8 @@ public partial class MainWindow : Window
     private UpdateCheckState _updateCheckState = UpdateCheckState.Checking;
     private bool _updateCheckFailedConnection;
     private int _updateCheckSequence;
+    private bool _bellChecking;
+    internal Func<CancellationToken, Task<IReadOnlyList<UpdateRelease>>> LoadBellReleases { get; set; } = UpdateReleaseCatalog.LoadAsync;
     private enum UpdateCheckState { Checking, Current, Available, Failed }
     private readonly string _logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Power Control PRO", "logs");
     private readonly object _logLock = new();
@@ -164,6 +166,7 @@ public partial class MainWindow : Window
             _placementSaveTimer.Start();
         };
         Closing += (_, _) => { _placementSaveTimer.Stop(); if (!IsBusy) PersistWindowPosition(); };
+        Closed += (_, _) => ++_updateCheckSequence;
         StateChanged += (_, _) =>
         {
             if (WindowState != WindowState.Minimized)
@@ -354,6 +357,7 @@ public partial class MainWindow : Window
 
     internal async Task CheckForUpdatesOnStartupAsync()
     {
+        if (_bellChecking || _updateInProgress) return;
         var sequence = ++_updateCheckSequence;
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(12));
         try
@@ -406,9 +410,9 @@ public partial class MainWindow : Window
             UpdateCheckState.Failed => _english ? "Update check failed · try again" : "Update-Prüfung fehlgeschlagen · erneut versuchen",
             _ => _english ? "Update check in progress" : "Update-Prüfung läuft"
         };
-        UpdateNoticeButton.ToolTip = _english ? "Show bell status" : "Glocken-Status anzeigen";
+        UpdateNoticeButton.ToolTip = _english ? "Check for app updates" : "Nach App-Updates suchen";
         System.Windows.Automation.AutomationProperties.SetName(UpdateNoticeButton, UpdateNoticeButton.ToolTip.ToString()!);
-        UpdateStatus.Visibility = state == UpdateCheckState.Checking || SettingsNoticePanel.Visibility == Visibility.Visible
+        UpdateStatus.Visibility = state == UpdateCheckState.Checking || SettingsNoticePopup.IsOpen
             ? Visibility.Collapsed : Visibility.Visible;
         UpdateStatus.Text = state switch
         {
@@ -419,25 +423,53 @@ public partial class MainWindow : Window
                 : (_english ? "The update check could not be completed." : "Die Update-Prüfung konnte nicht abgeschlossen werden."),
             _ => _english ? "Checking GitHub releases…" : "GitHub-Releases werden geprüft…"
         };
-        NoticeCurrentLabel.Text = _english ? "Up to date" : "Aktuell";
-        NoticeConnectionLabel.Text = state == UpdateCheckState.Failed && !_updateCheckFailedConnection
-            ? (_english ? "Check failed" : "Prüfung fehlgeschlagen")
-            : (_english ? "No connection" : "Keine Verbindung");
-        NoticeAvailableLabel.Text = _english ? "Update available" : "Update verfügbar";
-    }
-
-    internal void OpenUpdateNotice(object s, RoutedEventArgs e)
-    {
-        if (SettingsNoticePopup.IsOpen)
+        BellStatusText.Text = state switch
         {
-            CloseSettingsNotice(this, new RoutedEventArgs());
+            UpdateCheckState.Current => _english ? "Up to date" : "Ist aktuell",
+            UpdateCheckState.Available => _english ? "Update available" : "Update verfügbar",
+            UpdateCheckState.Failed => _updateCheckFailedConnection
+                ? (_english ? "No connection" : "Keine Verbindung")
+                : (_english ? "Check failed" : "Prüfung fehlgeschlagen"),
+            _ => _english ? "Checking …" : "Prüfe …"
+        };
+        BellStatusText.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+        SettingsNoticePopup.HorizontalOffset = (UpdateNoticeButton.ActualWidth - BellStatusText.DesiredSize.Width) / 2;
+    }
+    internal async void OpenUpdateNotice(object s, RoutedEventArgs e)
+    {
+        if (_bellChecking || _updateInProgress) return;
+        _bellChecking = true;
+        int sequence = ++_updateCheckSequence;
+        SetSettingsOverlay(showOptions: false, showNotice: false);
+        SetUpdateCheckState(UpdateCheckState.Checking);
+        SettingsNoticePopup.IsOpen = true;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        IReadOnlyList<UpdateRelease> releases;
+        try
+        {
+            releases = await LoadBellReleases(timeout.Token);
+        }
+        catch (Exception exception)
+        {
+            if (sequence != _updateCheckSequence) return;
+            _updateCheckFailedConnection = exception is HttpRequestException or OperationCanceledException;
+            SetUpdateCheckState(UpdateCheckState.Failed);
+            LogError((_english ? "Update check failed: " : "Update-Prüfung fehlgeschlagen: ") + UiText.Error(exception, _english));
             return;
         }
-
-        SetSettingsOverlay(showOptions: false, showNotice: false);
-        SettingsNoticePopup.IsOpen = true;
-        _noticeAutoCloseTimer.Stop();
-        _noticeAutoCloseTimer.Start();
+        finally
+        {
+            _bellChecking = false;
+            if (sequence == _updateCheckSequence && SettingsNoticePopup.IsOpen) _noticeAutoCloseTimer.Start();
+        }
+        if (sequence != _updateCheckSequence) return;
+        var latest = releases.FirstOrDefault()?.Update;
+        _availableUpdate = latest is not null && latest.Version > AppVersion.Installed ? latest : null;
+        _updateCheckFailedConnection = false;
+        SetUpdateCheckState(_availableUpdate is null ? UpdateCheckState.Current : UpdateCheckState.Available);
+        if (_availableUpdate is null || IsBusy) return;
+        CloseSettingsNotice(this, new RoutedEventArgs());
+        ShowAppUpdateDialog(releases);
     }
 
     private void CloseNoticeOnOutsideClick(object sender, MouseButtonEventArgs e)
@@ -469,7 +501,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CheckUpdates(object s, RoutedEventArgs e)
+    private void CheckUpdates(object s, RoutedEventArgs e) => ShowAppUpdateDialog();
+
+    private void ShowAppUpdateDialog(IReadOnlyList<UpdateRelease>? releases = null)
     {
         if (IsBusy)
         {
@@ -483,7 +517,8 @@ public partial class MainWindow : Window
         try
         {
             var manager = new UpdateManagerWindow(ThemePalette.For(SelectedTheme()), _english,
-                () => _timer.IsEnabled || _repairRunning) { Owner = this };
+                () => _timer.IsEnabled || _repairRunning,
+                load: releases is null ? null : _ => Task.FromResult(releases)) { Owner = this };
             var install = manager.ShowDialog() == true;
             if (manager.ReleaseLoadSucceeded)
             {
@@ -591,7 +626,7 @@ public partial class MainWindow : Window
         foreach (var textBlock in FindVisualChildren<TextBlock>(Root))
         {
             if (programInfo is not null && IsInside(textBlock, programInfo)) continue;
-            if (IsInside(textBlock, WindowsUpdatesHost) || IsInside(textBlock, SettingsPanel) || IsInside(textBlock, SettingsNoticePanel) || IsInside(textBlock, LogBox) || IsInside(textBlock, UserLogBox) || IsInside(textBlock, RepairLogBox) || IsInside(textBlock, UserList)) continue;
+            if (IsInside(textBlock, WindowsUpdatesHost) || IsInside(textBlock, SettingsPanel) || ReferenceEquals(textBlock, BellStatusText) || IsInside(textBlock, LogBox) || IsInside(textBlock, UserLogBox) || IsInside(textBlock, RepairLogBox) || IsInside(textBlock, UserList)) continue;
             if (!_baseTextSizes.TryGetValue(textBlock, out var baseSize))
                 _baseTextSizes[textBlock] = baseSize = textBlock.FontSize;
             textBlock.FontSize = Math.Round(baseSize * factor);
@@ -599,7 +634,7 @@ public partial class MainWindow : Window
         foreach (var button in FindVisualChildren<Button>(Root))
         {
             if (programInfo is not null && IsInside(button, programInfo)) continue;
-            if (IsInside(button, WindowsUpdatesHost) || IsInside(button, SettingsPanel) || IsInside(button, SettingsNoticePanel) || IsInside(button, LogBox) || IsInside(button, UserLogBox) || IsInside(button, RepairLogBox) || IsInside(button, UserList)) continue;
+            if (IsInside(button, WindowsUpdatesHost) || IsInside(button, SettingsPanel) || IsInside(button, LogBox) || IsInside(button, UserLogBox) || IsInside(button, RepairLogBox) || IsInside(button, UserList)) continue;
             if (!_baseButtonSizes.TryGetValue(button, out var baseSize))
                 _baseButtonSizes[button] = baseSize = button.FontSize;
             button.FontSize = Math.Round(baseSize * factor);
@@ -616,7 +651,7 @@ public partial class MainWindow : Window
         foreach (var icon in FindVisualChildren<Image>(Root))
         {
             if (programInfo is not null && IsInside(icon, programInfo)) continue;
-            if (IsInside(icon, SettingsPanel) || IsInside(icon, SettingsNoticePanel)) continue;
+            if (IsInside(icon, SettingsPanel)) continue;
             if (!_baseImageSizes.TryGetValue(icon, out var baseSize))
                 _baseImageSizes[icon] = baseSize = (icon.Width, icon.Height);
             icon.Width = baseSize.Width * factor;
@@ -1556,9 +1591,6 @@ public partial class MainWindow : Window
         RequestAdministratorOnLaunch.ToolTip = _english
             ? "Manual launches only; Windows autostart does not request UAC."
             : "Nur bei manuellem Start; Windows-Autostart bleibt ohne UAC-Abfrage.";
-        SettingsNoticeHeading.Text = _english ? "Bell status" : "Glocken-Status";
-        UpdateNoticeButton.ToolTip = _english ? "Show bell status" : "Glocken-Status anzeigen";
-        System.Windows.Automation.AutomationProperties.SetName(UpdateNoticeButton, UpdateNoticeButton.ToolTip.ToString()!);
         GitHubProjectButton.ToolTip = _english ? "Open GitHub project" : "GitHub-Projekt öffnen";
         SetComboContents(SizeBox, _english ? new[] { "Automatic", "Compact · 860 × 620", "Standard · 900 × 650", "Extended · 1050 × 670", "Large · 1200 × 760" } : new[] { "Automatisch", "Kompakt · 860 × 620", "Standard · 900 × 650", "Erweitert · 1050 × 670", "Groß · 1200 × 760" });
         SetComboContents(WarningSoundBox, _english
@@ -1660,9 +1692,6 @@ public partial class MainWindow : Window
             Resources[key] = name == "Classic"
                 ? new SolidColorBrush((Color)ColorConverter.ConvertFromString(classic)) : Resources[source];
         UpdateAdminBadgeBrush(IsAdmin(), name);
-        Resources["NoticeCurrentSurfaceBrush"] = new SolidColorBrush(BlendColor(card, (Color)ColorConverter.ConvertFromString(palette.Ready), 0.46));
-        Resources["NoticeConnectionSurfaceBrush"] = new SolidColorBrush(BlendColor(card, (Color)ColorConverter.ConvertFromString(actionColors[5]), 0.46));
-        Resources["NoticeAvailableSurfaceBrush"] = new SolidColorBrush(BlendColor(card, (Color)ColorConverter.ConvertFromString(actionColors[1]), 0.46));
         Resources["UpdateCheckCurrentBrush"] = new SolidColorBrush(BlendColor(button, (Color)ColorConverter.ConvertFromString(palette.Ready), 0.34));
         Resources["UpdateCheckFailedBrush"] = new SolidColorBrush(BlendColor(button, (Color)ColorConverter.ConvertFromString(actionColors[5]), 0.34));
         Resources["UpdateCheckAvailableBrush"] = new SolidColorBrush(BlendColor(button, (Color)ColorConverter.ConvertFromString(actionColors[1]), 0.34));

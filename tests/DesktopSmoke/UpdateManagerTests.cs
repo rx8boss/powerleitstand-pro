@@ -9,6 +9,90 @@ using PowerControlProWpf;
 
 internal static class UpdateManagerTests
 {
+    internal static int Bell(App app, string output)
+    {
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher));
+        UiSoundService.MuteForTests = true;
+        var main = new MainWindow(Path.Combine(output, "BellFixture"), new AppSettings { SizeIndex = 1 }) { ShowActivated = false };
+        void Assert(bool ok, string message) { if (!ok) throw new Exception(message); }
+        void Wait(Func<bool> done)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(8);
+            while (!done() && DateTime.UtcNow < deadline)
+            {
+                app.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+                Thread.Sleep(5);
+            }
+            Assert(done(), "Bell UI timed out");
+        }
+        try
+        {
+            main.Show();
+            var bell = (Button)main.FindName("UpdateNoticeButton");
+            var popup = (System.Windows.Controls.Primitives.Popup)main.FindName("SettingsNoticePopup");
+            void Click() => bell.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var status = (TextBlock)main.FindName("BellStatusText");
+            int loads = 0;
+            var pending = new TaskCompletionSource<IReadOnlyList<UpdateRelease>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            main.LoadBellReleases = _ => { loads++; return pending.Task; };
+            Click(); Click();
+            Assert(loads == 1 && popup.IsOpen && status.Text == "Prüfe …", "Repeated clicks share the in-flight request");
+            pending.SetResult([]);
+            Wait(() => status.Text == "Ist aktuell");
+            Assert(popup.IsOpen && ReferenceEquals(popup.Child, status), "Current release only displays the status");
+
+            Wait(() => status.ActualWidth > 0 && PresentationSource.FromVisual(status) is not null);
+            main.UpdateLayout();
+            var position = main.PointFromScreen(status.PointToScreen(new Point()));
+            var bellBounds = bell.TranslatePoint(new Point(), main);
+            Assert(Math.Abs(position.X + status.ActualWidth / 2 - bellBounds.X - bell.ActualWidth / 2) <= 2
+                && Math.Abs(position.Y - bellBounds.Y - bell.ActualHeight - 2) <= 2, "Single-line hint is centered immediately below the bell");
+            var screen = new RenderTargetBitmap((int)Math.Ceiling(main.ActualWidth), (int)Math.Ceiling(main.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            screen.Render(main);
+            var label = new RenderTargetBitmap((int)Math.Ceiling(status.ActualWidth), (int)Math.Ceiling(status.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            label.Render(status);
+            var composite = new DrawingVisual();
+            using (var drawing = composite.RenderOpen())
+            {
+                drawing.DrawImage(screen, new Rect(new Point(), main.RenderSize));
+                drawing.DrawImage(label, new Rect(position, status.RenderSize));
+            }
+            var preview = new RenderTargetBitmap(screen.PixelWidth, screen.PixelHeight, 96, 96, PixelFormats.Pbgra32);
+            preview.Render(composite);
+            var png = new PngBitmapEncoder();
+            png.Frames.Add(BitmapFrame.Create(preview));
+            using (var file = File.Create(Path.Combine(output, "Glocke-Ist-aktuell.png"))) png.Save(file);
+
+            Wait(() => !popup.IsOpen);
+
+            main.LoadBellReleases = _ => Task.FromException<IReadOnlyList<UpdateRelease>>(new System.Net.Http.HttpRequestException("offline fixture"));
+            Click();
+            Wait(() => status.Text == "Keine Verbindung");
+            Assert(popup.IsOpen && status.Text == "Keine Verbindung", "Network failure is visible and cannot appear current");
+
+            var version = new Version(AppVersion.Installed.Major + 1, 0, 0);
+            var update = new AvailableUpdate(version, "https://example.invalid/fixture.exe", new string('a', 64));
+            main.LoadBellReleases = _ => { loads++; return Task.FromResult<IReadOnlyList<UpdateRelease>>([new(update, "", DateTimeOffset.UtcNow)]); };
+            bool opened = false, selected = false;
+            var close = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
+            close.Tick += (_, _) =>
+            {
+                if (app.Windows.OfType<UpdateManagerWindow>().FirstOrDefault() is not { } window) return;
+                opened = true;
+                selected = window.LatestRelease?.Version == version && ((ListBox)window.FindName("VersionList")).SelectedIndex == 0;
+                window.Close();
+                close.Stop();
+            };
+            close.Start();
+            try { Click(); }
+            finally { close.Stop(); }
+            Assert(opened && selected && loads == 2 && !popup.IsOpen, "The same fetched release automatically opens selected in the update dialog");
+            Console.WriteLine("PASS bell refresh, duplicate click, current, offline and automatic update dialog");
+            return 0;
+        }
+        finally { main.Close(); }
+    }
+
     internal static int Run(App app, string output)
     {
         UiSoundService.MuteForTests = true;

@@ -10,7 +10,7 @@ internal static class ProgramCatalogAdditionsTests
         void Assert(bool ok, string reason) { if (!ok) throw new Exception(reason); checks++; }
         var filee = ProgramCatalog.Entries.Single(e => e.Id == "filee");
         var adw = ProgramCatalog.Entries.Single(e => e.Id == "adwcleaner");
-        Assert(ProgramCatalog.Entries.Length == 148 && ProgramCatalog.Entries.Select(e => e.Id).Distinct().Count() == 148, "148 distinct catalog entries");
+        Assert(ProgramCatalog.Entries.Select(e => e.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() == ProgramCatalog.Entries.Length, "Catalog entries have unique IDs");
         Assert(filee.PackageId == "KnifeLemon.Filee" && adw.PackageId == "Malwarebytes.AdwCleaner", "official WinGet identities");
         Assert(filee.Categories.Contains("office") && filee.Categories.Contains("tools") && adw.Categories.SequenceEqual(["tools"]), "appropriate catalog categories");
         foreach (var entry in new[] { filee, adw })

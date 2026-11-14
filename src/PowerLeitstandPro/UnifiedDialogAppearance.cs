@@ -77,8 +77,7 @@ internal static class UnifiedDialogAppearance
         var crosses = new List<Path>();
         foreach (var path in Children<Path>(button.Content))
         {
-            var geometry = System.Text.RegularExpressions.Regex.Replace(path.Data?.ToString() ?? "", @"[\s,]+", "");
-            if (kind == DialogButtonKind.Close || geometry is "M33L1616M163L316" or "M33L1717M173L317" or "M22L1818M182L218" or "M00L1212M120L012" or "M44L1818M184L418")
+            if (kind == DialogButtonKind.Close || CrossButtonAppearance.IsCross(path))
             {
                 crosses.Add(path);
                 path.SetBinding(Shape.StrokeProperty, new Binding

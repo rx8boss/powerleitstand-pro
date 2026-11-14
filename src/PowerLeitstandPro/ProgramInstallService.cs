@@ -107,6 +107,7 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
         };
     }
 
+    internal bool UsesWindowsInstallers => _realInventory;
     public event Action<ProgramStepEvent>? StepChanged;
     internal Task<bool> CloseForUpdateAsync(ProgramEntry entry, ProgramInstallation? proof, CancellationToken token)
     {
@@ -263,7 +264,7 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
     {
         token.ThrowIfCancellationRequested();
         InvalidateSaved(entry.Id);
-        if (!Approved(entry) || package.Id != PackageId(entry) || package.TargetProof is null || !package.CanInstall
+        if (!Approved(entry) || package.Id != PackageId(entry) || package.TargetProof is not { SupportsLocation: true } || !package.CanInstall
             || package.VersionSource != "WinGet" || package.ManagedPackage is not null
             || package.TargetProof.PackageId != package.Id || package.TargetProof.Version != package.Version
             || package.GitHubUpdate is not null || package.PortableUpdate is not null || _lastEvidence.ContainsKey(entry.Id))

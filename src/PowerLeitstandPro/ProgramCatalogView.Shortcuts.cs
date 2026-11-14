@@ -5,23 +5,33 @@ namespace PowerControlProWpf;
 
 internal sealed partial class ProgramCatalogView
 {
-    private void CreateDesktopShortcut(ProgramEntry entry, string? executable)
+    internal string CreateDesktopShortcut(ProgramEntry entry, string? executable)
     {
         try
         {
             var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             var outcome = SaveDesktopShortcut(entry.Name, executable, desktop);
-            WriteLog?.Invoke(entry.Name + ": " + (outcome switch
+            return Report(outcome switch
             {
                 true => L("Desktop-Verknüpfung erstellt.", "Desktop shortcut created."),
                 false => L("Desktop-Verknüpfung bereits vorhanden.", "Desktop shortcut already exists."),
                 null => L("Keine eindeutige Programmdatei für Desktop-Verknüpfung gefunden.", "No unambiguous executable found for the desktop shortcut.")
-            }));
+            });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or COMException or ArgumentException or InvalidOperationException)
         {
-            WriteLog?.Invoke(entry.Name + L(": Desktop-Verknüpfung fehlgeschlagen: ", ": Desktop shortcut failed: ") + UiText.Error(e, _english));
+            return Report(L("Desktop-Verknüpfung fehlgeschlagen: ", "Desktop shortcut failed: ") + UiText.Error(e, _english));
         }
+        string Report(string message) { WriteLog?.Invoke(entry.Name + ": " + message); return message; }
+    }
+
+    internal static string? DesktopExecutable(ProgramEntry entry, ProgramInstallation? proof)
+    {
+        if (proof?.LocationEvidence?.Alternatives is { Count: > 0 } || proof?.ManagedCopies is { Count: > 1 }) return null;
+        var path = proof?.LocationEvidence?.Executable ?? proof?.Path;
+        if (path is not null && File.Exists(path)) return path;
+        if (entry.Id != "adwcleaner" || proof?.Source is not ("Registry" or "WinGet")) return null;
+        return ProgramLocalInventory.AdwCleanerWinGetExecutable(proof.Version, path);
     }
 
     internal static bool? SaveDesktopShortcut(string name, string? executable, string desktop)

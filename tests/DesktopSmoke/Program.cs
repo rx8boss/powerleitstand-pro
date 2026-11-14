@@ -179,6 +179,7 @@ internal static class Program
             if (args.Contains("--winget-probe")) return WinGetTests.ProbeOnly();
             if (args.Contains("--install-dialog")) return InstallDialogTests.Run(app, output);
             if (args.Contains("--languages")) return LanguageTests.Run(app, output);
+            if (args.Contains("--update-bell")) return UpdateManagerTests.Bell(app, output);
             if (args.Contains("--updates")) return UpdateManagerTests.Run(app, output);
             if (args.Contains("--manager-exe")) return ManagerExeIntegration.Run(output, args.Last());
             // Regression: previous checks used non-active windows and missed Close -> Deactivated -> Close.

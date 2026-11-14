@@ -72,15 +72,16 @@ internal static class NeonPresentationTests
                 Theme(theme);
                 var outer = Glow(outline);
                 Assert(outer is { IsHitTestVisible: false }, theme + " Außenrahmen");
+                if (SystemParameters.ClientAreaAnimation) WaitFor(() => Clock()?.CurrentState == ClockState.Active);
                 var running = Clock();
                 Assert((running is not null) == SystemParameters.ClientAreaAnimation, theme + " folgt den Windows-Animationseinstellungen");
                 if (running is not null)
                 {
                     Call("BeginWindowDragPresentation");
-                    Pump();
+                    WaitFor(() => running.IsPaused);
                     Assert(running.IsPaused, theme + " pausiert beim Verschieben");
                     Call("EndWindowDragPresentation");
-                    Pump();
+                    WaitFor(() => !running.IsPaused);
                     Assert(!running.IsPaused, theme + " leuchtet nach dem Verschieben weiter");
                     running.Controller!.Pause();
                 }

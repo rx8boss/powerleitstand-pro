@@ -210,6 +210,28 @@ internal sealed partial class ProgramInfoCard
         AutomationProperties.SetName(detailsToggle, detailsToggle.ToolTip.ToString());
         detailsToggle.Click += (_, _) => { _details.Visibility = _details.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible; _sourceSummary.Text = SourceSummary(); };
         body.Children.Add(detailsToggle); body.Children.Add(_details);
+        if (view.Inventory.Installed.ContainsKey(entry.Id))
+        {
+            var shortcut = Action(L("Desktop-Verknüpfung erstellen", "Create desktop shortcut"));
+            shortcut.Name = "ProgramInfoDesktopShortcut";
+            shortcut.Margin = new(0, 8, 0, 0);
+            var result = Text("", 11, true);
+            shortcut.Click += async (_, _) =>
+            {
+                if (_closed || !view.CanChooseProgramFile) return;
+                _leave.Stop();
+                shortcut.IsEnabled = false;
+                try
+                {
+                    var proof = _singleEntryEvidence ?? view.Inventory.Evidence?.GetValueOrDefault(entry.Id);
+                    var executable = await Task.Run(() => ProgramCatalogView.DesktopExecutable(entry, proof));
+                    if (!_closed) result.Text = view.CreateDesktopShortcut(entry, executable);
+                }
+                catch (Exception error) when (ProgramPathResolver.ReadFailure(error)) { if (!_closed) result.Text = UiText.Error(error, view.English); }
+                finally { if (!_closed) { shortcut.IsEnabled = true; ResetIdle(); } }
+            };
+            body.Children.Add(shortcut); body.Children.Add(result);
+        }
         _error = Text("", 11, true); _error.Visibility = Visibility.Collapsed; body.Children.Add(_error);
         var scroll = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, CanContentScroll = false };
         if (entry.Id == "teamspeak") scroll.Content = _teamSpeak = new TeamSpeakInfoView(view, owner, Close);

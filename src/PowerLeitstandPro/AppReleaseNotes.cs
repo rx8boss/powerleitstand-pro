@@ -6,21 +6,21 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
-        Neu in Version 1.1.6 – Programme und Paketmanager
+        Neu in Version 1.1.7 – App-Updates und Programminstallation
 
-        • Neue Programme direkt aus dem Detaildialog installieren. Bei der Ersteinrichtung lässt sich eine Desktop-Verknüpfung auswählen.
-        • Windows Terminal: Ein bestätigtes Update für die Windows-App wird direkt über WinGet installiert und anschließend anhand der Windows-Paketversion geprüft.
-        • PSResourceGet: Eine fehlerhafte Benutzerinstallation der unterstützten Version kann repariert werden. Scheitert die Prüfung, wird die vorherige Kopie wiederhergestellt.
-        • Die Installationswarteschlange zeigt fehlende Installer und blockierte Updates mit einem Hinweis an.
+        • Ein Klick auf die Glocke sucht nach einem App-Update. Ist PowerLeitstand aktuell, erscheint kurz ein Hinweis unter der Glocke. Ist ein Update verfügbar, öffnet sich der Update-Dialog.
+        • Die Programminstallation zeigt an, ob die angeforderte Desktop-Verknüpfung erstellt wurde. Für AdwCleaner wird die ausführbare Datei auch im WinGet-Paketordner gesucht. Im Detaildialog installierter Programme lässt sich eine Verknüpfung nachträglich erstellen, wenn das Programm eindeutig zugeordnet werden kann.
+        • Bei einer Sammelinstallation teilen sich geeignete neue WinGet-Programme, die systemweit installiert werden, eine Windows-Adminabfrage.
+        • Die Schließen- und Abbruchsymbole in Dialogen reagieren einheitlicher, wenn der Mauszeiger darüberliegt.
         """;
 
     internal const string English = """
-        New in version 1.1.6 – Programs and package managers
+        New in version 1.1.7 – App updates and program installation
 
-        • Install new programs directly from their details. A desktop shortcut can be selected for a first installation.
-        • Windows Terminal: Verified updates for the Windows app are installed directly through WinGet and then checked against the Windows package version.
-        • PSResourceGet: A broken user installation of the supported version can be repaired. If verification fails, the previous copy is restored.
-        • The installation queue explains missing installers and blocked updates.
+        • Clicking the bell checks for an app update. If PowerLeitstand is up to date, a brief message appears below the bell. If an update is available, the update dialog opens.
+        • Program installation reports whether the requested desktop shortcut was created. AdwCleaner’s executable is also looked up in the WinGet package folder. A shortcut can be added from the details of an installed program when its executable can be identified unambiguously.
+        • In a batch installation, eligible new WinGet programs installed for all users share one Windows administrator prompt.
+        • Close and cancel icons in dialogs respond more consistently on hover.
         """;
 
     internal const string Current = "## Deutsch\n" + German + "\n\n## English\n" + English;

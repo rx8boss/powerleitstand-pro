@@ -79,11 +79,12 @@ internal static class CrossButtonAppearance
         RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(Border), 1)
     };
 
-    private static bool IsCross(Path path)
+    internal static bool IsCross(Path path)
     {
+        if (path.Tag is "DialogCross") return true;
         var data = Regex.Replace(path.Data?.ToString(CultureInfo.InvariantCulture) ?? "", @"[\s,]+", "");
         return data is "M33L1616M163L316" or "M33L1717M173L317"
-            or "M22L1818M182L218" or "M44L1818M184L418";
+            or "M22L1818M182L218" or "M44L1818M184L418" or "M00L1212M120L012";
     }
 
     private static ControlTemplate CreateTemplate()

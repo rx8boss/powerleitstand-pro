@@ -29,20 +29,20 @@ internal static class PortableAppUpdateTests
         var token = deadline.Token;
         string oldHash = await AppBackupStore.HashAsync(oldExe, token);
         string newHash = await AppBackupStore.HashAsync(newExe, token);
-        Assert(AppBackupStore.FileVersion(oldExe) == "1.1.4" && AppBackupStore.FileVersion(newExe) == "1.1.5",
-            "source binaries are 1.1.4 and 1.1.5");
+        Assert(AppBackupStore.FileVersion(oldExe) == "1.1.6" && AppBackupStore.FileVersion(newExe) == "1.1.7",
+            "source binaries are 1.1.6 and 1.1.7");
         var release = JsonSerializer.SerializeToElement(new
         {
-            tag_name = "v1.1.5",
+            tag_name = "v1.1.7",
             assets = new[] { new
             {
                 name = "PowerLeitstand-PRO.exe",
                 digest = "sha256:" + newHash,
-                browser_download_url = ProjectLinks.RepositoryUrl + "/releases/download/v1.1.5/PowerLeitstand-PRO.exe"
+                browser_download_url = ProjectLinks.RepositoryUrl + "/releases/download/v1.1.7/PowerLeitstand-PRO.exe"
             } }
         });
         var update = ReleaseAssetSelector.Select(release, new Version(1, 1, 4))
-            ?? throw new InvalidOperationException("Version 1.1.5 was not offered.");
+            ?? throw new InvalidOperationException("Version 1.1.7 was not offered.");
         using var client = new HttpClient(new ReleaseFixture(newExe));
         try
         {
@@ -50,8 +50,8 @@ internal static class PortableAppUpdateTests
             new AppSettings { Language = "en", Theme = "Classic", SizeIndex = 1, CheckUpdatesOnFirstOpen = false, EsuRegistrationConfirmed = true }
                 .Save(settingsFile);
             string settingsHash = await AppBackupStore.HashAsync(settingsFile, token);
-            backup = await store.CreateAsync(target, "1.1.4", "Isolated updater test", token);
-            Assert(await store.VerifyAsync(backup, token) && backup.Sha256 == oldHash, "backup matches the original 1.1.4 EXE");
+            backup = await store.CreateAsync(target, "1.1.6", "Isolated updater test", token);
+            Assert(await store.VerifyAsync(backup, token) && backup.Sha256 == oldHash, "backup matches the original 1.1.6 EXE");
 
             try
             {
@@ -61,22 +61,22 @@ internal static class PortableAppUpdateTests
             catch (InvalidDataException)
             {
                 Assert(!File.Exists(staged) && await AppBackupStore.HashAsync(target, token) == oldHash,
-                    "wrong SHA-256 rejects the download and keeps 1.1.4 intact");
+                    "wrong SHA-256 rejects the download and keeps 1.1.6 intact");
             }
 
             async Task Stage()
             {
                 await UpdateService.DownloadAndVerifyAsync(client, update, staged, null, token);
-                Assert(await AppBackupStore.HashAsync(staged, token) == newHash && AppBackupStore.FileVersion(staged) == "1.1.5",
-                    "download and SHA-256 match the genuine 1.1.5 EXE");
+                Assert(await AppBackupStore.HashAsync(staged, token) == newHash && AppBackupStore.FileVersion(staged) == "1.1.7",
+                    "download and SHA-256 match the genuine 1.1.7 EXE");
             }
 
             await Stage();
             var success = await UpdateRecovery.InstallAsync(target, staged, backup.BinaryPath,
-                () => ConfirmWindowAsync(fixture, target, "1.1.5"), () => Task.CompletedTask,
+                () => ConfirmWindowAsync(fixture, target, "1.1.7"), () => Task.CompletedTask,
                 () => throw new InvalidOperationException("A healthy update unexpectedly rolled back."), retainBackup: true);
             Assert(!success.Restored && await AppBackupStore.HashAsync(target, token) == newHash,
-                "replacement retained 1.1.5 after the WPF test window confirmed startup");
+                "replacement retained 1.1.7 after the WPF test window confirmed startup");
             Assert(await AppBackupStore.HashAsync(settingsFile, token) == settingsHash, "settings file remained identical after update");
 
             File.Copy(backup.BinaryPath, target, overwrite: true);
@@ -84,16 +84,16 @@ internal static class PortableAppUpdateTests
             Task<bool>? restarted = null;
             var failure = await UpdateRecovery.InstallAsync(target, staged, backup.BinaryPath, async () =>
             {
-                Assert(await AppBackupStore.HashAsync(target, token) == newHash, "1.1.5 was in place before the simulated failed start");
+                Assert(await AppBackupStore.HashAsync(target, token) == newHash, "1.1.7 was in place before the simulated failed start");
                 using var pipe = NewPipe(out _);
                 using var child = StartChild(fixture, "--portable-update-failed-start");
                 bool ready = await UpdateStartupConfirmation.WaitAsync(pipe, child, TimeSpan.FromSeconds(12));
                 await child.WaitForExitAsync(token);
                 Assert(!ready && child.ExitCode == 7, "process exited without a startup acknowledgement");
                 return false;
-            }, () => Task.CompletedTask, () => restarted = ConfirmWindowAsync(fixture, target, "1.1.4"), retainBackup: true);
+            }, () => Task.CompletedTask, () => restarted = ConfirmWindowAsync(fixture, target, "1.1.6"), retainBackup: true);
             Assert(failure.Restored && restarted is not null && await restarted && await AppBackupStore.HashAsync(target, token) == oldHash,
-                "rollback restored the exact 1.1.4 EXE before the WPF test window confirmed restart");
+                "rollback restored the exact 1.1.6 EXE before the WPF test window confirmed restart");
             Assert(await store.VerifyAsync(backup, token) && !File.Exists(staged) && !Directory.EnumerateFiles(fixture, "*.bak").Any(),
                 "verified backup retained without adjacent backup or staging files");
             Assert(await AppBackupStore.HashAsync(settingsFile, token) == settingsHash, "settings file remained identical after rollback");

@@ -6,7 +6,8 @@ using System.Text.RegularExpressions;
 
 namespace PowerControlProWpf;
 
-internal sealed record ProgramInstallTargetProof(string PackageId, string Version, string ManifestHash, string Kind, string Source);
+internal sealed record ProgramInstallTargetProof(string PackageId, string Version, string ManifestHash, string Kind, string Source,
+    bool SupportsLocation = true, bool RequiresMachineScope = false);
 
 internal static class ProgramInstallTargets
 {
@@ -26,7 +27,7 @@ internal static class ProgramInstallTargets
             using var limit = CancellationTokenSource.CreateLinkedTokenSource(token); limit.CancelAfter(TimeSpan.FromSeconds(8));
             var url = ManifestUri(package.Id, version);
             var bytes = await CatalogWeb.ReadAsync(url, Hosts, 512 * 1024, limit.Token).ConfigureAwait(false);
-            return Parse(package.Id, version, Encoding.UTF8.GetString(bytes), url.AbsoluteUri);
+            return ParseManifest(package.Id, version, Encoding.UTF8.GetString(bytes), url.AbsoluteUri);
         }
         catch (Exception e) when (e is IOException or System.Net.Http.HttpRequestException or OperationCanceledException or ArgumentException)
         { token.ThrowIfCancellationRequested(); return null; }
@@ -34,14 +35,17 @@ internal static class ProgramInstallTargets
     // A conservative reader for the ordinary Microsoft installer-manifest layout, not a general YAML parser.
     // Unsupported structures disable custom paths. These values never become installer arguments.
     internal static ProgramInstallTargetProof? Parse(string id, string version, string yaml, string source = "fixture")
+        => ParseManifest(id, version, yaml, source) is { SupportsLocation: true } proof ? proof : null;
+
+    internal static ProgramInstallTargetProof? ParseManifest(string id, string version, string yaml, string source = "fixture")
     {
         try
         {
             if (yaml.Length > 512 * 1024 || yaml.Contains('\t') || Regex.IsMatch(yaml, @"(?m)(?:^|\s)[&*!][A-Za-z_]|:\s*[|>]|^---|^\.\.\.")) return null;
             var lines = yaml.TrimStart('\uFEFF').Split('\n').Select(x => x.TrimEnd('\r'))
                 .Where(x => x.Trim().Length > 0 && !x.TrimStart().StartsWith('#')).ToArray();
-            // Even an unrecognized unsupported-arguments list is treated as a restriction.
-            if (lines.Any(x => Regex.IsMatch(x, @"^\s*UnsupportedArguments\s*:"))) return null;
+            bool supportsLocation = !lines.Any(x => Regex.IsMatch(x, @"^\s*UnsupportedArguments\s*:"));
+            bool requiresMachine = true;
             int start = Array.FindIndex(lines, x => x == "Installers:");
             if (start < 0 || lines.Count(x => x == "Installers:") != 1 || start + 1 == lines.Length) return null;
             int itemIndent = lines[start + 1].TakeWhile(c => c == ' ').Count();
@@ -67,11 +71,16 @@ internal static class ProgramInstallTargets
                 string? type = Value(block, indent, "InstallerType") ?? rootType;
                 if (type == "zip") type = Value(block, indent, "NestedInstallerType") ?? rootNested;
                 string? location = Switch(block, indent) ?? rootSwitch;
-                if (type is null || type is "msix" or "appx" or "msstore" || location is not null && !location.Contains("<INSTALLPATH>", StringComparison.Ordinal)) return null;
-                if (location is null && type is not ("inno" or "nullsoft" or "portable")) return null;
+                if (type is null) return null;
+                if (type is "msix" or "appx" or "msstore" || location is not null && !location.Contains("<INSTALLPATH>", StringComparison.Ordinal)
+                    || location is null && type is not ("inno" or "nullsoft" or "portable")) supportsLocation = false;
+                string? elevation = Value(block, indent, "ElevationRequirement") ?? Value(roots, 0, "ElevationRequirement");
+                string? scope = Value(block, indent, "Scope") ?? Value(roots, 0, "Scope");
+                requiresMachine &= scope == "machine" && elevation != "elevationProhibited"
+                    && type is not ("msix" or "appx" or "msstore" or "portable");
                 kinds.Add(type);
             }
-            return new(id, version, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(yaml))), string.Join(", ", kinds.Order()), source);
+            return new(id, version, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(yaml))), string.Join(", ", kinds.Order()), source, supportsLocation, requiresMachine);
         }
         catch (Exception e) when (e is FormatException or JsonException or InvalidOperationException) { return null; }
     }

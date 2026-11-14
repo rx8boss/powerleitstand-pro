@@ -28,6 +28,7 @@ internal sealed class ProgramPathResolver
     private static readonly Dictionary<string, Rule> Rules = new()
     {
         ["extra-electronicarts-eadesktop"] = new(["EADesktop.exe"], "EA|EA Desktop|EA App", "Electronic Arts", [@"Electronic Arts\EA Desktop\EA Desktop"]),
+        ["adwcleaner"] = new(["adwcleaner.exe"], "AdwCleaner", @"Malwarebytes(?: Inc\.?)?", []),
         ["node-js"] = new(["node.exe"], @"Node\.js", @"Node\.js|OpenJS Foundation|Node\.js Foundation", ["nodejs"]),
         ["putty"] = new(["putty.exe"], "PuTTY suite|PuTTY", "Simon Tatham", ["PuTTY"]),
         ["steam"] = new(["steam.exe"], "Steam", "Valve Corporation", ["Steam"], SeparateFileVersion: true),
@@ -116,6 +117,13 @@ internal sealed class ProgramPathResolver
         if (!_targets.TryGetValue(path, out string? target)) _targets[path] = target = LocalTarget(path, file: true);
         return target;
     }
+    internal ProgramPathEvidence? ResolveWinGetPortable(ProgramPathRegistration registration, ProgramEntry entry, string? target)
+    {
+        if (target is null || !Path.IsPathFullyQualified(target) || ExistingDirectory(registration.InstallLocation) is not { } directory
+            || !UsefulDirectory(directory) || !InDirectory(directory, target)) return null;
+        return Choose(registration, entry, [new(target, "WinGet portable", 0, true)], directory) is { Executable: not null } evidence ? evidence : null;
+    }
+
     private ProgramPathEvidence? ResolveCore(ProgramPathRegistration registration, ProgramEntry? entry, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -239,6 +247,9 @@ internal sealed class ProgramPathResolver
         ProgramPathFile file, bool anchored, Func<string, bool>? trustedEmptyPublisher = null)
     {
         if (HelperDescription.IsMatch(file.Description) || Helper.IsMatch(System.IO.Path.GetFileNameWithoutExtension(path))) return false;
+        if (entry?.Id == "adwcleaner" && anchored)
+            return Regex.IsMatch(System.IO.Path.GetFileName(path), @"\Aadwcleaner(?:_[\d.]+)?\.exe\z", RegexOptions.IgnoreCase)
+                && Exact(file.Product, "AdwCleaner") && Exact(file.Publisher, @"Malwarebytes(?: Inc\.?)?");
         if (entry is not null && Rules.TryGetValue(entry.Id, out var rule))
         {
             if (!rule.Files.Contains(System.IO.Path.GetFileName(path), StringComparer.OrdinalIgnoreCase) || !Exact(file.Product, rule.Products)) return false;
@@ -375,7 +386,7 @@ internal sealed class ProgramPathResolver
         try
         {
             if (!UsefulDirectory(folder) || ExistingDirectory(folder) is null) return;
-            if (entry is not null && Rules.TryGetValue(entry.Id, out var rule))
+            if (entry is not null && entry.Id != "adwcleaner" && Rules.TryGetValue(entry.Id, out var rule))
                 foreach (string name in rule.Files) found.Add(new(System.IO.Path.Combine(folder, name), source, priority, anchored));
             else foreach (string path in Directory.EnumerateFiles(folder, "*.exe", SearchOption.TopDirectoryOnly).Take(64))
                 found.Add(new(path, source, priority, anchored));

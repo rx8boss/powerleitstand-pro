@@ -69,6 +69,49 @@ internal static class ProgramDestinationTests
         Directory.CreateDirectory(target); File.WriteAllText(Path.Combine(target, "preserve.txt"), "user file");
         await Blocked(candidate, target, "occupied destination prevents execution");
         Assert(File.ReadAllText(Path.Combine(target, "preserve.txt")) == "user file", "existing target content preserved");
+        var adw = ProgramCatalog.Entries.Single(e => e.Id == "adwcleaner");
+        var portableRoot = Path.Combine(output, "AdwCleanerFixture");
+        Directory.CreateDirectory(portableRoot);
+        string executable = Path.Combine(portableRoot, "adwcleaner_8.8.1.exe");
+        File.Copy(Environment.ProcessPath!, executable, true);
+        var found = ProgramLocalInventory.AdwCleanerExecutable("8.8.1.639", [portableRoot], _ => ("AdwCleaner", "Malwarebytes Inc.", "8.8.1.639"));
+        Assert(found == executable, "The WinGet package folder resolves the versioned portable executable");
+        Assert(ProgramLocalInventory.AdwCleanerExecutable("8.8.1.639", [portableRoot], _ => ("AdwCleaner", "Other", "8.8.1.639")) is null,
+            "A different publisher cannot become the shortcut target");
+        var link = "AdwCleaner-Fixture-" + Guid.NewGuid().ToString("N");
+        Assert(ProgramCatalogView.SaveDesktopShortcut(link, found, portableRoot) == true
+            && ProgramPathResolver.ReadShortcut(Path.Combine(portableRoot, link + ".lnk")) == executable, "Portable package resolution creates a working link");
+        File.Copy(executable, Path.Combine(portableRoot, "adwcleaner.exe"), true);
+        Assert(ProgramLocalInventory.AdwCleanerExecutable("8.8.1.639", [portableRoot], _ => ("AdwCleaner", "Malwarebytes", "8.8.1.639")) is null, "Two matching copies stay ambiguous");
+
+        Assert(ProgramLocalInventory.AdwCleanerExecutable("8.8.1.639", [portableRoot], _ => ("AdwCleaner", "Malwarebytes", "8.8.1.639"), executable) == executable,
+            "The exact registered WinGet target resolves a portable alias without guessing");
+        string adminManifest = $"""
+            PackageIdentifier: {vlc.PackageId}
+            PackageVersion: 2.0
+            ManifestType: installer
+            InstallerType: wix
+            Scope: machine
+            ElevationRequirement: elevationRequired
+            Installers:
+            - Architecture: x64
+            """;
+        var machineProof = ProgramInstallTargets.ParseManifest(vlc.PackageId!, "2.0", adminManifest)!;
+        Assert(machineProof.RequiresMachineScope && !machineProof.SupportsLocation, "An administrator-only installer can be detected without custom path support");
+        Assert(ProgramInstallTargets.ParseManifest(vlc.PackageId!, "2.0", adminManifest.Replace("elevationRequired", "elevationProhibited"))?.RequiresMachineScope == false,
+            "Elevated batch excludes elevation-prohibited installers");
+        var machinePackage = candidate with { TargetProof = machineProof };
+        Assert(ProgramInstallElevation.Applies(new(vlc, machinePackage), empty, false)
+            && !ProgramInstallElevation.Applies(new(adw, Package(adw)), empty, false)
+            && !ProgramInstallElevation.Applies(new(vlc, machinePackage), empty, true), "Only supported machine installations use the elevated session");
+        var request = new ProgramInstallElevation.Request(vlc.Id, vlc.PackageId!, "2.0", machineProof.ManifestHash, null);
+        var verifiedCommand = await ProgramInstallElevation.VerifyCommandAsync(request, Environment.ProcessPath!, default, (_, _) => Task.FromResult<ProgramInstallTargetProof?>(machineProof));
+        Assert(verifiedCommand.ArgumentList.Contains("--scope") && verifiedCommand.ArgumentList.Contains("machine") && verifiedCommand.ArgumentList.Contains("--exact")
+            && verifiedCommand.ArgumentList.Contains("--no-upgrade") && !verifiedCommand.ArgumentList.Contains("--force"), "Elevated command pins the verified package and installation scope");
+        bool rejected = false;
+        try { await ProgramInstallElevation.VerifyCommandAsync(request with { Package = "Unrelated.Package" }, Environment.ProcessPath!, default); }
+        catch (IOException) { rejected = true; }
+        Assert(rejected, "Elevated helper rejects a package that differs from the catalog entry");
         Console.WriteLine($"PASS {checks} catalog-wide destination policy, selected-path execution, revalidation and conflict checks; controlled installer only"); return 0;
     }
 
