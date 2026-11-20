@@ -82,7 +82,7 @@ internal static class ProgramGitHubRemovalTests
         void Pump() => app.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
         void Wait(Task task) { var watch = Stopwatch.StartNew(); while (!task.IsCompleted && watch.Elapsed.TotalSeconds < 20) { Pump(); Thread.Sleep(5); } if (!task.IsCompleted) throw new TimeoutException(); task.GetAwaiter().GetResult(); Pump(); }
         var previousReader = ProgramRemovalDialog.Reader;
-        ProgramRemovalDialog.Reader = _ => [new("fixture", "DLSS Swapper", "beeradmoore", "1.2.6.1", @"C:\Program Files\DLSS Swapper\DLSS Swapper.exe", "Registry"), new("portable", "Ventoy", "Ventoy", "1.1.17", @"C:\Desktop\ventoy\Ventoy2Disk.exe", "Portable"), new("unknown", "Test ohne Versionsangabe", "Fixture", null, null, "Registry", Protected: true)];
+        ProgramRemovalDialog.Reader = _ => [new("fixture", "DLSS Swapper", "beeradmoore", "1.2.6.1", @"C:\Program Files\DLSS Swapper\DLSS Swapper.exe", "Registry"), new("portable", "Ventoy", "Ventoy", "1.1.17", @"C:\Desktop\ventoy\Ventoy2Disk.exe", "Portable"), new("unknown", "Test ohne Versionsangabe", "Fixture", null, null, "Registry")];
         try
         {
             foreach (string theme in new[] { "Standard", "Classic", "Neon Blau", "Neon Pink", "Neon Grün", "Linux Mint", "Dark" })
@@ -174,7 +174,7 @@ internal static class ProgramGitHubRemovalTests
             var task = ProgramRemovalDialog.ShowAsync(view);
             Until(() => Shows("AdwCleaner"));
             Click(Caption("Deinstallieren"));
-            Pump();
+            Until(() => Shows("Was wird entfernt?"));
             Assert(Shows("Programm deinstallieren") && Shows("Was wird entfernt?"), "List entry opens the confirmation.");
             Assert(Shows("Portable App · WinGet") && Shows("Windows kann Administratorrechte anfordern."), "WinGet route and permission hint are shown.");
             Click(Caption("Abbrechen"));

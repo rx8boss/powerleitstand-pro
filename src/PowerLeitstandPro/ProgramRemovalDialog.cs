@@ -103,6 +103,7 @@ internal static class ProgramRemovalDialog
         bool IsDefault(InstalledProgram p) => ProgramStoreApplications.Purpose(p.PackageFamily, false) is not null
             && (p.Inbox || provisioned.Contains(p.PackageFamily!));
         var removedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        bool CanList(InstalledProgram program) => !program.Protected && !removedIds.Contains(program.Id);
         InstalledProgram? confirming = null;
         bool narrowDialog = false;
         void Lock(bool value)
@@ -173,25 +174,12 @@ internal static class ProgramRemovalDialog
                 else if (p.WindowsDate is { } date) labels.Children.Add(Text(L("Windows-Datum · ", "Windows date · ") + date.ToShortDateString(), 10, true));
                 else labels.Children.Add(Text(L("Installationsdatum nicht ermittelbar", "Installation date unavailable"), 10, true));
                 labels.Children.Add(Text((p.Version ?? L("Version nicht ermittelbar", "Version unavailable")) + " · " + (p.Source.StartsWith("Portable") ? "Portable" : p.Source == "Windows-App" ? L("Windows-App · Paketversion", "Windows app · package version") : p.Source is "Scoop" or "Chocolatey" ? p.Source : L("Windows-Programmliste", "Windows installed programs")), 10.5, true));
-                if (p.Source == "Windows-App" && p.Protected) labels.Children.Add(Text(L("Geschützte Windows-App · kann hier nicht entfernt werden", "Protected Windows app · removal unavailable here"), 10.5, true));
                 if (selectedType == "defaults")
                     labels.Children.Add(Text((p.Inbox ? L("Mit Windows geliefert", "Windows inbox app") : L("Für dieses Windows-Abbild bereitgestellt", "Provisioned for this Windows image")) + " · " + ProgramStoreApplications.Purpose(p.PackageFamily, view.English), 11));
                 if (p.PackageVersion is { } packageVersion) labels.Children.Add(Text(L("Paketversion: ", "Package version: ") + packageVersion + L(" · Verwaltung über ", " · managed through ") + p.Source, 10.5, true));
                 if (p.MissingPortableFile) labels.Children.Add(Text(L("Programmdatei fehlt · WinGet-Eintrag vorhanden", "Program executable missing · WinGet registration remains"), 11));
                 var location = Text(p.Location is { Length: > 0 } path ? ProgramLocation.Shorten(path) : L("Speicherort nicht verfügbar", "Location unavailable"), 10.5, true); labels.Children.Add(location); row.Children.Add(labels);
-                var remove = Action(p.Source.StartsWith("Portable") ? L("EXE entfernen", "Remove EXE") : L("Deinstallieren", "Uninstall"), true); remove.IsEnabled = !p.Protected; remove.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(remove, 1); row.Children.Add(remove);
-                if (p.Protected && p.Source != "Windows-App")
-                {
-                    string reason = p.BlockReason switch
-                    {
-                        "policy" => L("Der Programmeintrag sperrt die Entfernung.", "Removal is disabled in the program registration."),
-                        "absent" => L("Kein Deinstaller registriert.", "No uninstaller registered."),
-                        "file" => L("Die registrierte Deinstallationsdatei fehlt.", "The registered uninstaller file is missing."),
-                        _ when p.Source is "Scoop" or "Chocolatey" => L("Entfernung über den zuständigen Paketmanager.", "Removal is managed by the package manager."),
-                        _ => L("Deinstallationsziel oder Befehl nicht bestätigt.", "Uninstall target or command could not be verified.")
-                    };
-                    labels.Children.Add(Text(reason, 11)); remove.ToolTip = reason;
-                }
+                var remove = Action(p.Source.StartsWith("Portable") ? L("EXE entfernen", "Remove EXE") : L("Deinstallieren", "Uninstall"), true); remove.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(remove, 1); row.Children.Add(remove);
                 remove.Click += async (_, _) =>
                 {
                     if (busy || p.Protected) return;
@@ -441,7 +429,7 @@ internal static class ProgramRemovalDialog
                     owner.Dispatcher.Invoke(() =>
                     {
                         if (closed || readToken.IsCancellationRequested) return;
-                        programs = found.Where(p => !removedIds.Contains(p.Id)).ToArray(); readComplete = true; loading.Dispose();
+                        programs = found.Where(CanList).ToArray(); readComplete = true; loading.Dispose();
                         if (!busy && confirming is null)
                         {
                             double offset = scroll.VerticalOffset; Render(); scroll.ScrollToVerticalOffset(offset); search.IsEnabled = category.IsEnabled = types.IsEnabled = true;
@@ -452,7 +440,7 @@ internal static class ProgramRemovalDialog
                 var found = await Task.Run(() => reader?.Invoke(readToken) ?? ProgramRemovalService.ReadWithLocations(readToken, new ProgramPathResolver(), target, fast: target is null, partial: Partial), readToken);
                 readToken.ThrowIfCancellationRequested();
                 if (closed) return;
-                found = found.Where(p => !removedIds.Contains(p.Id)).ToArray();
+                found = found.Where(CanList).ToArray();
                 programs = target is null ? found : found.Where(p => MatchesTarget(p, target, view.Inventory.Evidence?.GetValueOrDefault(target.Id))
                     && (exactLocation is null || p.Location is { } location && string.Equals(location.TrimEnd('\\'), exactLocation.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))).ToArray();
                 readComplete = true;

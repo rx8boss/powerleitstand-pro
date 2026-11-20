@@ -6,19 +6,17 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
-        Neu in Version 1.1.9 – Hotfix 2 zum Testen
+        Neu in Version 1.1.10 – Beta 1
 
-        • Die Programmliste zeigt im Microsoft-Store-Filter eigenständige Apps des angemeldeten Kontos. Optionale Windows-Standard-Apps lassen sich separat mit einer Erklärung zur Entfernung prüfen.
-        • Gesperrte Deinstallationsaktionen zeigen ihren Grund. Ein vorhandenes Windows-Datum wird gekennzeichnet. Registrierte Ersatzbefehle werden vor der Verwendung geprüft.
-        • Unter Einstellungen lässt sich auch eine portable Kopie entfernen. Der Dialog zeigt den Dateipfad und bietet Protokolle, Einstellungen mit Sound-Cache sowie Programmsicherungen einzeln zur Auswahl an.
+        • Auf Seite 4 erscheinen unter „Installierte Programme“ nur Programme und Apps, für die PowerLeitstand eine Deinstallation anbieten kann.
+        • Die Auswahl gilt bereits beim Laden sowie für die Suche, die Filter und die Anzahl der angezeigten Einträge.
         """;
 
     internal const string English = """
-        New in version 1.1.9 – Hotfix 2 for testing
+        New in version 1.1.10 – Beta 1
 
-        • The Microsoft Store filter lists standalone apps for the signed-in account. Optional Windows default apps have a separate view explaining the effect of removal.
-        • Disabled uninstall actions show their reason. The list labels dates supplied by Windows and checks registered alternative commands before use.
-        • Settings can remove a portable copy. The dialog shows the executable path and offers separate choices for logs, settings with the sound cache, and program backups.
+        • On page 4, the installed programs list shows only programs and apps that PowerLeitstand can offer to uninstall.
+        • The same selection applies while the list loads and when searching, filtering, or counting entries.
         """;
 
     internal const string Current = "## Deutsch\n" + German + "\n\n## English\n" + English;

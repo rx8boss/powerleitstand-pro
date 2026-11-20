@@ -45,7 +45,12 @@ internal static class ProgramRemovalHotfixTests
                 bool Shows(string text) => UnifiedDialogAppearance.Children<TextBlock>(Overlay()).Any(t => t.IsVisible && t.Text.Contains(text));
                 void ClickType(string type) => UnifiedDialogAppearance.Children<Button>(Overlay()).Single(b => b.Name == "InstalledType_" + type).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Until(() => Shows("Wintoys"));
-                Assert(Shows("3D Printer Manager"), "All filter includes programs and apps");
+                Assert(Shows("3D Printer Manager") && !Shows("Gesicherter Eintrag"), "All excludes blocked entries");
+                Assert(Shows(english ? "1 programs" : "1 Programme"), "Counter excludes blocked programs");
+                var search = UnifiedDialogAppearance.Children<TextBox>(Overlay()).Single();
+                search.Text = "Gesicherter Eintrag"; Pump();
+                Assert(Shows(english ? "No matching entries" : "Keine passenden Einträge") && !Shows("Gesicherter Eintrag"), "Search excludes blocked entries");
+                search.Clear();
                 ClickType("apps"); Pump();
                 Assert(Shows("Wintoys") && !Shows("3D Printer Manager"), "App filter excludes desktop programs");
                 Assert(!Shows("Wetter"), "Inbox entry excluded from Store filter");
@@ -62,7 +67,7 @@ internal static class ProgramRemovalHotfixTests
                     var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bmp)); using var file = File.Create(Path.Combine(output, "Installierte-Programme-und-Apps.png")); png.Save(file);
                 }
                 ClickType("defaults"); Pump(); Assert(Shows("Wetter") && !Shows("Wintoys"), "Dedicated view contains optional inbox app only");
-                ClickType("programs"); Pump(); Assert(Shows(english ? "registered uninstaller file is missing" : "Deinstallationsdatei fehlt"), "Reason visible for unavailable uninstall action"); Assert(Shows("3D Printer Manager") && !Shows("Wintoys"), "Program filter excludes apps");
+                ClickType("programs"); Pump(); Assert(!Shows("Gesicherter Eintrag"), "Programs exclude blocked entries"); Assert(Shows("3D Printer Manager") && !Shows("Wintoys"), "Program filter excludes apps");
                 UnifiedDialogAppearance.Children<Button>(Overlay()).Single(b => (b.Content as TextBlock)?.Text == (english ? "Close" : "Schließen")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Until(() => task.IsCompleted);
             }
