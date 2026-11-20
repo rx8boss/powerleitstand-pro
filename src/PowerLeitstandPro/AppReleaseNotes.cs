@@ -6,33 +6,21 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
-        Neu in Version 1.1.9 – Programme verwalten und Update-Kanäle auswählen
+        Neu in Version 1.1.9 – Hotfix 1 zum Testen
 
-        • Die Einzelprüfung im Programmkatalog berücksichtigt zusätzliche WinGet-Zuordnungen. Ein passender Updateweg wird nur bei eindeutig bestätigter Paketkennung, Programmbezeichnung und installierter Version angeboten.
-        • Portable WinGet-Programme werden erneut anhand ihrer Programmdatei geprüft. Fehlende Dateien und verbliebene WinGet-Einträge werden getrennt angezeigt; die Deinstallation verwendet den zugeordneten Eintrag und Installationsbereich.
-        • Desktop-Verknüpfungen berücksichtigen auch portable Programme mit versionsabhängigen EXE-Namen, beispielsweise AdwCleaner. Ziel und Ablage der Verknüpfung werden geprüft.
-        • Ein gemeinsamer Deinstallationsdialog zeigt Programm, Speicherort, Fortschritt und Ergebnis. Nach der Deinstallation wird gezielt dieses Programm erneut geprüft.
-        • In den Einstellungen kann PowerLeitstand selbst zur Deinstallation vorbereitet werden. Bei bestätigter WinGet-Zuordnung wird die Entfernung übergeben. Einstellungen und Protokolle bleiben standardmäßig erhalten; bei manuellen Kopien lässt sich der Programmordner öffnen.
-        • Der Update-Dialog hat eine feste Größe und zeigt bis zu drei vollständige Versionszeilen. Die gespeicherte Auswahl unterscheidet Nur stabil, Stabil + Hotfixes und ausschließlich Beta. Ohne passende Beta bleibt die Versionsliste leer.
-        • Die Updateprüfung erkennt nummerierte Hotfixes und Beta-Versionen auf GitHub. ZIP-Pakete werden vor dem Austausch anhand ihrer SHA-256-Prüfsumme und der enthaltenen EXE-Version geprüft.
-        • Optionale Updates erscheinen mit einem Zähler an der Glocke und kurzen Hinweisen darunter. Ist die stabile Version aktuell, bleibt die Glocke grün.
-        • Es werden bis zu acht geprüfte Programmsicherungen aufbewahrt. Nach erfolgreicher Erstellung einer weiteren Sicherung wird die älteste entfernt.
-        • Die deutsche Flagge in der Sprachauswahl wird wieder vollständig angezeigt.
+        • Installierte Programme erscheinen schrittweise. Die erste Liste benötigt keine vollständige Suche nach Programmdateien und Startmenü-Verknüpfungen. Die ausführliche Prüfung erfolgt beim ausgewählten Programm.
+        • Die Filter Alle, Programme und Windows-Apps trennen klassische Programme von Windows-App-Paketen. Suche und Kategorien lassen sich weiterhin kombinieren.
+        • Windows-Apps verwenden nach Möglichkeit ihren verständlichen Anzeigenamen. Zusätzliche App-Pakete können anhand ihrer eigenen bestätigten Paketidentität entfernt werden, unabhängig vom Programmkatalog.
+        • Vor jeder App-Entfernung werden Benutzerregistrierung, Paketversion und Schutzstatus erneut geprüft. Geschützte Windows-Pakete bleiben gesperrt. Die Deinstallation betrifft nur das aktuelle Windows-Konto.
         """;
 
     internal const string English = """
-        New in version 1.1.9 – Program management and update channels
+        New in version 1.1.9 – Hotfix 1 for testing
 
-        • Individual catalog checks support additional WinGet mappings. An update route is offered only when the package identifier, program name and installed version have been verified unambiguously.
-        • Portable WinGet programs are rechecked against their executable. Missing files and remaining WinGet registrations are shown separately; removal uses the matched registration and installation scope.
-        • Desktop shortcuts also support portable programs with versioned executable names, including AdwCleaner. The shortcut target and location are verified.
-        • A shared uninstall dialog shows the program, location, progress and result. Only the affected program is rechecked after removal.
-        • Settings can prepare removal of PowerLeitstand itself. A verified WinGet registration is handed over for removal. Settings and logs are kept by default; manually extracted copies offer access to their program folder.
-        • The update dialog has a fixed size and displays up to three complete version rows. The saved selection offers Stable only, Stable + hotfixes and Beta only. The version list remains empty when no matching beta is available.
-        • Update checks recognize numbered hotfixes and beta versions on GitHub. ZIP packages are verified against their SHA-256 checksum and executable version before replacement.
-        • Optional updates appear as a counter on the bell with short notices underneath. The bell stays green when the stable version is current.
-        • Up to eight verified application backups are retained. Once another backup has been created successfully, the oldest is removed.
-        • The German flag in the language selector is fully visible again.
+        • Installed programs appear progressively. The initial list no longer requires a complete executable and Start menu shortcut search. Detailed checks run for the selected program.
+        • All, Programs and Windows apps filters separate desktop programs from Windows app packages. Search and category filters can still be combined.
+        • Windows apps use friendly display names when available. Additional app packages can be removed using their own verified package identity, independently of the program catalog.
+        • User registration, package version and protection status are rechecked before every app removal. Protected Windows packages remain blocked. Removal affects only the current Windows account.
         """;
 
     internal const string Current = "## Deutsch\n" + German + "\n\n## English\n" + English;

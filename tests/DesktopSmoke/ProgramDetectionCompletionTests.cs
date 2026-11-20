@@ -31,7 +31,7 @@ internal static class ProgramDetectionCompletionTests
                 if (copies.Count == 1) Assert(merged[id].Version == copies[0].Location!.FileVersion && !merged[id].WinGetCompatible, "Live managed product version kept in its own source");
             }
             Assert(listed.Count(p => p.Source == "Windows-App") == store.Applications.Count, "All enumerated Store families represented in installed list");
-            Assert(listed.Where(p => p.Source == "Windows-App" && p.CatalogId is null).All(p => p.Protected), "Unknown Store families cannot inherit another uninstaller");
+            Assert(listed.Where(p => p.Source == "Windows-App").All(p => p.PackageFamily is not null), "Store families retain their own uninstall identity");
             File.WriteAllText(Path.Combine(output, "Lokaler-Abgleich-Privat.json"), JsonSerializer.Serialize(new
             { Checked = DateTimeOffset.Now, Milliseconds = watch.Elapsed.TotalMilliseconds, Managed = managed, ManagedMerged = merged,
                 Store = store, ListedStore = listed.Where(p => p.Source == "Windows-App"), ListedManaged = listed.Where(p => p.Source is "Scoop" or "Chocolatey"),
@@ -114,7 +114,8 @@ internal static class ProgramDetectionCompletionTests
         Assert(parsed.Single(p => p.Family.Equals("Vendor.App_abc123", StringComparison.OrdinalIgnoreCase)).Version == "2.0.0.0", "Duplicate family chooses current numeric version case-insensitively");
         Assert(parsed.All(p => p.Location == output) && parsed.Single(p => p.Family == "Vendor.Other_xyz321").Protected, "Store location and system protection retained");
         var unmapped = ProgramStoreApplications.Rows(parsed);
-        Assert(unmapped.Count == 2 && unmapped.All(p => p.CatalogId is null && p.Protected), "Unmapped Store apps visible without invented catalog identity or uninstaller");
+        Assert(unmapped.Count == 2 && unmapped.All(p => p.CatalogId is null && p.PackageFamily is not null)
+            && unmapped.Count(p => p.Protected) == 1, "Unmapped Store apps keep independent identity and system protection");
         var known = ProgramStoreApplications.Rows(ProgramStoreApplications.Parse(Json(Store(ProgramVersions.StoreFamilies["chatgpt"], "1.2.3.0")))).Single();
         Assert(known.CatalogId == "chatgpt" && known.Name == "ChatGPT" && !known.Protected, "Exact known family preserves existing catalog uninstall route");
         var unknownPath = ProgramStoreApplications.Parse(Json(new { PackageFamilyName = "Vendor.Path_abc123", Name = "Path", Version = "1.0.0.0", InstallLocation = @"\\server\share" })).Single();

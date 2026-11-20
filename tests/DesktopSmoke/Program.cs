@@ -121,6 +121,9 @@ internal static class Program
             if (args.Contains("--github-plan-probe")) return ProgramGitHubRemovalTests.Probe(output);
             if (args.Contains("--github-removal")) return ProgramGitHubRemovalTests.Run(app, output, args.Contains("--logic-only"));
             if (args.Contains("--removal-dialog")) return ProgramGitHubRemovalTests.Dialog(app, output);
+            if (args.Contains("--removal-hotfix")) return ProgramRemovalHotfixTests.Run(app, output);
+            if (args.Contains("--removal-hotfix-live")) return Task.Run(() => ProgramRemovalHotfixTests.Live(output)).GetAwaiter().GetResult();
+            if (args.Contains("--removal-hotfix-live-ui")) return ProgramRemovalHotfixTests.LiveUi(app, output);
             if (args.Contains("--app-uninstall")) return AppUninstallTests.Run(app, output);
             if (args.Contains("--app-update-channels")) return AppUpdateChannelTests.Run(app, output);
             if (args.Contains("--inspection-cache")) return ProgramInspectionCacheTests.Run(app, output, false);

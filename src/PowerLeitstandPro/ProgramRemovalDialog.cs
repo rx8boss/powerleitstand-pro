@@ -42,7 +42,7 @@ internal static class ProgramRemovalDialog
         var layout = new Grid(); layout.RowDefinitions.Add(new() { Height = GridLength.Auto }); layout.RowDefinitions.Add(new() { Height = GridLength.Auto }); layout.RowDefinitions.Add(new()); layout.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var header = new Grid { Margin = new(0, 0, 0, 12) }; header.ColumnDefinitions.Add(new() { Width = new GridLength(37) }); header.ColumnDefinitions.Add(new()); header.ColumnDefinitions.Add(new() { Width = new GridLength(28) });
         header.Children.Add(ProgramFallbackIcon.Create(27, "UnifiedAccent"));
-        var heading = Text(target is null ? L("Installierte Programme", "Installed programs") : L("Deinstallieren · ", "Uninstall · ") + target.Name, 20); heading.FontWeight = FontWeights.SemiBold; heading.Margin = new(0, 0, 55, 0); Grid.SetColumn(heading, 1); header.Children.Add(heading);
+        var heading = Text(target is null ? L("Installierte Programme und Apps", "Installed programs and apps") : L("Deinstallieren · ", "Uninstall · ") + target.Name, 20); heading.FontWeight = FontWeights.SemiBold; heading.Margin = new(0, 0, 55, 0); Grid.SetColumn(heading, 1); header.Children.Add(heading);
         var stripes = new System.Windows.Shapes.Path { Data = Geometry.Parse("M48,0 L50,0 L8,40 L6,40 Z M67,0 L69,0 L27,40 L25,40 Z M73,0 L87,0 L45,40 L31,40 Z"), Width = 50, Height = 30, Stretch = Stretch.Fill, Opacity = .2, HorizontalAlignment = HorizontalAlignment.Right, IsHitTestVisible = false };
         stripes.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "UnifiedAccent"); Grid.SetColumn(stripes, 1); header.Children.Add(stripes);
         var closeStyle = new Style(typeof(Button), (Style)owner.FindResource("ManagerDialogTextButton"));
@@ -60,12 +60,21 @@ internal static class ProgramRemovalDialog
         categoryOptions.AddRange(ProgramCatalog.Categories.Where(x => x != "all").Select(x => (x, ProgramCatalog.Category(x, view.English))));
         foreach (var option in categoryOptions) category.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Id });
         category.SelectedIndex = 0; AutomationProperties.SetName(category, L("Kategorie installierter Programme", "Installed program category")); Grid.SetRow(category, 2); layout.Children.Add(category);
+        layout.RowDefinitions.Insert(3, new RowDefinition { Height = GridLength.Auto });
+        var types = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new(0, 0, 0, 9), IsEnabled = false, Visibility = target is null ? Visibility.Visible : Visibility.Collapsed };
+        string selectedType = "all";
+        foreach (var option in new[] { (Id: "all", Label: L("Alle", "All")), (Id: "programs", Label: L("Programme", "Programs")), (Id: "apps", Label: L("Windows-Apps", "Windows apps")) })
+        {
+            var button = Action(option.Label); button.Tag = option.Id; button.Name = "InstalledType_" + option.Id; button.Margin = new(0, 0, option.Id == "apps" ? 0 : 6, 0);
+            types.Children.Add(button);
+        }
+        Grid.SetRow(types, 3); layout.Children.Add(types);
         var rows = new StackPanel(); var scroll = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        Grid.SetRow(scroll, 3); layout.Children.Add(scroll); DialogLayout.ScrollHint(scroll, view.English);
-        var loading = new ProgramInstalledLoading(view.English); Grid.SetRow(loading, 3); layout.Children.Add(loading);
+        Grid.SetRow(scroll, 4); layout.Children.Add(scroll); DialogLayout.ScrollHint(scroll, view.English);
+        var loading = new ProgramInstalledLoading(view.English); Grid.SetRow(loading, 4); layout.Children.Add(loading);
         search.IsEnabled = category.IsEnabled = false;
         var footer = new StackPanel { Margin = new(0, 10, 0, 0) }; var status = Text(L("Programme werden gelesen …", "Reading installed programs …"), 11, true); footer.Children.Add(status);
-        var finish = Action(L("Schließen", "Close"), true); finish.Width = 150; finish.Margin = new(0, 9, 0, 0); finish.HorizontalAlignment = HorizontalAlignment.Center; footer.Children.Add(finish); Grid.SetRow(footer, 4); layout.Children.Add(footer);
+        var finish = Action(L("Schließen", "Close"), true); finish.Width = 150; finish.Margin = new(0, 9, 0, 0); finish.HorizontalAlignment = HorizontalAlignment.Center; footer.Children.Add(finish); Grid.SetRow(footer, 5); layout.Children.Add(footer);
         var subtitle = Text("", 11, true);
         var title = new StackPanel { Margin = heading.Margin };
         heading.Margin = new Thickness(0);
@@ -88,6 +97,7 @@ internal static class ProgramRemovalDialog
         footer.Children.Add(removalActions);
         card.Child = layout; layer.Children.Add(card);
         IReadOnlyList<InstalledProgram> programs = [];
+        var removedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         InstalledProgram? confirming = null;
         bool narrowDialog = false;
         void Lock(bool value)
@@ -95,6 +105,7 @@ internal static class ProgramRemovalDialog
             busy = value;
             close.IsEnabled = finish.IsEnabled = back.IsEnabled = confirm.IsEnabled = !value;
             search.IsEnabled = category.IsEnabled = !value && readComplete;
+            types.IsEnabled = !value && readComplete;
             view.WorkStateChanged?.Invoke(value);
         }
         Border Frame(UIElement child)
@@ -106,9 +117,17 @@ internal static class ProgramRemovalDialog
         {
             confirming = null;
             narrowDialog = false;
-            heading.Text = target is null ? L("Installierte Programme", "Installed programs") : L("Deinstallieren · ", "Uninstall · ") + target.Name;
+            heading.Text = target is null ? L("Installierte Programme und Apps", "Installed programs and apps") : L("Deinstallieren · ", "Uninstall · ") + target.Name;
             subtitle.Visibility = removalActions.Visibility = Visibility.Collapsed;
             search.Visibility = category.Visibility = status.Visibility = finish.Visibility = Visibility.Visible;
+            types.Visibility = target is null ? Visibility.Visible : Visibility.Collapsed;
+            foreach (Button button in types.Children)
+            {
+                bool active = button.Tag as string == selectedType;
+                button.BorderThickness = new(active ? 2 : 1);
+                ((TextBlock)button.Content).FontWeight = active ? FontWeights.Bold : FontWeights.Normal;
+                AutomationProperties.SetHelpText(button, active ? L("Ausgewählt", "Selected") : "");
+            }
             Resize(null, null);
             rows.Children.Clear();
             if (target is not null && programs.Count == 0)
@@ -136,7 +155,7 @@ internal static class ProgramRemovalDialog
                     _ => categories.Contains(selectedCategory, StringComparer.OrdinalIgnoreCase)
                 };
             }
-            var visible = programs.Where(p => (p.Name + " " + p.Publisher).Contains(search.Text.Trim(), StringComparison.CurrentCultureIgnoreCase) && MatchesCategory(p));
+            var visible = programs.Where(p => MatchesType(p, selectedType) && (p.Name + " " + p.Publisher).Contains(search.Text.Trim(), StringComparison.CurrentCultureIgnoreCase) && MatchesCategory(p)).ToArray().AsEnumerable();
             if (selectedCategory == "recent") visible = visible.OrderByDescending(p => p.CatalogId is { } id ? view.InstalledAt(id) : null);
             foreach (var p in visible)
             {
@@ -148,6 +167,7 @@ internal static class ProgramRemovalDialog
                     labels.Children.Add(Text((knownId == latestId ? L("★ Zuletzt installiert · ", "★ Installed most recently · ") : L("Installiert am ", "Installed ")) + installedAt.ToLocalTime().ToString("g") + L(" · über diese App", " · through this app"), 10));
                 else labels.Children.Add(Text(L("Installationsdatum nicht ermittelbar", "Installation date unavailable"), 10, true));
                 labels.Children.Add(Text((p.Version ?? L("Version nicht ermittelbar", "Version unavailable")) + " · " + (p.Source.StartsWith("Portable") ? "Portable" : p.Source == "Windows-App" ? L("Windows-App · Paketversion", "Windows app · package version") : p.Source is "Scoop" or "Chocolatey" ? p.Source : L("Windows-Programmliste", "Windows installed programs")), 10.5, true));
+                if (p.Source == "Windows-App" && p.Protected) labels.Children.Add(Text(L("Geschützte Windows-App · kann hier nicht entfernt werden", "Protected Windows app · removal unavailable here"), 10.5, true));
                 if (p.PackageVersion is { } packageVersion) labels.Children.Add(Text(L("Paketversion: ", "Package version: ") + packageVersion + L(" · Verwaltung über ", " · managed through ") + p.Source, 10.5, true));
                 if (p.MissingPortableFile) labels.Children.Add(Text(L("Programmdatei fehlt · WinGet-Eintrag vorhanden", "Program executable missing · WinGet registration remains"), 11));
                 var location = Text(p.Location is { Length: > 0 } path ? ProgramLocation.Shorten(path) : L("Speicherort nicht verfügbar", "Location unavailable"), 10.5, true); labels.Children.Add(location); row.Children.Add(labels);
@@ -155,9 +175,23 @@ internal static class ProgramRemovalDialog
                 if (p.Protected) remove.ToolTip = p.Source is "Scoop" or "Chocolatey"
                     ? L("Über den vorhandenen Paketmanager verwalten; hier nur lesend erfasst.", "Manage through the existing package manager; listed read-only here.")
                     : L("Kein bestätigter Deinstallationsweg in dieser App; bei Bedarf über Windows verwalten.", "No verified uninstallation route in this app; manage through Windows if needed.");
-                remove.Click += (_, _) => { if (!busy && !p.Protected) ShowConfirmation(p); };
+                remove.Click += async (_, _) =>
+                {
+                    if (busy || p.Protected) return;
+                    Lock(true);
+                    status.Text = L("Ausgewähltes Programm wird geprüft …", "Checking selected program …");
+                    try
+                    {
+                        var verified = await Task.Run(() => ProgramRemovalService.ResolveForRemoval(p, readToken), readToken);
+                        if (!closed) ShowConfirmation(verified);
+                    }
+                    catch (OperationCanceledException) when (readToken.IsCancellationRequested) { }
+                    catch (Exception e) { if (!closed) status.Text = UiText.Error(e, view.English); }
+                    finally { if (!closed) Lock(false); }
+                };
                 rows.Children.Add(Frame(row));
             }
+            if (!visible.Any()) rows.Children.Add(Text(reading ? L("Diese Quelle wird noch geprüft …", "This source is still being checked …") : L("Keine passenden Einträge gefunden.", "No matching entries found."), 12, true));
             scroll.ScrollToTop();
         }
         void ShowConfirmation(InstalledProgram program)
@@ -167,7 +201,7 @@ internal static class ProgramRemovalDialog
             heading.Text = L("Programm deinstallieren", "Uninstall program");
             subtitle.Text = L("Seite 4 · Installierte Programme", "Page 4 · Installed programs");
             subtitle.Visibility = removalActions.Visibility = Visibility.Visible;
-            search.Visibility = category.Visibility = status.Visibility = finish.Visibility = Visibility.Collapsed;
+            search.Visibility = category.Visibility = types.Visibility = status.Visibility = finish.Visibility = Visibility.Collapsed;
             back.Content = L("Abbrechen", "Cancel");
             confirm.Visibility = Visibility.Visible;
             rows.Children.Clear();
@@ -257,6 +291,7 @@ internal static class ProgramRemovalDialog
                     return;
                 }
 
+                removedIds.Add(program.Id);
                 programs = programs.Where(x => x.Id != program.Id).ToArray();
                 try
                 {
@@ -355,6 +390,8 @@ internal static class ProgramRemovalDialog
         };
         finish.Click += (_, _) => Finish();
         search.TextChanged += (_, _) => { if (!busy && readComplete) Render(); };
+        foreach (Button button in types.Children)
+            button.Click += (_, _) => { if (!busy && readComplete) { selectedType = (string)button.Tag; Render(); } };
         category.SelectionChanged += (_, _) => { if (!busy && readComplete) Render(); };
         owner.SizeChanged += Resize; owner.PreviewKeyDown += Key; owner.Closed += OwnerClosed; view.Unloaded += Unloaded; view.IsVisibleChanged += ViewVisibilityChanged;
         host.Children.Add(layer); view.SelectionOpen = true; view.RefreshAvailability(); Resize(null, null);
@@ -362,15 +399,33 @@ internal static class ProgramRemovalDialog
         {
             try
             {
-                var found = await Task.Run(() => reader?.Invoke(readToken) ?? ProgramRemovalService.ReadWithLocations(readToken, new ProgramPathResolver(), target), readToken);
+                void Partial(IReadOnlyList<InstalledProgram> found)
+                {
+                    owner.Dispatcher.Invoke(() =>
+                    {
+                        if (closed || readToken.IsCancellationRequested) return;
+                        programs = found.Where(p => !removedIds.Contains(p.Id)).ToArray(); readComplete = true; loading.Dispose();
+                        if (!busy && confirming is null)
+                        {
+                            double offset = scroll.VerticalOffset; Render(); scroll.ScrollToVerticalOffset(offset); search.IsEnabled = category.IsEnabled = types.IsEnabled = true;
+                            status.Text = programs.Count + L(" Einträge · weitere Quellen werden geladen …", " entries · loading additional sources …");
+                        }
+                    });
+                }
+                var found = await Task.Run(() => reader?.Invoke(readToken) ?? ProgramRemovalService.ReadWithLocations(readToken, new ProgramPathResolver(), target, fast: target is null, partial: Partial), readToken);
                 readToken.ThrowIfCancellationRequested();
                 if (closed) return;
+                found = found.Where(p => !removedIds.Contains(p.Id)).ToArray();
                 programs = target is null ? found : found.Where(p => MatchesTarget(p, target, view.Inventory.Evidence?.GetValueOrDefault(target.Id))
                     && (exactLocation is null || p.Location is { } location && string.Equals(location.TrimEnd('\\'), exactLocation.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))).ToArray();
                 readComplete = true;
-                if (target is not null && programs.Count == 1 && !programs[0].Protected) ShowConfirmation(programs[0]);
-                else Render();
-                status.Text = programs.Count + L(" Programme gefunden · Windows, Paketmanager, Katalog-Portables und Store-Apps", " programs found · Windows, package managers, catalog portables and Store apps"); if (ProgramRemovalService.LastReadWarning is { } warning) status.Text += L("\nStore-Prüfung unvollständig: ", "\nStore check incomplete: ") + warning;
+                reading = false;
+                if (!busy && confirming is null)
+                {
+                    if (target is not null && programs.Count == 1 && !programs[0].Protected) ShowConfirmation(programs[0]);
+                    else { double offset = scroll.VerticalOffset; Render(); scroll.ScrollToVerticalOffset(offset); }
+                }
+                status.Text = programs.Count(p => p.Source != "Windows-App") + L(" Programme · ", " programs · ") + programs.Count(p => p.Source == "Windows-App") + L(" Windows-Apps", " Windows apps"); if (ProgramRemovalService.LastReadWarning is { } warning) status.Text += L("\nApp-Prüfung unvollständig: ", "\nApp check incomplete: ") + warning;
             }
             catch (OperationCanceledException) when (readToken.IsCancellationRequested) { }
             catch (Exception e)
@@ -386,11 +441,17 @@ internal static class ProgramRemovalDialog
             {
                 reading = false; loading.Dispose();
                 if (closed) cancellation.Dispose();
-                else search.IsEnabled = category.IsEnabled = readComplete && !busy;
+                else search.IsEnabled = category.IsEnabled = types.IsEnabled = readComplete && !busy;
             }
         }
         _ = Load(); return done.Task;
     }
+    internal static bool MatchesType(InstalledProgram program, string type) => type switch
+    {
+        "apps" => program.Source == "Windows-App",
+        "programs" => program.Source != "Windows-App",
+        _ => true
+    };
     internal static bool MatchesTarget(InstalledProgram program, ProgramEntry target, ProgramInstallation? proof)
     {
         if (program.CatalogId == target.Id) return true;

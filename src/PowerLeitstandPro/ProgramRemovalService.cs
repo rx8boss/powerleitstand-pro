@@ -10,7 +10,8 @@ namespace PowerControlProWpf;
 internal sealed record InstalledProgram(string Id, string Name, string Publisher, string? Version, string? Location,
     string Source, RegistryHive Hive = RegistryHive.CurrentUser, RegistryView View = RegistryView.Registry64,
     string? RegistryPath = null, string? Command = null, string? CatalogId = null, bool Protected = false,
-    ProgramPathEvidence? LocationEvidence = null, string? PackageVersion = null, string? WinGetProductCode = null, bool MissingPortableFile = false);
+    ProgramPathEvidence? LocationEvidence = null, string? PackageVersion = null, string? WinGetProductCode = null, bool MissingPortableFile = false,
+    string? PackageFamily = null, bool DetailsPending = false);
 internal sealed record ProgramRemainder(string Kind, string Path, string Description);
 
 internal sealed class ProgramRemovalService
@@ -19,8 +20,10 @@ internal sealed class ProgramRemovalService
     private const string UninstallRoot = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
     internal static IReadOnlyList<InstalledProgram> Read(CancellationToken token)
         => ReadWithLocations(token, new ProgramPathResolver());
-    internal static IReadOnlyList<InstalledProgram> ReadWithLocations(CancellationToken token, ProgramPathResolver locations, ProgramEntry? target = null)
+    internal static IReadOnlyList<InstalledProgram> ReadWithLocations(CancellationToken token, ProgramPathResolver locations, ProgramEntry? target = null,
+        bool fast = false, Action<IReadOnlyList<InstalledProgram>>? partial = null)
     {
+        fast &= target is null;
         var found = new List<InstalledProgram>();
         ProgramEntry[] entries = target is null ? ProgramCatalog.Entries : [target];
         bool knownTarget = target is null || ProgramCatalog.Contains(target);
@@ -44,21 +47,28 @@ internal sealed class ProgramRemovalService
                     string? version = ProgramVersions.ConfirmedVersion(key?.GetValue("DisplayVersion") as string);
                     var entry = catalog.Length == 1 ? catalog[0] : null;
                     var registration = ProgramPathResolver.Registration(key!, child, name, publisher, version, hive, view);
-                    var location = locations.Resolve(registration, entry, token);
+                    var location = fast ? null : locations.Resolve(registration, entry, token);
                     var code = ProgramLocalInventory.PortableWinGetProductCode(key!, child, entry?.PackageId);
-                    if (code is not null && entry is not null)
+                    if (!fast && code is not null && entry is not null)
                         location = ProgramLocalInventory.WinGetPortableLocation(key!, registration, entry, locations, location);
-                    bool missing = code is not null && location?.Executable is null
+                    bool missing = !fast && code is not null && location?.Executable is null
                         && ProgramLocalInventory.PortableWinGetFileMissing(registration.InstallLocation, key!.GetValue("PortableTargetFullPath") as string);
                     found.Add(new(hive + "|" + view + "|" + child, name, publisher,
-                        version, location?.Path, "Registry", hive, view, path, command,
+                        version, location?.Path ?? (fast ? RegisteredDirectory(registration.InstallLocation) : null), "Registry", hive, view, path, command,
                         knownTarget && catalog.Length == 1 ? catalog[0].Id : null, key?.GetValue("NoRemove") is int noRemove && noRemove == 1 || command is null,
-                        LocationEvidence: location, WinGetProductCode: code, MissingPortableFile: missing));
+                        LocationEvidence: location, WinGetProductCode: code, MissingPortableFile: missing, DetailsPending: fast));
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException or SecurityException) { }
             }
         }
-        var local = ProgramLocalInventory.Read(entries, token, includeManaged: false, pathResolver: locations);
+        if (fast) partial?.Invoke(Sort(found));
+        var local = new Dictionary<string, ProgramInstallation>();
+        if (fast)
+        {
+            foreach (var p in found.Where(p => p.CatalogId is not null)) local[p.CatalogId!] = new(p.Version, "Registry", p.Location);
+            ProgramLocalInventory.ReadPortable(entries, local, token);
+        }
+        else local = ProgramLocalInventory.Read(entries, token, includeManaged: false, pathResolver: locations);
         foreach (var pair in local.Where(p => p.Value.Source is "Portable" or "Portable-Setup"))
         {
             var entry = entries.Single(e => e.Id == pair.Key); var proof = pair.Value;
@@ -66,6 +76,7 @@ internal sealed class ProgramRemovalService
         }
         var managed = ProgramManagedInventory.Read(entries, token);
         found.AddRange(ProgramManagedInventory.Rows(entries, managed));
+        if (fast) partial?.Invoke(Sort(found));
         if (target is null || ProgramVersions.StoreFamilies.ContainsKey(target.Id))
         {
             ProgramStoreApplicationsSnapshot store;
@@ -75,8 +86,56 @@ internal sealed class ProgramRemovalService
             if (!store.Complete) LastReadWarning = store.Error;
             found.AddRange(ProgramStoreApplications.Rows(store.Applications).Where(p => target is null || p.CatalogId == target.Id));
         }
-        return found.DistinctBy(p => p.Source + "|" + p.Name + "|" + p.Version + "|" + p.Location + "|" + p.Command + "|" + (p.Source is "Scoop" or "Chocolatey" ? p.Id : p.WinGetProductCode is not null ? p.Hive.ToString() : ""), StringComparer.OrdinalIgnoreCase)
+        return Sort(found);
+    }
+
+    private static IReadOnlyList<InstalledProgram> Sort(IEnumerable<InstalledProgram> found)
+        => found.DistinctBy(p => p.Source + "|" + p.Name + "|" + p.Version + "|" + p.Location + "|" + p.Command + "|" + (p.Source == "Windows-App" ? p.Id : p.Source is "Scoop" or "Chocolatey" ? p.Id : p.WinGetProductCode is not null ? p.Hive.ToString() : ""), StringComparer.OrdinalIgnoreCase)
             .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+
+    private static string? RegisteredDirectory(string? path)
+    {
+        try { return path is not null && Path.IsPathFullyQualified(path) && ProgramPortableUpdates.PlainPath(path) && Directory.Exists(path) ? path : null; }
+        catch (Exception e) when (ProgramPathResolver.ReadFailure(e)) { return null; }
+    }
+
+    internal static InstalledProgram ResolveForRemoval(InstalledProgram program, CancellationToken token)
+    {
+        if (!program.DetailsPending || program.Source != "Registry") return program;
+        token.ThrowIfCancellationRequested();
+        using var root = RegistryKey.OpenBaseKey(program.Hive, program.View);
+        using var key = root.OpenSubKey(program.RegistryPath ?? throw new IOException("Programmeintrag fehlt. / Program registration missing."));
+        if (program.Protected || key is null || key.GetValue("NoRemove") is int noRemove && noRemove == 1
+            || key.GetValue("DisplayName") as string != program.Name || key.GetValue("UninstallString") as string != program.Command)
+            throw new IOException("Der Programmeintrag hat sich geändert. Bitte die Liste neu öffnen. / Program registration changed. Please reopen the list.");
+        var entry = ProgramCatalog.Entries.FirstOrDefault(e => e.Id == program.CatalogId);
+        var registration = ProgramPathResolver.Registration(key, key.Name[(key.Name.LastIndexOf('\\') + 1)..], program.Name, program.Publisher, program.Version, program.Hive, program.View);
+        var resolver = new ProgramPathResolver();
+        var location = resolver.Resolve(registration, entry, token);
+        if (program.WinGetProductCode is not null && entry is not null)
+            location = ProgramLocalInventory.WinGetPortableLocation(key, registration, entry, resolver, location);
+        bool missing = program.WinGetProductCode is not null && location?.Executable is null
+            && ProgramLocalInventory.PortableWinGetFileMissing(registration.InstallLocation, key.GetValue("PortableTargetFullPath") as string);
+        return program with { Location = location?.Path ?? RegisteredDirectory(registration.InstallLocation), LocationEvidence = location, MissingPortableFile = missing, DetailsPending = false };
+    }
+
+    internal static string StoreFamily(InstalledProgram program)
+    {
+        string? family = program.PackageFamily ?? ProgramVersions.StoreFamilies.GetValueOrDefault(program.CatalogId ?? "");
+        if (program.Source != "Windows-App" || !ProgramStoreApplications.ValidFamily(family)) throw new IOException("App-Paketidentität fehlt. / App package identity unavailable.");
+        return family!;
+    }
+
+    internal static ProcessStartInfo StoreUninstallCommand(InstalledProgram program)
+    {
+        if (program.Protected || !Version.TryParse(program.Version, out var version)) throw new IOException("App kann nicht sicher entfernt werden. / App cannot be safely removed.");
+        string family = StoreFamily(program);
+        var start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe")) { UseShellExecute = false, CreateNoWindow = true };
+        string script = "$ErrorActionPreference='Stop'; $p=@(Get-AppxPackage -PackageTypeFilter Main -ErrorAction Stop | Where-Object {$_.PackageFamilyName -eq '" + family
+            + "'}); if($p.Count -ne 1 -or $p[0].Version.ToString() -ne '" + version
+            + "'){throw 'App registration changed. Please reopen the list.'}; if($p[0].NonRemovable -or $p[0].IsFramework -or $p[0].IsResourcePackage){throw 'Protected Windows package'}; Remove-AppxPackage -Package $p[0].PackageFullName -ErrorAction Stop";
+        foreach (string arg in new[] { "-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script)) }) start.ArgumentList.Add(arg);
+        return start;
     }
 
     internal static ProcessStartInfo UninstallCommand(InstalledProgram program)
@@ -131,12 +190,7 @@ internal sealed class ProgramRemovalService
         if (program.Protected) throw new IOException("Kein bestätigter Deinstallationsweg. / No verified uninstaller.");
         if (program.Source == "Windows-App")
         {
-            string family = ProgramVersions.StoreFamilies.GetValueOrDefault(program.CatalogId ?? "") ?? throw new IOException("Store identity not confirmed");
-            if (!Regex.IsMatch(family, @"^[A-Za-z0-9._-]+$")) throw new IOException("Invalid Store family");
-            var start = new ProcessStartInfo(System.IO.Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe")) { UseShellExecute = false, CreateNoWindow = true };
-            string script = "$ErrorActionPreference='Stop'; $p=@(Get-AppxPackage -PackageTypeFilter Main | Where-Object {$_.PackageFamilyName -eq '" + family + "'}); if($p.Count -ne 1){throw 'Store identity changed'}; Remove-AppxPackage -Package $p[0].PackageFullName -ErrorAction Stop";
-            foreach (string arg in new[] { "-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script)) }) start.ArgumentList.Add(arg);
-            var result = await WinGetService.QueryAsync(start, CancellationToken.None);
+            var result = await WinGetService.QueryAsync(StoreUninstallCommand(program), CancellationToken.None);
             if (result.ExitCode != 0) throw new IOException(result.Output); return result.ExitCode;
         }
         if (program.Source is "Portable" or "Portable-Setup")
@@ -163,7 +217,7 @@ internal sealed class ProgramRemovalService
     internal static bool IsPresent(InstalledProgram program)
     {
         if (program.Source is "Portable" or "Portable-Setup") return File.Exists(program.Location);
-        if (program.Source == "Windows-App") return ProgramVersions.ReadStoreInstallationsAsync(CancellationToken.None).GetAwaiter().GetResult().ContainsKey(program.CatalogId!);
+        if (program.Source == "Windows-App") return ProgramStoreApplications.IsPresent(StoreFamily(program));
         return HasRegistration(program) || program.WinGetProductCode is not null
             && File.Exists(program.LocationEvidence?.Executable);
     }
@@ -189,6 +243,8 @@ internal sealed class ProgramRemovalService
     internal static IReadOnlyList<ProgramRemainder> ScanRemainders(InstalledProgram program)
     {
         var found = new List<ProgramRemainder>();
+        // Display names do not identify AppData or registry ownership for packaged apps.
+        if (program.Source == "Windows-App") return found;
         if (IsPresent(program)) return found;
         if (program.Location is { } exe && exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) ProgramGitHubUpdates.EnsureClosed(exe);
         if (SafeLeaf(program.Name))

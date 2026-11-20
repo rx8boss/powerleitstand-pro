@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Windows.ApplicationModel;
 using Windows.Management.Deployment;
 
 namespace PowerControlProWpf;
@@ -16,6 +17,11 @@ internal sealed record ProgramStoreApplicationsSnapshot(IReadOnlyList<ProgramSto
 // Catalog/startup scans keep their small, identity-verified family set.
 internal static class ProgramStoreApplications
 {
+    internal static bool ValidFamily(string? family) => family is { Length: > 0 and <= 256 }
+        && Regex.IsMatch(family, @"\A[A-Za-z0-9.-]+_[A-Za-z0-9]+\z");
+    internal static string FriendlyName(string name, string? candidate)
+        => !string.IsNullOrWhiteSpace(candidate) && candidate.Length <= 250
+            && !candidate.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase) ? candidate.Trim() : name;
     internal static async Task<ProgramStoreApplicationsSnapshot> ReadAsync(CancellationToken token,
         Func<CancellationToken, Task<IReadOnlyList<ProgramStoreApplication>>>? primary = null,
         Func<CancellationToken, Task<IReadOnlyList<ProgramStoreApplication>>>? fallback = null)
@@ -52,6 +58,16 @@ internal static class ProgramStoreApplications
             string name = id.Name, publisher = id.Publisher, directory = "";
             try { if (!string.IsNullOrWhiteSpace(package.DisplayName)) name = package.DisplayName; }
             catch (Exception e) when (Failure(e)) { }
+            if (name == id.Name || Guid.TryParse(name, out _) || name.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var appEntries = package.GetAppListEntriesAsync().AsTask(token).GetAwaiter().GetResult();
+                    var names = appEntries.Select(e => e.DisplayInfo.DisplayName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToArray();
+                    if (names.Length == 1) name = FriendlyName(name, names[0]);
+                }
+                catch (Exception e) when (Failure(e)) { token.ThrowIfCancellationRequested(); }
+            }
             try { if (!string.IsNullOrWhiteSpace(package.PublisherDisplayName)) publisher = package.PublisherDisplayName; }
             catch (Exception e) when (Failure(e)) { }
             try { directory = package.InstalledLocation?.Path ?? ""; }
@@ -67,8 +83,10 @@ internal static class ProgramStoreApplications
     {
         var command = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"))
             { UseShellExecute = false, CreateNoWindow = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
-        string script = "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); "
-            + "@(Get-AppxPackage -PackageTypeFilter Main -ErrorAction Stop | Select-Object PackageFamilyName,Name,"
+        string script = "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); $names=@{}; "
+            + "try { Get-StartApps -ErrorAction Stop | ForEach-Object { $family=($_.AppID -split '!',2)[0]; if(!$names.ContainsKey($family)){$names[$family]=$_.Name} } } catch {} ; "
+            + "@(Get-AppxPackage -PackageTypeFilter Main -ErrorAction Stop | Select-Object PackageFamilyName,"
+            + "@{Name='Name';Expression={if($names.ContainsKey($_.PackageFamilyName)){$names[$_.PackageFamilyName]}else{$_.Name}}},"
             + "@{Name='Publisher';Expression={$_.Publisher}},@{Name='Version';Expression={$_.Version.ToString()}},"
             + "InstallLocation,NonRemovable) | ConvertTo-Json -Compress";
         foreach (string arg in new[] { "-NoProfile", "-NonInteractive", "-Command", script }) command.ArgumentList.Add(arg);
@@ -90,13 +108,13 @@ internal static class ProgramStoreApplications
             string? Text(string field) => row.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
             bool Flag(string field) => row.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.True;
             string? family = Text("PackageFamilyName"), version = Text("Version"), name = Text("Name");
-            if (family is null || family.Length > 256 || !Regex.IsMatch(family, @"^[A-Za-z0-9.-]+_[A-Za-z0-9]+$")
+            if (!ValidFamily(family)
                 || name is null || name.Length is 0 or > 250 || !System.Version.TryParse(version, out var parsed)
                 || Flag("IsFramework") || Flag("IsResourcePackage") || Flag("IsBundle") || Flag("IsOptional")) continue;
             string? directory = Text("InstallLocation");
             if (directory is null || !Path.IsPathFullyQualified(directory) || directory.StartsWith(@"\\", StringComparison.Ordinal)
                 || !Directory.Exists(directory)) directory = null;
-            found.Add(new(family, name, Text("Publisher") ?? "", parsed.ToString(), directory, Flag("NonRemovable")));
+            found.Add(new(family!, name, Text("Publisher") ?? "", parsed.ToString(), directory, Flag("NonRemovable")));
         }
         // The same family may have architecture/staging rows. Keep one deterministic
         // current-user version per family; never combine identities by display name.
@@ -110,9 +128,21 @@ internal static class ProgramStoreApplications
         {
             string? id = ProgramVersions.StoreFamilies.FirstOrDefault(p => p.Value.Equals(app.Family, StringComparison.OrdinalIgnoreCase)).Key;
             var entry = ProgramCatalog.Entries.FirstOrDefault(e => e.Id == id);
-            // New families are listed, but cannot inherit another app's uninstaller
-            // or WinGet route merely because their display names look similar.
             return new InstalledProgram("store|" + app.Family, entry?.Name ?? app.Name, entry?.Publisher ?? app.Publisher,
-                app.Version, app.Location, "Windows-App", CatalogId: id, Protected: app.Protected || entry is null);
+                app.Version, app.Location, "Windows-App", CatalogId: id, Protected: app.Protected, PackageFamily: app.Family);
         }).ToArray();
+
+    internal static bool IsPresent(string family)
+    {
+        if (!ValidFamily(family)) throw new IOException("App-Paketidentität fehlt. / App package identity unavailable.");
+        try { return new PackageManager().FindPackagesForUser(string.Empty, family).Any(p => p.Id.FamilyName.Equals(family, StringComparison.OrdinalIgnoreCase)); }
+        catch (Exception e) when (Failure(e))
+        {
+            var start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe")) { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var arg in new[] { "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; @(Get-AppxPackage -PackageTypeFilter Main | Where-Object {$_.PackageFamilyName -eq '" + family + "'}).Count" }) start.ArgumentList.Add(arg);
+            var result = WinGetService.QueryAsync(start, CancellationToken.None).GetAwaiter().GetResult();
+            if (result.ExitCode != 0 || !int.TryParse(result.Output.Trim(), out int count)) throw new IOException("App-Entfernung konnte nicht geprüft werden. / App removal could not be verified.");
+            return count > 0;
+        }
+    }
 }

@@ -8,7 +8,8 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 [xml]$project = Get-Content -LiteralPath (Join-Path $projectRoot 'src/PowerLeitstandPro/PowerControlProWpf.csproj') -Raw
 $version = [string]$project.Project.PropertyGroup.Version
-if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Version muss drei Zahlen enthalten / Version must contain three numbers.' }
+if ($version -notmatch '^\d+\.\d+\.\d+(?:-(?:hotfix|beta)\.[1-9]\d*)?$') { throw 'Ungültige Release-Version / Invalid release version.' }
+$numericVersion = ($version -split '-')[0]
 $source = Get-Content -LiteralPath (Join-Path $projectRoot 'src/PowerLeitstandPro/AppReleaseNotes.cs') -Raw
 function Read-Language([string]$name) {
     $match = [regex]::Match($source, '(?s)const string ' + $name + ' = """\r?\n(.*?)\r?\n        """;')
@@ -33,7 +34,7 @@ if (!$Exe) { throw 'EXE für vollständige Versionsprüfung angeben / Supply -Ex
 $binary = Get-Item -LiteralPath $Exe
 $fileVersion = [version]$binary.VersionInfo.FileVersion
 $productVersion = ($binary.VersionInfo.ProductVersion -split '\+')[0]
-if ($fileVersion.ToString(3) -ne $version -or $productVersion -ne $version) { throw 'EXE- und Projektversion weichen ab / EXE and project versions differ.' }
+if ($fileVersion.ToString(3) -ne $numericVersion -or $productVersion -ne $version) { throw 'EXE- und Projektversion weichen ab / EXE and project versions differ.' }
 Write-Output "PASS RELEASE $version : project, EXE file/product version, DE/EN changelogs ($deCount changes each), app/release text agreement."
 Write-Output "Release text: $notesPath"
 if ($PublicZip) {
@@ -84,7 +85,7 @@ if ($GitHubReleaseJson) {
     $release = Get-Content -LiteralPath $GitHubReleaseJson -Raw | ConvertFrom-Json
     if (@($release.assets | Where-Object name -match '(?i)testbericht|test[ _-]?report').Count -gt 0) { throw 'Privater Prüfbericht in Release-Dateien / Private report in release assets.' }
     $asset = @($release.assets | Where-Object name -eq 'PowerLeitstand-PRO.exe')
-    if ($release.tag_name -cne "v$version" -or $release.draft -or $release.prerelease -or $asset.Count -ne 1) { throw 'GitHub-Version oder EXE-Auswahl falsch / GitHub version or EXE selection mismatch.' }
+    if ($release.tag_name -cne "v$version" -or $release.draft -or $release.prerelease -ne $version.Contains('-') -or $asset.Count -ne 1) { throw 'GitHub-Version oder EXE-Auswahl falsch / GitHub version or EXE selection mismatch.' }
     if ($release.body.Replace("`r", '').Trim() -cne $expected.Trim()) { throw 'GitHub-Changelog weicht ab / GitHub changelog mismatch.' }
     $digest = 'sha256:' + (Get-FileHash -LiteralPath $binary.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($asset[0].digest -cne $digest) { throw 'GitHub-EXE stimmt nicht überein / GitHub EXE digest mismatch.' }

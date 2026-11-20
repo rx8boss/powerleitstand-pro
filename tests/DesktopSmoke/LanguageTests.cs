@@ -50,7 +50,8 @@ internal static class LanguageTests
         }
         try
         {
-            Assert(AppVersion.Installed.ToString() == "1.1.9" && AppVersion.UserAgent.EndsWith("/1.1.9"), "assembly version and update user agent agree");
+            string? releaseVersion = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(AppVersion).Assembly)?.InformationalVersion.Split('+')[0];
+            Assert(AppBuild.Parse(releaseVersion)?.Version == AppVersion.Installed && AppVersion.UserAgent.EndsWith("/" + releaseVersion), "assembly version, channel and update user agent agree");
             Assert(AppReleaseNotes.Select(AppReleaseNotes.Current, false) == AppReleaseNotes.German.Trim(), "complete German changelog selected");
             Assert(AppReleaseNotes.Select(AppReleaseNotes.Current, true) == AppReleaseNotes.English.Trim(), "complete English changelog selected");
             Assert(AppReleaseNotes.German.Count(c => c == '•') == AppReleaseNotes.English.Count(c => c == '•'), "equal number of release changes in both languages");
