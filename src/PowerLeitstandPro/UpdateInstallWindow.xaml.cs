@@ -10,9 +10,12 @@ namespace PowerControlProWpf;
 
 public partial class UpdateInstallWindow : Window
 {
-    internal UpdateInstallWindow(ThemePalette palette, bool english, Version installed, AvailableUpdate update)
+    internal AvailableUpdate SelectedUpdate { get; private set; }
+
+    internal UpdateInstallWindow(ThemePalette palette, bool english, Version installed, AvailableUpdate update, AvailableUpdate? alternative = null)
     {
         InitializeComponent();
+        SelectedUpdate = update;
         Brush Solid(string value) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(value));
         foreach (var (key, index) in new[] { ("DialogBackground", 0), ("DialogText", 5), ("DialogSubtleText", 6), ("DialogInput", 4), ("DialogLine", 8) })
             Resources[key] = Solid(palette.Colors[index]);
@@ -54,8 +57,48 @@ public partial class UpdateInstallWindow : Window
         UnifiedDialogAppearance.Buttons(this, palette);
         RestartText.Margin = new Thickness(0, 0, 0, 8);
         SafetyText.Margin = new Thickness(0); SafetyText.FontSize = 13;
-        var body = DialogLayout.Stack(DialogLayout.Field(InstalledCaption, InstalledText, palette),
-            DialogLayout.Field(TargetCaption, TargetText, palette), RestartText, SafetyText, OlderVersionText);
+        System.Windows.Controls.StackPanel body;
+        if (alternative is null)
+        {
+            body = DialogLayout.Stack(DialogLayout.Field(InstalledCaption, InstalledText, palette),
+                DialogLayout.Field(TargetCaption, TargetText, palette), RestartText, SafetyText, OlderVersionText);
+        }
+        else
+        {
+            Resources["DialogAccent"] = Solid(palette.Colors[7]);
+            var hotfix = update.Channel == UpdateChannel.Hotfix ? update : alternative;
+            var stable = update.Channel == UpdateChannel.Stable ? update : alternative;
+            HeaderText.Text = english ? "Install update" : "Update installieren";
+            Title = "PowerLeitstand PRO · " + HeaderText.Text;
+            TargetCaption.Text = english ? "Update channel" : "Update-Kanal";
+            TargetText.Text = english ? "Stable + hotfixes" : "Stabil + Hotfixes";
+            EditionPrompt.Text = english ? "Which edition would you like to install?" : "Welche Fassung möchtest du installieren?";
+            HotfixEdition.Content = english ? $"{hotfix.Version} with Hotfix {hotfix.Revision}" : $"{hotfix.Version} mit Hotfix {hotfix.Revision}";
+            HotfixEdition.Tag = english ? $"Latest hotfix for version {hotfix.Version}" : $"Neuester Hotfix für Version {hotfix.Version}";
+            StableEdition.Content = english ? $"{stable.Version} without hotfix" : $"{stable.Version} ohne Hotfix";
+            StableEdition.Tag = stable.Build == currentBuild ? (english ? "Already installed" : "Bereits installiert")
+                : (english ? "Install the stable base version" : "Stabile Grundversion installieren");
+            CancelCaption.Text = english ? "Back to versions" : "Zur Versionsliste";
+            CancelIcon.Data = Geometry.Parse("M 8,0 L 2,6 L 8,12 M 2,6 L 14,6");
+            CancelIcon.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "DialogAccent");
+            UnifiedDialogAppearance.Button(this, CancelButton, DialogButtonKind.Primary);
+            System.Windows.Automation.AutomationProperties.SetName(CancelButton, CancelCaption.Text);
+            void SelectEdition(AvailableUpdate selected)
+            {
+                SelectedUpdate = selected;
+                ConfirmButton.IsEnabled = selected.Build != currentBuild;
+                ConfirmCaption.Text = selected.Channel == UpdateChannel.Hotfix
+                    ? (english ? "Install with hotfix" : "Mit Hotfix installieren")
+                    : (english ? "Install stable version" : "Grundversion installieren");
+                OlderVersionText.Visibility = selected.Build.CompareTo(currentBuild) < 0 ? Visibility.Visible : Visibility.Collapsed;
+                OlderVersionText.Text = english ? "Earlier versions may not contain all current features." : "Ältere Versionen enthalten möglicherweise nicht alle aktuellen Funktionen.";
+                System.Windows.Automation.AutomationProperties.SetName(ConfirmButton, ConfirmCaption.Text);
+            }
+            HotfixEdition.Checked += (_, _) => SelectEdition(hotfix);
+            StableEdition.Checked += (_, _) => SelectEdition(stable);
+            (update.Channel == UpdateChannel.Hotfix ? HotfixEdition : StableEdition).IsChecked = true;
+            body = DialogLayout.Stack(VersionSummary, EditionChoices, SafetyText, OlderVersionText);
+        }
         DialogLayout.Compose(this, DialogFrame, palette, HeaderText.Text, english, body,
             DialogLayout.Actions(ConfirmButton, CancelButton), HeaderCloseButton);
     }

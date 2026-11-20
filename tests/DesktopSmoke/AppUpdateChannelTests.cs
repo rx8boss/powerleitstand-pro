@@ -101,6 +101,37 @@ internal static class AppUpdateChannelTests
         try
         {
             main.Show(); Pump();
+            var baseRelease = new AvailableUpdate(upcoming, "stable.exe", new string('b', 64));
+            var fix = baseRelease with { Channel = UpdateChannel.Hotfix, Revision = 10, DownloadUrl = "hotfix.zip", Sha256 = new string('c', 64) };
+            foreach (var english in new[] { false, true })
+            foreach (var action in new[] { "default", "switch", "manual", "cancel", "stable-only", "no-hotfix" })
+            {
+                var candidates = new List<UpdateRelease> { new(baseRelease, "", default) };
+                if (action != "no-hotfix") candidates.Add(new(fix, "", default));
+                var manager = new UpdateManagerWindow(ThemePalette.For("Standard"), english, () => false,
+                    load: _ => Task.FromResult<IReadOnlyList<UpdateRelease>>(candidates),
+                    preference: action == "stable-only" ? UpdatePreference.Stable : UpdatePreference.Hotfixes) { Owner = main };
+                manager.ContentRendered += (_, _) => manager.Dispatcher.BeginInvoke(() =>
+                {
+                    var list = (ListBox)manager.FindName("VersionList");
+                    if (action == "manual") list.SelectedIndex = 1;
+                    manager.Dispatcher.BeginInvoke(() =>
+                    {
+                        var confirm = manager.OwnedWindows.OfType<UpdateInstallWindow>().Single();
+                        var radio = (RadioButton)confirm.FindName("StableEdition");
+                        Assert(radio.IsVisible == (action is not ("stable-only" or "no-hotfix")), "Paired choices only for an applicable hotfix.");
+                        if (action == "switch") radio.IsChecked = true;
+                        if (action == "default" && !english)
+                            Screenshot(confirm, confirm.RenderSize, "Hotfix-Installationsauswahl.png");
+                        ((Button)confirm.FindName(action == "cancel" ? "CancelButton" : "ConfirmButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    }, DispatcherPriority.ApplicationIdle);
+                    ((Button)manager.FindName("InstallButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    if (action == "cancel") manager.Close();
+                }, DispatcherPriority.ApplicationIdle);
+                manager.ShowDialog();
+                Assert(manager.SelectedUpdate == (action == "cancel" ? null : action == "default" ? fix : baseRelease),
+                    "Confirmed edition supplies its own URL and digest: " + action);
+            }
             Assert(((TextBlock)main.FindName("InstalledVersionText")).Text == $"v{stable}", "The footer shows only the numeric version.");
             main.LoadBellReleases = _ => Task.FromResult(releases);
             var button = (Button)main.FindName("UpdateNoticeButton");

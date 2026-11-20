@@ -260,9 +260,16 @@ public partial class UpdateManagerWindow : Window
             _ => null
         };
         if (update is null) return;
-        if (new UpdateInstallWindow(CurrentPalette, _english, _installedBuild.Version, update) { Owner = this }.ShowDialog() != true) return;
+        AvailableUpdate? alternative = null;
+        if (_preference == UpdatePreference.Hotfixes && choice.Payload is UpdateRelease)
+        {
+            alternative = VersionList.Items.Cast<Choice>().Select(item => ((UpdateRelease)item.Payload).Update)
+                .FirstOrDefault(other => other.Version == update.Version && other.Channel != update.Channel);
+        }
+        var confirmation = new UpdateInstallWindow(CurrentPalette, _english, _installedBuild.Version, update, alternative) { Owner = this };
+        if (confirmation.ShowDialog() != true) return;
         if (_busy()) { RefreshActions(); return; }
-        SelectedUpdate = update;
+        SelectedUpdate = confirmation.SelectedUpdate;
         DialogResult = true;
     }
 

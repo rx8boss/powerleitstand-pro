@@ -35,29 +35,7 @@
     <WrapPanel Margin="0,0,0,8"><TextBlock x:Name="InstalledText" FontSize="14" FontWeight="SemiBold" Margin="0,0,20,0"/><TextBlock x:Name="LatestText" FontSize="13" Foreground="{DynamicResource DialogAccent}" VerticalAlignment="Center" TextWrapping="Wrap"/></WrapPanel>
     <TextBlock x:Name="ChannelsLabel" Foreground="{DynamicResource DialogAccent}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,7"/>
     <UniformGrid Columns="3">
-     <UniformGrid.Resources>
-      <Style TargetType="RadioButton">
-       <Setter Property="Foreground" Value="{DynamicResource DialogText}"/><Setter Property="Margin" Value="0,0,4,0"/>
-       <Setter Property="Cursor" Value="Hand"/><Setter Property="MinHeight" Value="42"/><Setter Property="FontSize" Value="11"/>
-       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
-        <Border x:Name="ChannelFrame" Background="{DynamicResource DialogInput}" BorderBrush="{DynamicResource DialogLine}" BorderThickness="1" CornerRadius="6" Padding="5">
-         <DockPanel LastChildFill="True" VerticalAlignment="Center">
-          <Grid Width="11" Height="11" Margin="0,0,5,0"><Ellipse Stroke="{DynamicResource DialogAccent}"/><Ellipse x:Name="Mark" Width="5" Height="5" Fill="{DynamicResource DialogAccent}" Visibility="Collapsed"/></Grid>
-          <StackPanel>
-           <TextBlock Text="{TemplateBinding Content}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-           <TextBlock x:Name="ChannelHint" Text="{TemplateBinding Tag}" FontSize="10" Foreground="{DynamicResource DialogSubtleText}" TextWrapping="Wrap"/>
-          </StackPanel>
-         </DockPanel>
-        </Border>
-        <ControlTemplate.Triggers>
-         <Trigger Property="Tag" Value="{x:Null}"><Setter TargetName="ChannelHint" Property="Visibility" Value="Collapsed"/></Trigger>
-         <Trigger Property="IsChecked" Value="True"><Setter TargetName="ChannelFrame" Property="Background" Value="{DynamicResource DialogButtonBackground}"/><Setter TargetName="ChannelFrame" Property="BorderBrush" Value="{DynamicResource DialogAccent}"/><Setter TargetName="Mark" Property="Visibility" Value="Visible"/></Trigger>
-         <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ChannelFrame" Property="BorderThickness" Value="2"/></Trigger>
-         <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ChannelFrame" Property="BorderBrush" Value="{DynamicResource DialogAccent}"/></Trigger>
-        </ControlTemplate.Triggers>
-       </ControlTemplate></Setter.Value></Setter>
-      </Style>
-     </UniformGrid.Resources>
+     <UniformGrid.Resources><ResourceDictionary Source="UpdateChoiceStyle.xaml"/></UniformGrid.Resources>
      <RadioButton x:Name="StableChannel" GroupName="AppReleaseChannel"/>
      <RadioButton x:Name="HotfixChannel" GroupName="AppReleaseChannel"/>
      <RadioButton x:Name="BetaChannel" GroupName="AppReleaseChannel" Margin="0"/>

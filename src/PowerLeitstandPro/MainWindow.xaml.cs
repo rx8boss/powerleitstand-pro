@@ -530,10 +530,20 @@ public partial class MainWindow : Window
             var install = manager.ShowDialog() == true;
             if (manager.ReleaseLoadSucceeded) ApplyAppReleases(manager.Releases);
             if (!install || manager.SelectedUpdate is not { } selected) return;
-            var download = new UpdateDownloadWindow(selected, ThemePalette.For(SelectedTheme()), _english,
-                () => _timer.IsEnabled || _repairRunning) { Owner = this };
-            var completed = download.ShowDialog() == true;
-            if (download.Failure is not null) throw download.Failure;
+            bool completed;
+            while (true)
+            {
+                var download = new UpdateDownloadWindow(selected, ThemePalette.For(SelectedTheme()), _english,
+                    () => _timer.IsEnabled || _repairRunning) { Owner = this };
+                completed = download.ShowDialog() == true;
+                if (download.Failure is not { } error) break;
+                if (selected.SourceBackup is not null || error is not (System.Net.Http.HttpRequestException or System.IO.IOException or OperationCanceledException))
+                    throw error;
+                LogError($"Version {selected.Build.Display} · {UiText.Error(error, _english)}");
+                var retry = _english ? $"Download version {selected.Build.Display} again?" : $"Version {selected.Build.Display} erneut herunterladen?";
+                if (ThemedMessageBox.Show(this, retry + "\n\n" + UiText.Error(error, _english), "PowerLeitstand PRO",
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            }
             if (completed)
             {
                 _updateInProgress = false;
