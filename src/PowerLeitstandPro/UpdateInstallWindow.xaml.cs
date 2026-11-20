@@ -30,14 +30,15 @@ public partial class UpdateInstallWindow : Window
         InstalledCaption.Text = english ? "Installed" : "Installiert";
         TargetCaption.Text = restoring ? english ? "Application backup" : "Programmsicherung"
             : english ? "Selected version" : "Neue Version";
-        InstalledText.Text = "Version " + installed;
-        TargetText.Text = "Version " + update.Version;
+        var currentBuild = installed == AppVersion.Installed ? AppVersion.Build : new AppBuild(installed);
+        InstalledText.Text = "Version " + currentBuild.Display;
+        TargetText.Text = "Version " + update.Build.Display;
         RestartText.Text = english ? "The app will restart after installation." : "Die App startet nach der Installation neu.";
         SafetyText.Text = restoring
             ? english ? "The backup is verified. The current version is saved before replacement." : "Die Sicherung wird geprüft. Vor dem Austausch wird die aktuelle Version gesichert."
             : english ? "The current version is saved before replacement. The download is checked for completeness and verified using its SHA-256 checksum."
                       : "Vor dem Austausch wird die aktuelle Version gesichert. Der Download wird auf Vollständigkeit und mit seiner SHA-256-Prüfsumme geprüft.";
-        if (update.Version < installed)
+        if (update.Build.CompareTo(currentBuild) < 0)
         {
             OlderVersionText.Visibility = Visibility.Visible;
             OlderVersionText.Text = english ? "Earlier versions may not contain all current features." : "Ältere Versionen enthalten möglicherweise nicht alle aktuellen Funktionen.";

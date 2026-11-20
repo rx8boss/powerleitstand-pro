@@ -86,7 +86,8 @@ internal sealed partial class ProgramInfoCard
             using var limit = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token); limit.CancelAfter(TimeSpan.FromSeconds(60));
             await _view.PauseBackgroundInspectionAsync();
             var checkedUpdates = await service.InspectUpdatesAsync([_entry], limit.Token);
-            if (!checkedUpdates.HasUpdate(_entry.Id) && (checkedUpdates.Error is not null || checkedUpdates.OnlineError is not null))
+            if (checkedUpdates.Evidence?.GetValueOrDefault(_entry.Id)?.MissingPortableFile != true
+                && !checkedUpdates.HasUpdate(_entry.Id) && (checkedUpdates.Error is not null || checkedUpdates.OnlineError is not null))
                 throw new System.IO.IOException(checkedUpdates.Error ?? checkedUpdates.OnlineError);
             if (_entry.Id == "tukui-client" && checkedUpdates.Evidence?.GetValueOrDefault(_entry.Id) is { } tukui && ProgramTukuiUpdates.Eligible(tukui))
             {
@@ -101,7 +102,7 @@ internal sealed partial class ProgramInfoCard
             var offer = await service.ResolveCheckedUpdateAsync(_entry, checkedUpdates, limit.Token);
             var installation = checkedUpdates.Evidence?.GetValueOrDefault(_entry.Id);
             bool terminalStore = _entry.Id == "windows-terminal" && installation?.Source == "Windows-App";
-            var package = ForDisplayedVariant(offer ?? (terminalStore ? null : await service.ResolveAsync(_entry, limit.Token)), installation);
+            var package = ForDisplayedVariant(offer ?? (terminalStore || installation?.MissingPortableFile == true ? null : await service.ResolveAsync(_entry, limit.Token)), installation);
             if (offer is null && package is not null) package = package with { CanInstall = false };
             var result = (Installation: checkedUpdates.Evidence?.GetValueOrDefault(_entry.Id), Package: package, CheckedUtc: checkedUpdates.CheckedUtc ?? DateTime.UtcNow);
             if (_closed) return;

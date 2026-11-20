@@ -14,9 +14,11 @@ internal sealed partial class ProgramInstallService
             var pending = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
             foreach (var hints in new[] { previous.Updates, previous.GitHubUpdates, previous.PendingUpdates })
                 if (hints is not null) foreach (var pair in hints) pending[pair.Key] = pair.Value;
-            installed[entry.Id] = proof.Version; evidence[entry.Id] = proof;
+            evidence[entry.Id] = proof;
+            if (proof.MissingPortableFile) { installed.Remove(entry.Id); pending.Remove(entry.Id); }
+            else installed[entry.Id] = proof.Version;
             string? version = proof.ManagedCopies is { Count: 1 } copies ? copies[0].PackageVersion : proof.Version;
-            string? target = package?.OnlineVersion ?? package?.Version;
+            string? target = proof.MissingPortableFile ? null : package?.OnlineVersion ?? package?.Version;
             if (ProgramVersions.IsNewer(version, target) || package?.ManagedPackage?.IsUpdate == true && target is not null) pending[entry.Id] = target!;
             else if (pending.TryGetValue(entry.Id, out var old) && CurrentEnough(version, old)) pending.Remove(entry.Id);
             var saved = _inspectionCache?.Read(KnownEntries, DateTime.UtcNow);

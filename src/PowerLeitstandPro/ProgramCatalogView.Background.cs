@@ -98,6 +98,8 @@ internal sealed partial class ProgramCatalogView
         var previousCandidates = new Dictionary<string, string>();
         foreach (var values in new[] { previous.PendingUpdates, previous.Updates, previous.GitHubUpdates })
             if (values is not null) foreach (var pair in values) previousCandidates.TryAdd(pair.Key, pair.Value);
+        foreach (var id in previousCandidates.Keys.Where(id => fresh.Evidence?.GetValueOrDefault(id)?.MissingPortableFile == true).ToArray())
+            previousCandidates.Remove(id);
         if (healthy)
         {
             // A failed optional provider cannot erase its old candidate or withhold other fresh offers.
@@ -133,7 +135,11 @@ internal sealed partial class ProgramCatalogView
         var evidence = previous.Evidence?.ToDictionary(p => p.Key, p => p.Value) ?? [];
         var pending = previousCandidates;
         foreach (var pair in fresh.Installed) installed[pair.Key] = pair.Value;
-        if (fresh.Evidence is not null) foreach (var pair in fresh.Evidence) evidence[pair.Key] = pair.Value;
+        if (fresh.Evidence is not null) foreach (var pair in fresh.Evidence)
+        {
+            evidence[pair.Key] = pair.Value;
+            if (pair.Value.MissingPortableFile) installed.Remove(pair.Key);
+        }
         foreach (var values in new[] { fresh.Updates, fresh.GitHubUpdates })
             if (values is not null) foreach (var pair in values) pending[pair.Key] = pair.Value;
         return fresh with { Installed = installed, Evidence = evidence, PendingUpdates = pending, CheckedUtc = previous.CheckedUtc,

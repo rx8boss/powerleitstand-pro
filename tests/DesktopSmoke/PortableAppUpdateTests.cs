@@ -29,20 +29,24 @@ internal static class PortableAppUpdateTests
         var token = deadline.Token;
         string oldHash = await AppBackupStore.HashAsync(oldExe, token);
         string newHash = await AppBackupStore.HashAsync(newExe, token);
-        Assert(AppBackupStore.FileVersion(oldExe) == "1.1.7" && AppBackupStore.FileVersion(newExe) == "1.1.8",
-            "source binaries are 1.1.7 and 1.1.8");
+        var oldBuild = AppVersion.ReadBuild(oldExe) ?? throw new InvalidDataException("Invalid original build.");
+        var newBuild = AppVersion.ReadBuild(newExe) ?? throw new InvalidDataException("Invalid candidate build.");
+        string oldVersion = oldBuild.Version.ToString();
+        string newVersion = newBuild.Version.ToString();
+        Assert(oldBuild.Channel == UpdateChannel.Stable && newBuild.Channel == UpdateChannel.Stable && newBuild.CompareTo(oldBuild) > 0,
+            $"source binaries are {oldVersion} and {newVersion}");
         var release = JsonSerializer.SerializeToElement(new
         {
-            tag_name = "v1.1.8",
+            tag_name = "v" + newVersion,
             assets = new[] { new
             {
                 name = "PowerLeitstand-PRO.exe",
                 digest = "sha256:" + newHash,
-                browser_download_url = ProjectLinks.RepositoryUrl + "/releases/download/v1.1.8/PowerLeitstand-PRO.exe"
+                browser_download_url = ProjectLinks.RepositoryUrl + "/releases/download/v" + newVersion + "/PowerLeitstand-PRO.exe"
             } }
         });
-        var update = ReleaseAssetSelector.Select(release, new Version(1, 1, 4))
-            ?? throw new InvalidOperationException("Version 1.1.8 was not offered.");
+        var update = ReleaseAssetSelector.Select(release, oldBuild.Version)
+            ?? throw new InvalidOperationException($"Version {newVersion} was not offered.");
         using var client = new HttpClient(new ReleaseFixture(newExe));
         try
         {
@@ -50,8 +54,8 @@ internal static class PortableAppUpdateTests
             new AppSettings { Language = "en", Theme = "Classic", SizeIndex = 1, CheckUpdatesOnFirstOpen = false, EsuRegistrationConfirmed = true }
                 .Save(settingsFile);
             string settingsHash = await AppBackupStore.HashAsync(settingsFile, token);
-            backup = await store.CreateAsync(target, "1.1.7", "Isolated updater test", token);
-            Assert(await store.VerifyAsync(backup, token) && backup.Sha256 == oldHash, "backup matches the original 1.1.7 EXE");
+            backup = await store.CreateAsync(target, oldVersion, "Isolated updater test", token);
+            Assert(await store.VerifyAsync(backup, token) && backup.Sha256 == oldHash, $"backup matches the original {oldVersion} EXE");
 
             try
             {
@@ -61,22 +65,22 @@ internal static class PortableAppUpdateTests
             catch (InvalidDataException)
             {
                 Assert(!File.Exists(staged) && await AppBackupStore.HashAsync(target, token) == oldHash,
-                    "wrong SHA-256 rejects the download and keeps 1.1.7 intact");
+                    $"wrong SHA-256 rejects the download and keeps {oldVersion} intact");
             }
 
             async Task Stage()
             {
                 await UpdateService.DownloadAndVerifyAsync(client, update, staged, null, token);
-                Assert(await AppBackupStore.HashAsync(staged, token) == newHash && AppBackupStore.FileVersion(staged) == "1.1.8",
-                    "download and SHA-256 match the genuine 1.1.8 EXE");
+                Assert(await AppBackupStore.HashAsync(staged, token) == newHash && AppVersion.ReadBuild(staged) == newBuild,
+                    $"download and SHA-256 match the genuine {newVersion} EXE");
             }
 
             await Stage();
             var success = await UpdateRecovery.InstallAsync(target, staged, backup.BinaryPath,
-                () => ConfirmWindowAsync(fixture, target, "1.1.8"), () => Task.CompletedTask,
+                () => ConfirmWindowAsync(fixture, target, newVersion), () => Task.CompletedTask,
                 () => throw new InvalidOperationException("A healthy update unexpectedly rolled back."), retainBackup: true);
             Assert(!success.Restored && await AppBackupStore.HashAsync(target, token) == newHash,
-                "replacement retained 1.1.8 after the WPF test window confirmed startup");
+                $"replacement retained {newVersion} after the WPF test window confirmed startup");
             Assert(await AppBackupStore.HashAsync(settingsFile, token) == settingsHash, "settings file remained identical after update");
 
             File.Copy(backup.BinaryPath, target, overwrite: true);
@@ -84,16 +88,16 @@ internal static class PortableAppUpdateTests
             Task<bool>? restarted = null;
             var failure = await UpdateRecovery.InstallAsync(target, staged, backup.BinaryPath, async () =>
             {
-                Assert(await AppBackupStore.HashAsync(target, token) == newHash, "1.1.8 was in place before the simulated failed start");
+                Assert(await AppBackupStore.HashAsync(target, token) == newHash, $"{newVersion} was in place before the simulated failed start");
                 using var pipe = NewPipe(out _);
                 using var child = StartChild(fixture, "--portable-update-failed-start");
                 bool ready = await UpdateStartupConfirmation.WaitAsync(pipe, child, TimeSpan.FromSeconds(12));
                 await child.WaitForExitAsync(token);
                 Assert(!ready && child.ExitCode == 7, "process exited without a startup acknowledgement");
                 return false;
-            }, () => Task.CompletedTask, () => restarted = ConfirmWindowAsync(fixture, target, "1.1.7"), retainBackup: true);
+            }, () => Task.CompletedTask, () => restarted = ConfirmWindowAsync(fixture, target, oldVersion), retainBackup: true);
             Assert(failure.Restored && restarted is not null && await restarted && await AppBackupStore.HashAsync(target, token) == oldHash,
-                "rollback restored the exact 1.1.7 EXE before the WPF test window confirmed restart");
+                $"rollback restored the exact {oldVersion} EXE before the WPF test window confirmed restart");
             Assert(await store.VerifyAsync(backup, token) && !File.Exists(staged) && !Directory.EnumerateFiles(fixture, "*.bak").Any(),
                 "verified backup retained without adjacent backup or staging files");
             Assert(await AppBackupStore.HashAsync(settingsFile, token) == settingsHash, "settings file remained identical after rollback");

@@ -14,7 +14,7 @@ internal sealed record AppBackup(string Folder, string Version, DateTimeOffset C
 
 internal sealed class AppBackupStore
 {
-    internal const int Limit = 4;
+    internal const int Limit = 8;
     internal static string DefaultRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Power Control PRO", "Backups");
     internal string Root { get; }
     private sealed record Manifest(string Application, int Schema, string Version, DateTimeOffset Created, string Sha256, string Notes);
@@ -42,7 +42,7 @@ internal sealed class AppBackupStore
         // The open handle remains readable, while Windows can remove the directory entry.
         using var manifest = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
         var data = JsonSerializer.Deserialize<Manifest>(manifest) ?? throw new InvalidDataException("Ungültige Sicherung.");
-        if (data.Application != "PowerLeitstand-PRO" || data.Schema != 1 || !Version.TryParse(data.Version, out _) ||
+        if (data.Application != "PowerLeitstand-PRO" || data.Schema != 1 || AppBuild.Parse(data.Version) is null ||
             !Regex.IsMatch(data.Sha256 ?? "", "^[0-9a-fA-F]{64}$")) throw new InvalidDataException("Unbekannte Sicherung.");
         return new(Path.GetFullPath(folder), data.Version, data.Created, data.Sha256!, data.Notes ?? "");
     }
@@ -56,7 +56,7 @@ internal sealed class AppBackupStore
 
     internal async Task<AppBackup> CreateAsync(string source, string version, string notes, CancellationToken token = default)
     {
-        if (!Version.TryParse(version, out _)) throw new InvalidDataException("Ungültige Sicherungsversion.");
+        if (AppBuild.Parse(version) is null) throw new InvalidDataException("Ungültige Sicherungsversion.");
         CheckRoot(); Directory.CreateDirectory(Root); CheckRoot();
         var created = DateTimeOffset.Now;
         var folder = Path.Combine(Root, $"PowerLeitstand-PRO_{version}_{created:yyyy-MM-dd_HH-mm-ss}_{Guid.NewGuid():N}");
@@ -127,7 +127,7 @@ internal sealed class AppBackupStore
         CheckRoot();
         var full = Path.GetFullPath(folder);
         if (!string.Equals(Path.GetDirectoryName(full), Root, StringComparison.OrdinalIgnoreCase) ||
-            !Regex.IsMatch(Path.GetFileName(full), @"^PowerLeitstand-PRO_[0-9.]+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_[a-f0-9]{32}$") ||
+            !Regex.IsMatch(Path.GetFileName(full), @"^PowerLeitstand-PRO_[0-9.]+(?:-(?:beta|hotfix)\.[1-9][0-9]*)?_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_[a-f0-9]{32}$") ||
             !Directory.Exists(full) || (File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0)
             throw new InvalidDataException("Ungültiger Sicherungspfad.");
     }

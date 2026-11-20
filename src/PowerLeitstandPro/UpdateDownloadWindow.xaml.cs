@@ -37,7 +37,7 @@ public partial class UpdateDownloadWindow : Window
         CrossButtonAppearance.Prepare(HeaderCloseButton);
         FontFamily = new FontFamily(palette.FontFamily);
         HeaderText.Text = english ? "Download update" : "Update herunterladen";
-        VersionText.Text = $"PowerLeitstand PRO · v{update.Version}";
+        VersionText.Text = $"PowerLeitstand PRO · {update.Build.Display}";
         PhaseText.Text = english ? "Preparing download …" : "Download wird vorbereitet …";
         HintText.Text = english ? "The file will be verified. The app will then restart." : "Anschließend wird die Datei geprüft. Danach startet die App neu.";
         CancelCaption.Text = english ? "Cancel" : "Abbrechen";

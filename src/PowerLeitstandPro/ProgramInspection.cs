@@ -161,7 +161,12 @@ internal sealed partial class ProgramInstallService
         if (_locationsFile is not null) await Task.Run(() => new ProgramFileAssociations(_locationsFile).Merge(added, local, token), token);
         var evidence = recent.Evidence?.ToDictionary(x => x.Key, x => x.Value) ?? [];
         var installed = recent.Installed.ToDictionary(x => x.Key, x => x.Value);
-        foreach (var pair in local) { evidence[pair.Key] = pair.Value; installed[pair.Key] = pair.Value.Version; }
+        foreach (var pair in local)
+        {
+            evidence[pair.Key] = pair.Value;
+            if (pair.Value.MissingPortableFile) installed.Remove(pair.Key);
+            else installed[pair.Key] = pair.Value.Version;
+        }
         foreach (var entry in added)
         foreach (var pair in _recentExport.Where(p => PackageMatches(entry, p.Key)))
         {

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.IO.Pipes;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -13,6 +14,7 @@ internal sealed record UpdateProgress(UpdatePhase Phase, long ReceivedBytes, lon
 
 internal static class UpdateService
 {
+    private const long MaxArchiveSize = 512L * 1024 * 1024;
     private static readonly HttpClient Client = CreateClient();
 
     private static HttpClient CreateClient()
@@ -23,17 +25,6 @@ internal static class UpdateService
         return client;
     }
 
-    internal static async Task<AvailableUpdate?> CheckAsync(CancellationToken cancellationToken = default)
-    {
-        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); limit.CancelAfter(TimeSpan.FromSeconds(20));
-        using var connection = new OnlineRequest(limit.Token); cancellationToken = connection.Token;
-        using var response = await Client.GetAsync(ProjectLinks.ReleaseApiUrl, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        using var data = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(cancellationToken));
-        var current = AppVersion.Installed;
-        return ReleaseAssetSelector.Select(data.RootElement, current);
-    }
-
     internal static async Task PrepareAndLaunchAsync(AvailableUpdate update, Func<bool> isBusy,
         CancellationToken cancellationToken = default, IProgress<UpdateProgress>? progress = null)
     {
@@ -42,6 +33,8 @@ internal static class UpdateService
         var directory = Path.GetDirectoryName(target) ?? throw new InvalidOperationException("Installationsordner nicht ermittelbar.");
         var staged = Path.Combine(directory, $".{Path.GetFileName(target)}.{Guid.NewGuid():N}.new");
         var helper = Path.Combine(Path.GetTempPath(), $"PowerLeitstand-update-helper-{Guid.NewGuid():N}.exe");
+        var archive = staged + ".zip";
+        bool archiveReady = false;
         string? backup = null;
         try
         {
@@ -54,12 +47,19 @@ internal static class UpdateService
                 if (!string.Equals(await AppBackupStore.HashAsync(staged, cancellationToken), local.Sha256, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("Wiederherstellungsdatei konnte nicht geprüft werden.");
             }
+            else if (update.IsArchive)
+            {
+                await DownloadAndVerifyAsync(Client, update, archive, progress, cancellationToken);
+                archiveReady = true;
+                await ExtractUpdateAsync(archive, staged, update.Sha256, cancellationToken);
+            }
             else await DownloadAndVerifyAsync(Client, update, staged, progress, cancellationToken);
-            if (AppBackupStore.FileVersion(staged) != $"{update.Version.Major}.{update.Version.Minor}.{update.Version.Build}")
+            if (AppVersion.ReadBuild(staged) != update.Build)
                 throw new InvalidDataException("Dateiversion passt nicht zur ausgewählten Version.");
+            var stagedHash = update.IsArchive ? await AppBackupStore.HashAsync(staged, cancellationToken) : update.SourceBackup?.Sha256 ?? update.Sha256;
             if (isBusy()) throw new InvalidOperationException("Ein Timer oder eine Reparatur wurde während des Downloads gestartet.");
             cancellationToken.ThrowIfCancellationRequested();
-            var snapshot = await new AppBackupStore().CreateAsync(target, AppBackupStore.FileVersion(target), AppReleaseNotes.Current, cancellationToken);
+            var snapshot = await new AppBackupStore().CreateAsync(target, AppVersion.Build.ToString(), AppReleaseNotes.Current, cancellationToken);
             backup = snapshot.BinaryPath;
             await Task.Run(() => File.Copy(target, helper), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
@@ -74,7 +74,7 @@ internal static class UpdateService
             start.ArgumentList.Add(staged);
             start.ArgumentList.Add(backup);
             start.ArgumentList.Add(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            start.ArgumentList.Add(update.SourceBackup?.Sha256 ?? update.Sha256);
+            start.ArgumentList.Add(stagedHash);
             using var process = Process.Start(start) ?? throw new InvalidOperationException("Update-Helfer konnte nicht gestartet werden.");
         }
         catch
@@ -83,6 +83,35 @@ internal static class UpdateService
             try { if (File.Exists(helper)) File.Delete(helper); } catch { }
             throw;
         }
+        finally
+        {
+            if (archiveReady) try { File.Delete(archive); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    internal static async Task ExtractUpdateAsync(string archivePath, string destination, string sha256, CancellationToken token)
+    {
+        await using var file = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true);
+        var digest = Convert.ToHexString(await SHA256.HashDataAsync(file, token));
+        if (!digest.Equals(sha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("SHA-256-Prüfsumme des Update-ZIP stimmt nicht überein.");
+        file.Position = 0;
+        using var archive = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
+        var entries = archive.Entries.Where(e => e.FullName.Equals("PowerLeitstand-PRO.exe", StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (entries.Length != 1 || entries[0].Length is <= 0 or > MaxArchiveSize)
+            throw new InvalidDataException("Das ZIP enthält keine eindeutige PowerLeitstand-PRO.exe.");
+        await using var source = entries[0].Open();
+        await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true);
+        byte[] buffer = new byte[65536];
+        long total = 0;
+        int read;
+        while ((read = await source.ReadAsync(buffer, token)) > 0)
+        {
+            total += read;
+            if (total > entries[0].Length) throw new InvalidDataException("Ungültige Dateigröße im Update-ZIP.");
+            await output.WriteAsync(buffer.AsMemory(0, read), token);
+        }
+        if (total != entries[0].Length) throw new InvalidDataException("Die EXE im Update-ZIP ist unvollständig.");
     }
 
     internal static async Task DownloadAndVerifyAsync(HttpClient client, AvailableUpdate update, string staged,
@@ -95,6 +124,7 @@ internal static class UpdateService
             using var response = await client.GetAsync(update.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             long? total = response.Content.Headers.ContentLength is > 0 ? response.Content.Headers.ContentLength : null;
+            if (update.IsArchive && total > MaxArchiveSize) throw new InvalidDataException("Das Update-ZIP ist zu groß.");
             long received = 0;
             progress?.Report(new(UpdatePhase.Downloading, 0, total));
             var watch = Stopwatch.StartNew();
@@ -106,8 +136,9 @@ internal static class UpdateService
                 int count;
                 while ((count = await OnlineConnection.ReadAsync(input, buffer, cancellationToken).ConfigureAwait(false)) != 0)
                 {
-                    await output.WriteAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
                     received += count;
+                    if (update.IsArchive && received > MaxArchiveSize) throw new InvalidDataException("Das Update-ZIP ist zu groß.");
+                    await output.WriteAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
                     if (watch.ElapsedMilliseconds >= 80)
                     {
                         progress?.Report(new(UpdatePhase.Downloading, received, total));

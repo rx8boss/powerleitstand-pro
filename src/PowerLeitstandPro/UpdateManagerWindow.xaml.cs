@@ -26,7 +26,9 @@ public partial class UpdateManagerWindow : Window
     private readonly CancellationTokenSource _cancel = new();
     private readonly CancellationToken _token;
     private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromMilliseconds(500) };
-    private readonly Version _installed = AppVersion.Installed;
+    private readonly AppBuild _installedBuild = AppVersion.Build;
+    private UpdatePreference _preference;
+    private readonly Action<UpdatePreference>? _savePreference;
     private IReadOnlyList<UpdateRelease> _releases = [];
     private bool _recovery, _working, _closed, _verified, _notes;
     private int _selectionSequence;
@@ -37,10 +39,12 @@ public partial class UpdateManagerWindow : Window
     internal bool IsNotesView => _notes;
     internal Task PendingSelection { get; private set; } = Task.CompletedTask;
     internal bool ReleaseLoadSucceeded { get; private set; }
-    internal AvailableUpdate? LatestRelease => _releases.FirstOrDefault()?.Update;
+    internal IReadOnlyList<UpdateRelease> Releases => _releases;
+    internal AvailableUpdate? LatestRelease => UpdateReleaseCatalog.Visible(_releases, _installedBuild, _preference).FirstOrDefault()?.Update;
 
     internal UpdateManagerWindow(ThemePalette palette, bool english, Func<bool> isBusy, AppBackupStore? store = null,
-        Func<CancellationToken, Task<IReadOnlyList<UpdateRelease>>>? load = null, bool autoLoad = true)
+        Func<CancellationToken, Task<IReadOnlyList<UpdateRelease>>>? load = null, bool autoLoad = true,
+        UpdatePreference preference = UpdatePreference.Stable, Action<UpdatePreference>? savePreference = null)
     {
         InitializeComponent();
         CurrentPalette = palette;
@@ -56,8 +60,22 @@ public partial class UpdateManagerWindow : Window
         CrossButtonAppearance.PreserveCustomSurface(HeaderCloseButton);
         CrossButtonAppearance.PreserveCustomSurface(CloseButton);
         CrossButtonAppearance.PreserveCustomSurface(DeleteBackupButton);
-        InstalledText.Text = (english ? "Installed: " : "Installiert: ") + _installed;
-        BackupLocation.Text = "AppData · Power Control PRO · Backups · " + (english ? "up to four backups" : "maximal vier Sicherungen");
+        InstalledText.Text = (english ? "Installed: " : "Installiert: ") + _installedBuild.Display;
+        _preference = preference;
+        _savePreference = savePreference;
+        ChannelsLabel.Text = english ? "Update channel" : "Update-Kanal";
+        StableChannel.Content = english ? "Stable only" : "Nur stabil";
+        HotfixChannel.Content = english ? "Stable + hotfixes" : "Stabil + Hotfixes";
+        BetaChannel.Content = "Beta";
+        StableChannel.Tag = english ? "Regular releases" : "Reguläre Versionen";
+        HotfixChannel.Tag = english ? "With bug fixes" : "Mit Fehlerkorrekturen";
+        BetaChannel.ToolTip = english ? "Shows preview versions only" : "Zeigt nur Vorabversionen";
+        StableChannel.IsChecked = preference == UpdatePreference.Stable;
+        HotfixChannel.IsChecked = preference == UpdatePreference.Hotfixes;
+        BetaChannel.IsChecked = preference == UpdatePreference.Beta;
+        foreach (var (button, value) in new[] { (StableChannel, UpdatePreference.Stable), (HotfixChannel, UpdatePreference.Hotfixes), (BetaChannel, UpdatePreference.Beta) })
+            button.Checked += (_, _) => { _preference = value; _savePreference?.Invoke(value); ApplyView(); };
+        BackupLocation.Text = "AppData · Power Control PRO · Backups · " + (english ? $"up to {AppBackupStore.Limit} backups" : $"maximal {AppBackupStore.Limit} Sicherungen");
         BackupLocation.ToolTip = _store.Root;
         if (english)
         {
@@ -77,6 +95,7 @@ public partial class UpdateManagerWindow : Window
         Closed += (_, _) => { _closed = true; _refresh.Stop(); _cancel.Cancel(); _cancel.Dispose(); };
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { CloseWindow(this, new()); e.Handled = true; } };
         UnifiedDialogAppearance.Resources(this, palette);
+        VersionList.Template = (ControlTemplate)FindResource("AdapterListTemplate");
         Resources["DialogEnglish"] = english;
         ApplyView();
         UnifiedDialogAppearance.Button(this, HeaderCloseButton, DialogButtonKind.Close);
@@ -134,23 +153,32 @@ public partial class UpdateManagerWindow : Window
             {
                 var backups = _store.List();
                 LatestText.Text = $"{backups.Count} / {AppBackupStore.Limit} " + (_english ? "backups" : "Sicherungen");
-                foreach (var b in backups) choices.Add(new("Version " + b.Version, b.Created.ToLocalTime().ToString("dd.MM.yyyy · HH:mm"), choices.Count == 0 ? (_english ? "Most recent backup" : "Zuletzt gesichert") : "", b));
+                foreach (var b in backups) choices.Add(new("Version " + (AppBuild.Parse(b.Version)?.Display ?? b.Version), b.Created.ToLocalTime().ToString("dd.MM.yyyy · HH:mm"), choices.Count == 0 ? (_english ? "Most recent backup" : "Zuletzt gesichert") : "", b));
             }
             catch (Exception e) { StatusText.Text = UiText.Error(e, _english); }
         }
         else
         {
-            var newest = _releases.FirstOrDefault();
-            LatestText.Text = newest is null ? (_english ? "No release data loaded" : "Keine Versionsdaten geladen")
-                : (newest.Update.Version > _installed ? (_english ? "Available: " : "Verfügbar: ") : (_english ? "Latest on GitHub: " : "Neueste auf GitHub: ")) + newest.Update.Version;
-            foreach (var r in _releases) choices.Add(new("Version " + r.Update.Version,
+            var available = UpdateReleaseCatalog.Visible(_releases, _installedBuild, _preference);
+            var newest = available.FirstOrDefault();
+            InstalledText.Visibility = _preference == UpdatePreference.Beta && _installedBuild.Channel != UpdateChannel.Beta
+                ? Visibility.Collapsed : Visibility.Visible;
+            LatestText.Text = newest is null
+                ? (ReleaseLoadSucceeded && _preference == UpdatePreference.Beta
+                    ? (_english ? "No beta available" : "Keine Beta verfügbar")
+                    : (_english ? "No release data loaded" : "Keine Versionsdaten geladen"))
+                : (newest.Update.Build.CompareTo(_installedBuild) > 0 ? (_english ? "Available: " : "Verfügbar: ") : (_english ? "Latest on GitHub: " : "Neueste auf GitHub: ")) + newest.Update.Build.Display;
+            foreach (var r in available) choices.Add(new("Version " + r.Update.Build.Display,
                 r.Published == DateTimeOffset.MinValue ? "GitHub" : r.Published.ToLocalTime().ToString("dd.MM.yyyy · HH:mm"),
-                r.Update.Version == _installed ? (_english ? "Installed" : "Installiert") : r == newest ? (_english ? "Latest release" : "Neueste Veröffentlichung") : (_english ? "Earlier version" : "Frühere Version"), r));
+                r.Update.Build == _installedBuild ? (_english ? "Installed" : "Installiert")
+                    : r.Update.Channel == UpdateChannel.Stable ? (_english ? "Stable" : "Stabil") : r.Update.Channel.ToString(), r));
         }
         VersionList.ItemsSource = choices;
         if (choices.Count > 0)
         {
-            VersionList.SelectedIndex = 0;
+            var recommended = choices.FindIndex(x => x.Payload is UpdateRelease r && r.Update.Channel != UpdateChannel.Beta
+                && r.Update.Build.CompareTo(_installedBuild) > 0);
+            VersionList.SelectedIndex = Math.Max(0, recommended);
             // A value-equal selection may survive ItemsSource replacement without SelectionChanged.
             PendingSelection = UpdateSelectionAsync();
         }
@@ -175,7 +203,7 @@ public partial class UpdateManagerWindow : Window
         if (VersionList.SelectedItem is not Choice choice) return;
         if (choice.Payload is UpdateRelease release)
         {
-            DetailHeading.Text = (_english ? "Changes in version " : "Änderungen in Version ") + release.Update.Version;
+            DetailHeading.Text = (_english ? "Changes in version " : "Änderungen in Version ") + release.Update.Build.Display;
             DetailSubheading.Text = _english ? "Release notes from GitHub" : "Versionshinweise von GitHub";
             NotesText.Text = PlainNotes(AppReleaseNotes.Select(release.Notes, _english));
             VerificationText.Visibility = Visibility.Collapsed;
@@ -200,7 +228,7 @@ public partial class UpdateManagerWindow : Window
         }
         if (_closed) return;
         RefreshActions();
-        _ = Dispatcher.BeginInvoke((Action)(() => { FitListHeight(); UpdateScrollHints(); }), DispatcherPriority.Loaded);
+        _ = Dispatcher.BeginInvoke((Action)UpdateScrollHints, DispatcherPriority.Loaded);
     }
 
     private string PlainNotes(string notes)
@@ -215,7 +243,7 @@ public partial class UpdateManagerWindow : Window
         if (_closed) return;
         var choice = VersionList.SelectedItem as Choice;
         InstallButton.IsEnabled = !_working && !_busy() && _verified && choice is not null &&
-            (choice.Payload is AppBackup || choice.Payload is UpdateRelease r && r.Update.Version != _installed);
+            (choice.Payload is AppBackup || choice.Payload is UpdateRelease r && r.Update.Build != _installedBuild);
         DeleteBackupButton.IsEnabled = !_working && choice?.Payload is AppBackup;
         RecoveryButton.IsEnabled = !_working;
         ChangesButton.IsEnabled = !_working && choice is not null;
@@ -229,11 +257,12 @@ public partial class UpdateManagerWindow : Window
         var update = choice.Payload switch
         {
             UpdateRelease r => r.Update,
-            AppBackup b => new AvailableUpdate(Version.Parse(b.Version), "", b.Sha256) { SourceBackup = b, Notes = b.Notes },
+            AppBackup b when AppBuild.Parse(b.Version) is { } build => new AvailableUpdate(build.Version, "", b.Sha256)
+                { Channel = build.Channel, Revision = build.Number, SourceBackup = b, Notes = b.Notes },
             _ => null
         };
         if (update is null) return;
-        if (new UpdateInstallWindow(CurrentPalette, _english, _installed, update) { Owner = this }.ShowDialog() != true) return;
+        if (new UpdateInstallWindow(CurrentPalette, _english, _installedBuild.Version, update) { Owner = this }.ShowDialog() != true) return;
         if (_busy()) { RefreshActions(); return; }
         SelectedUpdate = update;
         DialogResult = true;
@@ -319,27 +348,17 @@ public partial class UpdateManagerWindow : Window
         var ownerHeight = Owner is { ActualHeight: > 0 } ? Owner.ActualHeight - 32 : area.Height - 24;
         var availableWidth = Math.Max(240, Math.Min(area.Width - 24, ownerWidth));
         var availableHeight = Math.Max(240, Math.Min(area.Height - 24, ownerHeight));
-        MinWidth = Math.Min(420, availableWidth); MinHeight = Math.Min(400, availableHeight);
-        Width = Math.Max(MinWidth, Math.Min(548, availableWidth));
-        Height = Math.Max(MinHeight, Math.Min(480, availableHeight));
+        MinWidth = MaxWidth = Width = Math.Min(548, availableWidth);
+        MinHeight = MaxHeight = Height = Math.Min(540, availableHeight);
         var centerX = Owner is { ActualWidth: > 0 } ? Owner.Left + Owner.ActualWidth / 2 : area.Left + area.Width / 2;
         var centerY = Owner is { ActualHeight: > 0 } ? Owner.Top + Owner.ActualHeight / 2 : area.Top + area.Height / 2;
         Left = Math.Clamp(centerX - Width / 2, area.Left, area.Right - Width);
         Top = Math.Clamp(centerY - Height / 2, area.Top, area.Bottom - Height);
         AdaptLayout();
     }
-    private void BodySizeChanged(object s, SizeChangedEventArgs e) => FitListHeight();
-    private void FitListHeight()
-    {
-        if (VersionList is null || BodyScroll.ActualHeight <= 0) return;
-        var hint = ListScrollHint.Visibility == Visibility.Visible ? ListScrollHint.ActualHeight + 4 : 0;
-        var verification = VerificationText.Visibility == Visibility.Visible ? VerificationText.ActualHeight + 8 : 0;
-        VersionList.MaxHeight = Math.Max(35, BodyScroll.ActualHeight - ListHeading.ActualHeight - hint - verification - 10);
-    }
     private void AdaptLayout()
     {
         if (BodyGrid is null) return;
-        FitListHeight();
         HeaderText.FontSize = 19;
         BodyScroll.ToolTip = _english ? "Scroll for more entries." : "Für weitere Einträge scrollen.";
         ApplyNavigation();

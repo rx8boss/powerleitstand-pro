@@ -8,7 +8,11 @@ namespace PowerControlProWpf;
 
 internal sealed record ProgramInstallation(string? Version, string Source, string? Path = null,
     bool WinGetCompatible = true, string? Variant = null, IReadOnlyList<ProgramManagedCopy>? ManagedCopies = null,
-    ProgramPathEvidence? LocationEvidence = null);
+    ProgramPathEvidence? LocationEvidence = null)
+{
+    internal const string MissingWinGetPortable = "WinGet-PortableMissing";
+    internal bool MissingPortableFile => Source == MissingWinGetPortable;
+}
 
 internal static class ProgramLocalInventory
 {
@@ -103,22 +107,16 @@ internal static class ProgramLocalInventory
                         }
                         var registration = ProgramPathResolver.Registration(item!, child, name, publisher!, version, hive, view);
                         var location = locations.Resolve(registration, entry, token);
-                        if (entry.PackageId is not null
-                            && string.Equals(item!.GetValue("WinGetPackageIdentifier") as string, entry.PackageId, StringComparison.OrdinalIgnoreCase)
-                            && item.GetValue("WinGetSourceIdentifier") as string == "Microsoft.Winget.Source_8wekyb3d8bbwe"
-                            && item.GetValue("WinGetInstallerType") as string == "portable")
-                        {
-                            var target = item.GetValue("PortableTargetFullPath") as string;
-                            if (locations.ResolveWinGetPortable(registration, entry, target) is { } registeredPortable)
-                                location = registeredPortable;
-                            else if (entry.Id == "adwcleaner" && AdwCleanerWinGetExecutable(version, registration.InstallLocation, target) is { } executable)
-                                location = new(Path.GetDirectoryName(executable), executable, "WinGet portable", hive == RegistryHive.CurrentUser ? "User" : "Machine", version);
-                        }
+                        bool winGetPortable = PortableWinGetProductCode(item!, child, entry.PackageId) is not null;
+                        if (winGetPortable) location = WinGetPortableLocation(item!, registration, entry, locations, location);
+                        bool missingPortable = winGetPortable && location?.Executable is null
+                            && PortableWinGetFileMissing(registration.InstallLocation, item!.GetValue("PortableTargetFullPath") as string);
                         var path = location?.Path;
                         if (version is null && location?.Executable is not null) version = location.FileVersion;
                         if (entry.Id == "net-sdk") path = ExistingDirectory(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "sdk", version ?? ""));
                         bool extension = location?.Source == "Registry Overwolf extension";
-                        var evidence = new ProgramInstallation(version, "Registry", path, Compatible(entry, version) && !extension,
+                        var evidence = new ProgramInstallation(missingPortable ? null : version, missingPortable ? ProgramInstallation.MissingWinGetPortable : "Registry", path,
+                            !missingPortable && Compatible(entry, version) && !extension,
                             extension ? "CurseForge · Overwolf" : entry.Id == "teamspeak" && !Compatible(entry, version) ? "TeamSpeak " + (version ?? "?") : null,
                             LocationEvidence: location);
                         if (!result.TryGetValue(entry.Id, out var old) || Prefer(evidence, old)) result[entry.Id] = evidence;
@@ -131,8 +129,50 @@ internal static class ProgramLocalInventory
         if (includeManaged) ProgramManagedInventory.Merge(result, ProgramManagedInventory.Read(catalog, token));
         return result;
     }
+    internal static string? PortableWinGetProductCode(RegistryKey key, string productCode, string? expectedPackage = null)
+        => PortableWinGetProductCode(key.GetValue("WinGetPackageIdentifier") as string, key.GetValue("WinGetSourceIdentifier") as string,
+            key.GetValue("WinGetInstallerType") as string, productCode, expectedPackage);
+
+    internal static string? PortableWinGetProductCode(string? id, string? source, string? type, string productCode, string? expectedPackage = null)
+        => source == "Microsoft.Winget.Source_8wekyb3d8bbwe" && string.Equals(type, "portable", StringComparison.OrdinalIgnoreCase)
+            && id is not null && Regex.IsMatch(id, @"\A[A-Za-z0-9][A-Za-z0-9._+-]{0,159}\z")
+            && (expectedPackage is null || string.Equals(id, expectedPackage, StringComparison.OrdinalIgnoreCase))
+            && string.Equals(id + "_" + source, productCode, StringComparison.OrdinalIgnoreCase) ? productCode : null;
+
+    internal static bool PortableWinGetFileMissing(string? directory, string? target)
+    {
+        if (directory is null || !Path.IsPathFullyQualified(directory) || directory.StartsWith(@"\\", StringComparison.Ordinal)) return false;
+        try
+        {
+            if ((File.GetAttributes(directory) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != FileAttributes.Directory) return false;
+            if (target is not null && Path.IsPathFullyQualified(target) && ProgramPathResolver.InDirectory(directory, target))
+            {
+                try { return (File.GetAttributes(target) & FileAttributes.Directory) != 0; }
+                catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { return true; }
+            }
+            // Archive packages can put their executable in a subfolder.
+            return !Directory.EnumerateFileSystemEntries(directory).Any();
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { return true; }
+        catch (Exception e) when (ProgramPathResolver.ReadFailure(e)) { return false; }
+    }
+
+    internal static ProgramPathEvidence? WinGetPortableLocation(RegistryKey key, ProgramPathRegistration registration,
+        ProgramEntry entry, ProgramPathResolver resolver, ProgramPathEvidence? location)
+    {
+        if (registration.InstallLocation is not { } directory || !Path.IsPathFullyQualified(directory)) return null;
+        var target = key.GetValue("PortableTargetFullPath") as string;
+        var portable = resolver.ResolveWinGetPortable(registration, entry, target);
+        if (portable is not null) return portable;
+        if (entry.Id == "adwcleaner" && AdwCleanerWinGetExecutable(registration.Version, directory, target) is { } executable
+            && ProgramPathResolver.InDirectory(directory, executable))
+            return new(Path.GetDirectoryName(executable), executable, "WinGet portable", registration.Hive == RegistryHive.CurrentUser ? "User" : "Machine", registration.Version);
+        return location?.Path is { } path && ProgramPathResolver.InDirectory(directory, path) ? location : null;
+    }
+
     private static bool Prefer(ProgramInstallation next, ProgramInstallation old)
     {
+        if (next.MissingPortableFile != old.MissingPortableFile) return !next.MissingPortableFile;
         if (System.Version.TryParse(next.Version, out var n) && System.Version.TryParse(old.Version, out var o)) return n > o;
         return old.Version is null && next.Version is not null || old.Path is null && next.Path is not null;
     }
@@ -250,7 +290,7 @@ internal static class ProgramLocalInventory
                     var info = FileVersionInfo.GetVersionInfo(path);
                     if (MatchesPortable(entry.Id, info.ProductName, info.CompanyName))
                     {
-                        if (result.TryGetValue(entry.Id, out var registered))
+                        if (result.TryGetValue(entry.Id, out var registered) && !registered.MissingPortableFile)
                         {
                             string? fileVersion = PortableVersion(entry.Id, path, info);
                             if (registered.LocationEvidence?.Alternatives is { Count: > 1 } || !ProgramPathResolver.VersionFits(registered.Version, fileVersion)) continue;
@@ -260,9 +300,9 @@ internal static class ProgramLocalInventory
                         {
                             string? version = PortableVersion(entry.Id, path, info);
                             // The MelonLoader installer version is not the per-game loader version.
-                            result.TryAdd(entry.Id, entry.Id == "melonloader"
+                            result[entry.Id] = entry.Id == "melonloader"
                                 ? new(null, "Portable-Setup", path, false, "MelonLoader Installer " + (version ?? "?"))
-                                : new(version, "Portable", path, false));
+                                : new(version, "Portable", path, false);
                         }
                     }
                 }

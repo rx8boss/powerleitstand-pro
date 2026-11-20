@@ -1,4 +1,4 @@
-﻿using System.Net.NetworkInformation;
+using System.Net.NetworkInformation;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -31,7 +31,7 @@ internal sealed partial class ProgramCatalogView
     internal void NotifyOverlayChanged() => _page.ProgramOverlayChanged?.Invoke();
     internal void VersionChecking(string id) => _versionChecks[id] = (false, null);
     internal void VersionChecked(string id, string? version) { _versionChecks[id] = (true, version); RenderTiles(); }
-    internal bool ShowManualMark(string id) => !Inventory.Installed.ContainsKey(id)
+    internal bool ShowManualMark(string id) => !Inventory.Installed.ContainsKey(id) && !PortableRegistrationWithoutFile(id)
         && (!ProgramVersions.StoreFamilies.ContainsKey(id) || Inventory.StoreCheckComplete)
         && _versionChecks.TryGetValue(id, out var check) && check.Complete && string.IsNullOrWhiteSpace(check.Version);
     private void InitializeConnectionOverlay()

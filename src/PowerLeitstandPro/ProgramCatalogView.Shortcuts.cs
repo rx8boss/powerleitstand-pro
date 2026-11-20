@@ -5,12 +5,12 @@ namespace PowerControlProWpf;
 
 internal sealed partial class ProgramCatalogView
 {
-    internal string CreateDesktopShortcut(ProgramEntry entry, string? executable)
+    internal string CreateDesktopShortcut(ProgramEntry entry, string? executable, bool portable = false)
     {
         try
         {
             var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            var outcome = SaveDesktopShortcut(entry.Name, executable, desktop);
+            var outcome = SaveDesktopShortcut(entry.Name, executable, desktop, portable);
             return Report(outcome switch
             {
                 true => L("Desktop-Verknüpfung erstellt.", "Desktop shortcut created."),
@@ -34,7 +34,7 @@ internal sealed partial class ProgramCatalogView
         return ProgramLocalInventory.AdwCleanerWinGetExecutable(proof.Version, path);
     }
 
-    internal static bool? SaveDesktopShortcut(string name, string? executable, string desktop)
+    internal static bool? SaveDesktopShortcut(string name, string? executable, string desktop, bool portable = false)
     {
         if (executable is null || !Path.IsPathFullyQualified(executable) || executable.StartsWith(@"\\", StringComparison.Ordinal)
             || !Path.GetExtension(executable).Equals(".exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(executable))
@@ -44,7 +44,19 @@ internal sealed partial class ProgramCatalogView
         if (!Path.IsPathFullyQualified(desktop) || !Directory.Exists(desktop)) throw new IOException("Desktop folder unavailable.");
         string destination = Path.Combine(desktop, name + ".lnk");
         string common = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
-        if (File.Exists(destination) || common.Length != 0 && File.Exists(Path.Combine(common, name + ".lnk"))) return false;
+        string? commonLink = common.Length == 0 ? null : Path.Combine(common, name + ".lnk");
+        if (File.Exists(destination) || File.Exists(commonLink))
+        {
+            if (!portable || PointsToProgram(destination) || PointsToProgram(commonLink)) return false;
+            destination = Path.Combine(desktop, name + " (Portable).lnk");
+            if (File.Exists(destination))
+            {
+                if (PointsToProgram(destination)) return false;
+                throw new IOException("Der portable Desktop-Link ist bereits anderweitig belegt. / The portable desktop shortcut name is already in use.");
+            }
+        }
+        bool PointsToProgram(string? path) => File.Exists(path)
+            && string.Equals(ProgramPathResolver.ReadShortcut(path!), executable, StringComparison.OrdinalIgnoreCase);
         string stage = Path.Combine(desktop, "." + Guid.NewGuid().ToString("N") + ".lnk");
         object? shell = null, link = null;
         try
@@ -55,6 +67,7 @@ internal sealed partial class ProgramCatalogView
             ((dynamic)link).TargetPath = executable;
             ((dynamic)link).WorkingDirectory = Path.GetDirectoryName(executable);
             ((dynamic)link).Save();
+            if (!PointsToProgram(stage)) throw new IOException("Das Ziel der Desktop-Verknüpfung konnte nicht bestätigt werden. / The desktop shortcut target could not be verified.");
             File.Move(stage, destination);
             return true;
         }

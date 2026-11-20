@@ -153,7 +153,7 @@ internal sealed partial class ProgramCatalogView : UserControl
             try { await PauseBackgroundInspectionAsync(); }
             finally { SelectionOpen = false; }
             if (HostBusy() || IsWorking) return;
-            CloseInfo(); ClearFinishedProgress(); await ProgramRemovalDialog.ShowAsync(this); await RefreshAsync();
+            CloseInfo(); ClearFinishedProgress(); await ProgramRemovalDialog.ShowAsync(this);
         };
         Grid.SetColumn(InstalledButton, 3); actions.Children.Add(InstalledButton);
         footer.Children.Add(actions); Grid.SetRow(_progress, 1); _progress.Margin = new(0, 5, 0, 0); footer.Children.Add(_progress);
@@ -224,7 +224,8 @@ internal sealed partial class ProgramCatalogView : UserControl
     internal void SetCategory(string category)
     { if (!ProgramCatalog.Categories.Contains(category)) return; _category = category; CloseAdditionalCategories(); CloseInfo(); RenderTiles(); _scroll.ScrollToTop(); }
     internal void ClearSearch() { CancelSearch(); _search.Clear(); _search.Focus(); }
-    internal bool IsInstalled(string id) => Inventory.Installed.ContainsKey(id) || _marks.Contains(id);
+    internal bool IsInstalled(string id) => !PortableRegistrationWithoutFile(id) && (Inventory.Installed.ContainsKey(id) || _marks.Contains(id));
+    internal bool PortableRegistrationWithoutFile(string id) => Inventory.Evidence?.GetValueOrDefault(id)?.MissingPortableFile == true;
     internal bool IsManual(string id) => !Inventory.Installed.ContainsKey(id) && _marks.Contains(id);
     internal bool CanReinstall(ProgramEntry entry) => Service is ProgramInstallService service && !IsManual(entry.Id)
         && service.CanReinstall(entry, Inventory);
@@ -233,10 +234,21 @@ internal sealed partial class ProgramCatalogView : UserControl
     internal void RecordInstalled(string id)
     { try { _marks.RecordInstalled(id); } catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { WriteLog?.Invoke(L("Installationszeit nicht gespeichert: ", "Installation time could not be saved: ") + e.Message); } }
     internal void ForgetInstallation(string id)
-    { try { _marks.ForgetInstallation(id); } catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { WriteLog?.Invoke(L("Installationszeit nicht entfernt: ", "Installation time could not be removed: ") + e.Message); } }
+    {
+        if (PortableRegistrationWithoutFile(id))
+            Inventory = Inventory with
+            {
+                Evidence = Inventory.Evidence?.Where(pair => pair.Key != id).ToDictionary(),
+                InstalledSources = Inventory.InstalledSources?.Where(pair => pair.Key != id).ToDictionary()
+            };
+        try { _marks.ForgetInstallation(id); }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+        { WriteLog?.Invoke(L("Installationszeit nicht entfernt: ", "Installation time could not be removed: ") + e.Message); }
+    }
     internal bool CanMark(string id) => ShowManualMark(id) && !IsWorking && !HostBusy() && !_refreshing && !_searching;
     internal string InstallationStatus(string id)
     {
+        if (PortableRegistrationWithoutFile(id)) return L("Programmdatei fehlt · WinGet-Eintrag vorhanden", "Program executable missing · WinGet registration remains");
         if ((Inventory.IsStale || Inventory.PendingUpdates?.ContainsKey(id) == true || Inventory.UnverifiedInstalledIds?.Contains(id) == true) && Inventory.Installed.ContainsKey(id)) return Inventory.PendingUpdates?.ContainsKey(id) == true
             ? L("Update zuletzt erkannt · wird geprüft", "Update previously detected · pending verification")
             : L("Installiert · gespeicherter Prüfstand", "Installed · saved state");
@@ -268,11 +280,11 @@ internal sealed partial class ProgramCatalogView : UserControl
         RenderTiles();
     }
     internal void Select(string id, bool selected)
-    { if (IsWorking || HostBusy() || SelectionOpen || _refreshing || _searching) return; CancelBackgroundInspection(); if (selected && (!IsInstalled(id) || Inventory.HasUpdate(id))) Selected.Add(id); else Selected.Remove(id); RefreshAvailability(); }
+    { if (IsWorking || HostBusy() || SelectionOpen || _refreshing || _searching) return; CancelBackgroundInspection(); if (selected && !PortableRegistrationWithoutFile(id) && (!IsInstalled(id) || Inventory.HasUpdate(id))) Selected.Add(id); else Selected.Remove(id); RefreshAvailability(); }
     private void RenderTiles()
     {
         _info?.RefreshInventory();
-        if (!Inventory.IsPartial) Selected.RemoveWhere(id => IsInstalled(id) && !Inventory.HasUpdate(id));
+        if (!Inventory.IsPartial) Selected.RemoveWhere(id => PortableRegistrationWithoutFile(id) || IsInstalled(id) && !Inventory.HasUpdate(id));
         foreach (var (id, tab) in _categories) tab.BorderThickness = new(id == _category ? 2 : 1);
         var query = _search.Text.Trim();
         UpdateCategoryVisibility();
@@ -281,7 +293,7 @@ internal sealed partial class ProgramCatalogView : UserControl
         var entries = ProgramCatalog.Entries.Where(x => (query.Length > 0 || _category == "all" || x.Categories.Contains(_category))
             && (query.Length == 0 || (x.Name + " " + x.Description(_english) + " " + x.Publisher + " " + x.PackageId).Contains(query, StringComparison.OrdinalIgnoreCase)));
         if (online) entries = entries.Concat(_results);
-        var ordered = entries.Where(e => IsInstalled(e.Id) || CanOfferNewInstall(e) || e.Id == "teamspeak").DistinctBy(x => x.PackageId ?? x.Id, StringComparer.OrdinalIgnoreCase).ToArray();
+        var ordered = entries.Where(e => IsInstalled(e.Id) || PortableRegistrationWithoutFile(e.Id) || CanOfferNewInstall(e) || e.Id == "teamspeak").DistinctBy(x => x.PackageId ?? x.Id, StringComparer.OrdinalIgnoreCase).ToArray();
         string key = _english + ":" + _compact + ":" + _category + ":" + MostRecentlyInstalledId + ":" + string.Join("|", ordered.Select(e => e.Id + ":" + IsInstalled(e.Id) + ":" + IsManual(e.Id) + ":" + Selected.Contains(e.Id) + ":" + Inventory.HasUpdate(e.Id) + ":" + UpdateTarget(e.Id)));
         if (ReferenceEquals(_renderedInventory, Inventory) && _renderedKey == key)
         { FitTiles((_scroll.Parent as FrameworkElement)?.ActualHeight ?? 0); RefreshAvailability(); return; }
@@ -317,7 +329,7 @@ internal sealed partial class ProgramCatalogView : UserControl
             fallback.Visibility = image.Source is null ? Visibility.Visible : Visibility.Collapsed; image.Tag = fallback; iconCell.Children.Add(fallback); iconCell.Children.Add(image); labels.Children.Add(iconCell);
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new(0, 0, 3, 0) };
             var name = Text(entry.Name, _compact ? 11.5 : 12); name.FontWeight = FontWeights.SemiBold; name.TextWrapping = TextWrapping.NoWrap; name.TextTrimming = TextTrimming.CharacterEllipsis; stack.Children.Add(name);
-            var description = Text(entry.Description(_english), 10); description.LineHeight = 12; description.MaxHeight = 24; description.TextTrimming = TextTrimming.WordEllipsis; description.Margin = new(0, 3, 0, 0); description.Visibility = installed ? Visibility.Collapsed : Visibility.Visible; stack.Children.Add(description);
+            var description = Text(PortableRegistrationWithoutFile(entry.Id) ? InstallationStatus(entry.Id) : entry.Description(_english), 10); description.LineHeight = 12; description.MaxHeight = 24; description.TextTrimming = TextTrimming.WordEllipsis; description.Margin = new(0, 3, 0, 0); description.Visibility = installed ? Visibility.Collapsed : Visibility.Visible; stack.Children.Add(description);
             if (installed)
             {
                 row.VerticalAlignment = VerticalAlignment.Top; row.Margin = new(7, _compact ? 4 : 6, 7, 6);
@@ -328,7 +340,7 @@ internal sealed partial class ProgramCatalogView : UserControl
             open.Click += (_, _) => ShowInfo(entry, open, true);
             frame.MouseEnter += (_, _) => { _ = Assets.EnsureIconAsync(entry); };
             var check = new CheckBox { Style = (Style)_page.FindResource("UpdateSelection"), IsChecked = Selected.Contains(entry.Id), VerticalAlignment = installed ? VerticalAlignment.Top : VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
-                Visibility = installed && !selectableUpdate ? Visibility.Collapsed : Visibility.Visible, Margin = new(7, installed ? (_compact ? 5 : 7) : 0, 0, 0) };
+                Visibility = PortableRegistrationWithoutFile(entry.Id) || installed && !selectableUpdate ? Visibility.Collapsed : Visibility.Visible, Margin = new(7, installed ? (_compact ? 5 : 7) : 0, 0, 0) };
             AutomationProperties.SetName(check, L("Auswählen: ", "Select: ") + entry.Name); check.Checked += (_, _) => Select(entry.Id, true); check.Unchecked += (_, _) => Select(entry.Id, false);
             overlay.Children.Add(open);
             if (installed)
@@ -429,7 +441,7 @@ internal sealed partial class ProgramCatalogView : UserControl
             cancellation.Token.ThrowIfCancellationRequested();
             var inventory = await InspectInventoryAsync(cancellation.Token, false);
             if (cancellation.IsCancellationRequested || _inspectionCancellation != cancellation) return;
-            Inventory = PreserveLastCandidates(previousInventory, inventory); inventory = Inventory; Selected.RemoveWhere(id => IsInstalled(id) && !Inventory.HasUpdate(id));
+            Inventory = PreserveLastCandidates(previousInventory, inventory); inventory = Inventory; Selected.RemoveWhere(id => PortableRegistrationWithoutFile(id) || IsInstalled(id) && !Inventory.HasUpdate(id));
             FinishCheckStatus(inventory);
             if (inventory.OnlineError is not null) ShowConnectionOverlay(new OnlineConnectionException(!OnlineConnection.Available));
             else if (!inventory.Complete && !inventory.UpdateCheckComplete && inventory.Error is not null) ShowConnectionOverlay(new System.IO.IOException(inventory.Error));
@@ -474,7 +486,7 @@ internal sealed partial class ProgramCatalogView : UserControl
             if (results.Count > 0) { _checkHasFreshResults = true; _checkStage = CheckStage.Partial; RefreshAvailability(); }
             var inventory = await InspectInventoryAsync(cancellation.Token, true);
             if (cancellation.IsCancellationRequested || _searchCancellation != cancellation || _search.Text.Trim() != query) return;
-            Inventory = inventory; Selected.RemoveWhere(id => IsInstalled(id) && !Inventory.HasUpdate(id));
+            Inventory = inventory; Selected.RemoveWhere(id => PortableRegistrationWithoutFile(id) || IsInstalled(id) && !Inventory.HasUpdate(id));
             FinishCheckStatus(inventory);
             if (inventory.OnlineError is not null) ShowConnectionOverlay(new OnlineConnectionException(!OnlineConnection.Available), true); else HideConnectionOverlay();
             _searchStatus = results.Count + L(" WinGet-Treffer · zusätzliche Ergebnisse aus der Onlinequelle", " WinGet results · additional matches from the online source");
@@ -491,7 +503,7 @@ internal sealed partial class ProgramCatalogView : UserControl
     internal void RequestStop()
     { if (!IsWorking) return; if (DeveloperPane is not null) { DeveloperPane.Stop(); return; } OperationPanel?.StopRequested(); _stopping = true; _prepare?.Cancel(); (Service as IProgramCancelableUpdate)?.StopPortableDownload(); _phase = L("Stop angefordert · laufenden Vorgang zuerst beenden", "Stop requested · finish the current operation first"); RefreshAvailability(); }
     internal Task InstallAsync() => InstallEntriesAsync(KnownEntries.Where(x => Selected.Contains(x.Id) && (!IsInstalled(x.Id) || Inventory.HasUpdate(x.Id))).ToArray());
-    internal bool CanOfferNewInstall(ProgramEntry entry) => entry.Id != "teamspeak" && (entry.PackageId is not null
+    internal bool CanOfferNewInstall(ProgramEntry entry) => !PortableRegistrationWithoutFile(entry.Id) && entry.Id != "teamspeak" && (entry.PackageId is not null
         || entry.Id == "mpv" && Inventory.Managers?.Any(manager => manager.Present && manager.Manager is "Scoop" or "Chocolatey") == true);
 
     private Task InstallNewAsync() => InstallEntriesAsync(KnownEntries.Where(x => Selected.Contains(x.Id) && !IsInstalled(x.Id)).ToArray(), newOnly: true);
@@ -509,7 +521,7 @@ internal sealed partial class ProgramCatalogView : UserControl
             if ((!scopedUpdates && Inventory.IsStale) || _refreshing || _searching || IsWorking || HostBusy()) return;
         }
         finally { SelectionOpen = false; RefreshAvailability(); }
-        entries = entries.Where(x => KnownEntries.Any(k => ReferenceEquals(k, x)) && (scopedUpdates ? Inventory.Installed.ContainsKey(x.Id) : allowReinstall
+        entries = entries.Where(x => !PortableRegistrationWithoutFile(x.Id) && KnownEntries.Any(k => ReferenceEquals(k, x)) && (scopedUpdates ? Inventory.Installed.ContainsKey(x.Id) : allowReinstall
             ? IsInstalled(x.Id) && Service is ProgramInstallService api && api.CanReinstall(x, Inventory)
             : !IsInstalled(x.Id) || !newOnly && Inventory.HasUpdate(x.Id))).DistinctBy(x => x.Id).ToArray();
         if (entries.Length == 0) return;
@@ -713,7 +725,12 @@ internal sealed partial class ProgramCatalogView : UserControl
                         RecordInstalled(entry.Id);
                         string configured = entry.Id == "vlc" ? L("ZIP eingerichtet", "ZIP configured") : L("Portable eingerichtet", "Portable configured");
                         WriteLog?.Invoke(entry.Name + ": " + configured + ": " + executable);
-                        Selected.Remove(entry.Id); Inventory = await Service.InspectAsync(CancellationToken.None); OperationPanel?.Location(entry.Id, executable); if (choice.DesktopShortcut) OperationPanel?.ShortcutResult(entry.Id, CreateDesktopShortcut(entry, executable)); OperationPanel?.State(entry.Id, configured); RenderTiles();
+                        if (choice.DesktopShortcut)
+                            OperationPanel?.ShortcutResult(entry.Id, CreateDesktopShortcut(entry, executable, portable: true));
+                        OperationPanel?.Location(entry.Id, executable);
+                        Selected.Remove(entry.Id);
+                        Inventory = await Service.InspectAsync(CancellationToken.None);
+                        OperationPanel?.State(entry.Id, configured); RenderTiles();
                     }
                     catch (OperationCanceledException) when (_stopping) { OperationPanel?.State(entry.Id, L("Gestoppt", "Stopped")); break; }
                     catch (Exception e) { OperationPanel?.State(entry.Id, L("Fehler · siehe Protokoll", "Error · see log")); WriteLog?.Invoke(entry.Name + ": " + UiText.Error(e, _english)); }
@@ -856,7 +873,7 @@ internal sealed partial class ProgramCatalogView : UserControl
                     {
                         var proof = workInventory.Evidence?.GetValueOrDefault(entry.Id);
                         string? executable = await Task.Run(() => DesktopExecutable(entry, proof));
-                        OperationPanel?.ShortcutResult(entry.Id, CreateDesktopShortcut(entry, executable));
+                        OperationPanel?.ShortcutResult(entry.Id, CreateDesktopShortcut(entry, executable, portable: entry.Id == "adwcleaner" || proof?.Source == "Portable" || proof?.LocationEvidence?.Source == "WinGet portable"));
                     }
                     Selected.Remove(entry.Id); WriteLog?.Invoke(entry.Name + (reinstall ? L(": Neuinstallation bestätigt.", ": reinstallation verified.") : L(": Installation/Update bestätigt.", ": installation/update verified.")));
                 }

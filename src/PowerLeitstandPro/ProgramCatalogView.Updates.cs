@@ -9,6 +9,7 @@ internal sealed partial class ProgramCatalogView
 
     internal string? UpdateTarget(string id)
     {
+        if (PortableRegistrationWithoutFile(id)) return null;
         var known = Inventory.Updates?.GetValueOrDefault(id) ?? Inventory.PendingUpdates?.GetValueOrDefault(id) ?? Inventory.GitHubUpdates?.GetValueOrDefault(id);
         if (known is not null) return known;
         var proof = Inventory.Evidence?.GetValueOrDefault(id);

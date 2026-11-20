@@ -93,7 +93,7 @@ internal static class UpdateManagerTests
         finally { main.Close(); }
     }
 
-    internal static int Run(App app, string output)
+    internal static int Run(App app, string output, bool backupsOnly = false)
     {
         UiSoundService.MuteForTests = true;
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher));
@@ -123,9 +123,16 @@ internal static class UpdateManagerTests
         try
         {
             var fixtureNotes = "Beispieldaten\n" + string.Join("\n", Enumerable.Range(1, 50).Select(n => "• Änderung " + n + " dieser Version"));
-            for (var i = 0; i < 6; i++) Wait(store.CreateAsync(source, "1.1." + i, fixtureNotes));
+            for (var i = 0; i < 9; i++)
+            {
+                Wait(store.CreateAsync(source, "1.1." + i, fixtureNotes));
+                if (i == 7)
+                    Assert(store.List().Count == 8 && store.List().Any(b => b.Version == "1.1.0"),
+                        "the first eight backups are retained, including the original four");
+            }
             var backups = store.List();
-            Assert(backups.Count == 4 && backups.Select(b => b.Version).SequenceEqual(new[] { "1.1.5", "1.1.4", "1.1.3", "1.1.2" }), "four newest verified backups retained");
+            Assert(backups.Count == 8 && backups.Select(b => b.Version).SequenceEqual(Enumerable.Range(1, 8).Reverse().Select(i => "1.1." + i)),
+                "the ninth verified backup replaces only the oldest");
             Assert(backups.All(b => File.Exists(b.BinaryPath)), "backup binaries and manifests exist");
             Assert(Result(store.VerifyAsync(backups[0])), "stored hash matches binary");
             File.AppendAllText(backups[0].BinaryPath, "corrupt");
@@ -139,7 +146,35 @@ internal static class UpdateManagerTests
             File.Delete(sentinel);
             var missing = Path.Combine(output, "missing.exe");
             try { Wait(store.CreateAsync(missing, "1.1.9", "")); throw new Exception("Missing source accepted"); }
-            catch (FileNotFoundException) { Assert(store.List().Count == 4 && Directory.GetDirectories(store.Root).Length == 4, "failed snapshot preserves retention and removes incomplete folder"); }
+            catch (FileNotFoundException)
+            {
+                Assert(store.List().Select(b => b.Folder).SequenceEqual(backups.Select(b => b.Folder))
+                    && Directory.GetDirectories(store.Root).Length == 8,
+                    "failed snapshot preserves all eight backups and removes the incomplete folder");
+            }
+
+            if (backupsOnly)
+            {
+                foreach (bool english in new[] { false, true })
+                {
+                    var window = new UpdateManagerWindow(ThemePalette.For("Standard"), english, () => false, store,
+                        _ => Task.FromResult<IReadOnlyList<UpdateRelease>>([]), autoLoad: false) { ShowActivated = false };
+                    try
+                    {
+                        window.Show(); window.ShowRecoveryView(); Wait(window.PendingSelection);
+                        Assert(((ListBox)window.FindName("VersionList")).Items.Count == 8
+                            && ((TextBlock)window.FindName("LatestText")).Text.StartsWith("8 / 8"),
+                            "all eight backups are available in the recovery list");
+                        Assert(((TextBlock)window.FindName("BackupLocation")).Text.Contains(english ? "up to 8 backups" : "maximal 8 Sicherungen"),
+                            "the retention hint uses the current limit in both languages");
+                        Save(window, english ? "Backups-EN" : "Backups-DE");
+                    }
+                    finally { window.Close(); }
+                }
+                Assert(errors.Count == 0, "no unhandled dispatcher errors");
+                Console.WriteLine($"PASS BACKUP LIMIT: {checks} checks using fixture files only.");
+                return 0;
+            }
 
             object Release(string tag, bool draft = false, bool prerelease = false, bool badHash = false) => new
             {
@@ -160,13 +195,13 @@ internal static class UpdateManagerTests
                 try
                 {
                     w.Show(); Wait(w.ReloadAsync());
-                    if (small) { w.Width = 420; w.Height = 400; }
+                    if (small) { w.Width += 50; w.Height += 50; }
                     Pump(); w.UpdateLayout();
                     var list = (ListBox)w.FindName("VersionList"); var notes = (ScrollViewer)w.FindName("NotesScroll");
                     Wait(w.PendingSelection);
-                    Assert(w.Width <= 620 && w.Height <= 480, "compact window size");
+                    Assert(w.ActualWidth <= 548 && w.ActualHeight <= 540 && w.MinWidth == w.MaxWidth && w.MinHeight == w.MaxHeight, "fixed window size");
                     Assert(NativeWindowCapture.HasNoNativeTopStrip(w), "native window has no extra top strip");
-                    Assert(NativeWindowCapture.LeftResizeHit(w) == 10, "native left border still resizes");
+                    Assert(NativeWindowCapture.LeftResizeHit(w) != 10, "native left border cannot resize the dialog");
                     var back = (Button)w.FindName("BackButton"); var close = (Button)w.FindName("HeaderCloseButton");
                     Assert(back.Width == 28 && back.Height == 28 && close.ActualWidth == 28 && close.ActualHeight == 28, "compact square header buttons");
                     Assert(back.Content is System.Windows.Shapes.Path && close.Content is System.Windows.Shapes.Path, "header icons use vector geometry");
@@ -194,7 +229,7 @@ internal static class UpdateManagerTests
                     if (!english && !small && theme is "Standard" or "Classic" or "Neon Blau") Save(w, "Updates-" + theme.Replace(" ", "-"));
                     if (!english && small && theme == "Standard") Save(w, "Updates-Klein");
                     w.ShowRecoveryView(); Wait(w.PendingSelection); Pump();
-                    Assert(w.IsRecoveryView && list.Items.Count == 4 && ((Button)w.FindName("InstallButton")).IsEnabled, "same window switches to four valid backups");
+                    Assert(w.IsRecoveryView && list.Items.Count == 8 && ((Button)w.FindName("InstallButton")).IsEnabled, "same window switches to eight valid backups");
                     Assert(((Button)w.FindName("DeleteBackupButton")).Visibility == Visibility.Visible, "selected backup can be deleted");
                     if (!english && !small && theme is "Standard" or "Classic" or "Neon Blau") Save(w, "Sicherungen-" + theme.Replace(" ", "-"));
                     if (!english && small && theme == "Standard") Save(w, "Sicherungen-Klein");
@@ -222,7 +257,7 @@ internal static class UpdateManagerTests
             Save(minimum, "Updates-Minimum"); minimum.Close();
             var broken = new UpdateManagerWindow(ThemePalette.For("Standard"), false, () => false, store, _ => throw new IOException("fixture offline"), false) { ShowActivated = false };
             broken.Show(); Wait(broken.ReloadAsync()); broken.ShowRecoveryView(); Wait(broken.PendingSelection);
-            Assert(((ListBox)broken.FindName("VersionList")).Items.Count == 4 && ((Button)broken.FindName("InstallButton")).IsEnabled, "offline releases do not disable local restoration");
+            Assert(((ListBox)broken.FindName("VersionList")).Items.Count == 8 && ((Button)broken.FindName("InstallButton")).IsEnabled, "offline releases do not disable local restoration");
             File.AppendAllText(store.List()[0].BinaryPath, "bad"); broken.ShowRecoveryView(); Wait(broken.PendingSelection);
             Assert(!((Button)broken.FindName("InstallButton")).IsEnabled && ((Button)broken.FindName("DeleteBackupButton")).IsEnabled, "damaged backup cannot restore but remains deletable");
             File.Copy(source, store.List()[0].BinaryPath, true); broken.Close();
@@ -242,12 +277,12 @@ internal static class UpdateManagerTests
                 answer.Start();
             }
             ReplyToConfirmation(false); ((Button)deleting.FindName("DeleteBackupButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
-            Assert(store.List().Count == 4, "delete confirmation cancellation preserves all backups");
+            Assert(store.List().Count == 8, "delete confirmation cancellation preserves all backups");
             ReplyToConfirmation(true); ((Button)deleting.FindName("DeleteBackupButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var deletionDeadline = DateTime.UtcNow.AddSeconds(10);
-            while (store.List().Count == 4 && DateTime.UtcNow < deletionDeadline) { Pump(); Thread.Sleep(10); }
+            while (store.List().Count == 8 && DateTime.UtcNow < deletionDeadline) { Pump(); Thread.Sleep(10); }
             Wait(deleting.PendingSelection);
-            Assert(store.List().Count == 3, "actual delete button removes the confirmed fixture backup"); deleting.Close();
+            Assert(store.List().Count == 7, "actual delete button removes the confirmed fixture backup"); deleting.Close();
 
             var picking = new UpdateManagerWindow(ThemePalette.For("Standard"), false, () => false, store, _ => Task.FromResult(releases), false);
             picking.Loaded += async (_, _) =>

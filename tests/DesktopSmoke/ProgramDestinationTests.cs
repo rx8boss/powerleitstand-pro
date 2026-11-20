@@ -81,11 +81,67 @@ internal static class ProgramDestinationTests
         var link = "AdwCleaner-Fixture-" + Guid.NewGuid().ToString("N");
         Assert(ProgramCatalogView.SaveDesktopShortcut(link, found, portableRoot) == true
             && ProgramPathResolver.ReadShortcut(Path.Combine(portableRoot, link + ".lnk")) == executable, "Portable package resolution creates a working link");
+        string otherExecutable = Path.Combine(portableRoot, "OtherCopy.exe");
+        File.Copy(executable, otherExecutable);
+        Assert(ProgramCatalogView.SaveDesktopShortcut(link, otherExecutable, portableRoot, portable: true) == true
+            && ProgramPathResolver.ReadShortcut(Path.Combine(portableRoot, link + " (Portable).lnk")) == otherExecutable
+            && ProgramPathResolver.ReadShortcut(Path.Combine(portableRoot, link + ".lnk")) == executable,
+            "A same-name link for another copy is preserved and the portable copy gets its own working link");
+        Assert(ProgramCatalogView.SaveDesktopShortcut(link, otherExecutable, portableRoot, portable: true) == false,
+            "Repeating portable setup does not duplicate its shortcut");
         File.Copy(executable, Path.Combine(portableRoot, "adwcleaner.exe"), true);
         Assert(ProgramLocalInventory.AdwCleanerExecutable("8.8.1.639", [portableRoot], _ => ("AdwCleaner", "Malwarebytes", "8.8.1.639")) is null, "Two matching copies stay ambiguous");
 
         Assert(ProgramLocalInventory.AdwCleanerExecutable("8.8.1.639", [portableRoot], _ => ("AdwCleaner", "Malwarebytes", "8.8.1.639"), executable) == executable,
             "The exact registered WinGet target resolves a portable alias without guessing");
+        const string winGetSource = "Microsoft.Winget.Source_8wekyb3d8bbwe";
+        foreach (string id in ProgramCatalog.Entries.Select(entry => entry.PackageId).OfType<string>().Distinct())
+        {
+            string code = id + "_" + winGetSource;
+            Assert(ProgramLocalInventory.PortableWinGetProductCode(id, winGetSource, "portable", code, id) == code
+                && ProgramLocalInventory.PortableWinGetProductCode(id, winGetSource, "exe", code, id) is null
+                && ProgramLocalInventory.PortableWinGetProductCode(id, winGetSource, "portable", code + " --force", id) is null,
+                "Portable registration requires the exact product code and installer kind: " + id);
+        }
+        var userUninstall = ProgramRemovalService.PortableWinGetUninstallCommand(adw.PackageId + "_" + winGetSource, Microsoft.Win32.RegistryHive.CurrentUser);
+        var machineUninstall = ProgramRemovalService.PortableWinGetUninstallCommand(adw.PackageId + "_" + winGetSource, Microsoft.Win32.RegistryHive.LocalMachine);
+        Assert(userUninstall.ArgumentList.SequenceEqual(new[] { "uninstall", "--product-code", adw.PackageId + "_" + winGetSource,
+            "--exact", "--scope", "user", "--preserve", "--disable-interactivity" })
+            && machineUninstall.ArgumentList[5] == "machine", "Portable WinGet uninstalls target only the confirmed package and scope");
+        string emptyPackage = Directory.CreateDirectory(Path.Combine(output, "Empty WinGet package")).FullName;
+        string missingTarget = Path.Combine(emptyPackage, "app.exe");
+        Assert(ProgramLocalInventory.PortableWinGetFileMissing(emptyPackage, null)
+            && ProgramLocalInventory.PortableWinGetFileMissing(Path.Combine(emptyPackage, "Deleted"), null), "An empty or deleted package directory is incomplete");
+        Directory.CreateDirectory(Path.Combine(emptyPackage, "Nested"));
+        Assert(!ProgramLocalInventory.PortableWinGetFileMissing(emptyPackage, null), "An archive can keep its binaries below the package directory");
+        Assert(ProgramLocalInventory.PortableWinGetFileMissing(emptyPackage, missingTarget), "Missing recorded executable is detected");
+        File.Copy(executable, missingTarget);
+        Assert(!ProgramLocalInventory.PortableWinGetFileMissing(emptyPackage, missingTarget), "An existing recorded executable is not treated as missing");
+
+        var missingProof = new ProgramInstallation(null, ProgramInstallation.MissingWinGetPortable, WinGetCompatible: false);
+        var current = new ProgramInventory(true, new Dictionary<string, string?>(),
+            Evidence: new Dictionary<string, ProgramInstallation> { [adw.Id] = missingProof }, UpdateCheckComplete: true, CheckedUtc: DateTime.UtcNow);
+        var savedInstalled = new ProgramInventory(true, new Dictionary<string, string?> { [adw.Id] = "1.2.3" }, IsStale: true,
+            PendingUpdates: new Dictionary<string, string> { [adw.Id] = "2.0" });
+        var merged = ProgramCatalogView.PreserveLastCandidates(savedInstalled, current with { Complete = false, IsPartial = true });
+        Assert(!merged.Installed.ContainsKey(adw.Id) && !merged.HasUpdateNotice(adw.Id), "An offline refresh cannot resurrect a missing executable as installed");
+        var cache = new ProgramInspectionCache(Path.Combine(output, "MissingPortable.json"));
+        Assert(cache.Save(current, [adw]), "A missing registration can be saved");
+        var reloaded = ProgramInspectionCache.Display(cache.Read([adw], DateTime.UtcNow)!);
+        Assert(!reloaded.Installed.ContainsKey(adw.Id) && reloaded.Evidence?[adw.Id].MissingPortableFile == true,
+            "Reload retains the cleanup action without inventing an installed program");
+        var staleExport = new ProgramInstallService(query: (command, _) =>
+        {
+            if (command.ArgumentList[0] == "export")
+                File.WriteAllText(command.ArgumentList[command.ArgumentList.IndexOf("--output") + 1],
+                    $$"""{"Sources":[{"SourceDetails":{"Name":"winget"},"Packages":[{"PackageIdentifier":"{{adw.PackageId}}","Version":"1.2.3"}]}]}""");
+            return Task.FromResult(new WinGetResult(0, $"AdwCleaner {adw.PackageId} 1.2.3 2.0 winget"));
+        }, localReader: (_, _) => Task.FromResult(new Dictionary<string, ProgramInstallation> { [adw.Id] = missingProof }));
+        var inspected = await staleExport.InspectAsync(default);
+        Assert(!inspected.Installed.ContainsKey(adw.Id) && !inspected.HasUpdate(adw.Id)
+            && inspected.Evidence?[adw.Id].MissingPortableFile == true, "WinGet list and export cannot reintroduce a missing portable file");
+        var checkedEntry = await staleExport.RecordEntryCheckAsync(savedInstalled, adw, missingProof, null, DateTime.UtcNow, default);
+        Assert(!checkedEntry.Installed.ContainsKey(adw.Id) && !checkedEntry.HasUpdateNotice(adw.Id), "Single check clears the stale installed badge");
         string adminManifest = $"""
             PackageIdentifier: {vlc.PackageId}
             PackageVersion: 2.0
@@ -161,6 +217,21 @@ internal static class ProgramDestinationTests
                 start.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Wait(dialog);
                 Assert(dialog.Result![0].DesktopShortcut && !dialog.Result[1].DesktopShortcut, "Desktop shortcut choice is independent per program");
                 Assert(dialog.Result![0].TargetPath == path.Text && dialog.Result[1].TargetPath is null, "each program retains its independent exact destination");
+                var obs = ProgramCatalog.Entries.Single(e => e.Id == "obs-studio");
+                var portable = new PortablePackage("1.2.3", "https://example.invalid/obs.zip", new string('a', 64), 100);
+                var portableDialog = ProgramSelectionDialog.ShowAsync(view, [new(obs, null, portable)], () => output);
+                Pump();
+                var portableCheck = UnifiedDialogAppearance.Children<CheckBox>(host).Single(c => c.Name == "ProgramDesktopShortcut");
+                Assert(portableCheck.IsChecked == true, "Portable-only setup selects the desktop shortcut by default");
+                UnifiedDialogAppearance.Children<Button>(host).Single(b => b.Content is TextBlock t && t.Text == "…")
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Pump();
+                var portableStart = UnifiedDialogAppearance.Children<Button>(host)
+                    .Single(b => b.Content is TextBlock t && t.Text == (english ? "↓ Install" : "↓ Installieren"));
+                Assert(portableStart.IsEnabled, "Portable-only setup can proceed once a folder is selected");
+                portableStart.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Wait(portableDialog);
+                Assert(portableDialog.Result is { Count: 1 } && portableDialog.Result[0].Portable == portable
+                    && portableDialog.Result[0].DesktopShortcut, "Portable setup passes the actual route and shortcut choice to the queue");
                 var updates = new ProgramInventory(true, new Dictionary<string, string?> { [vlc.Id] = "1.0", [firefox.Id] = "1.0" },
                     Updates: new Dictionary<string, string> { [vlc.Id] = "2.0", [firefox.Id] = "2.0" }, UpdateCheckComplete: true);
                 foreach (string selection in new[] { "single-update", "multiple-updates", "mixed", "reinstall", "cancel-update" })
@@ -250,7 +321,8 @@ internal static class ProgramDestinationTests
                 for (int n = 0; n < pickers.Length; n++)
                 { var toggle = UnifiedDialogAppearance.Children<CheckBox>(pickers[n]).Single(); Assert(toggle.IsEnabled, "freshly confirmed queue offers destination"); toggle.IsChecked = true; UnifiedDialogAppearance.Children<TextBox>(pickers[n]).Single().Text = targets[n]; }
                 Pump();
-                var start = UnifiedDialogAppearance.Children<Button>(host).Single(b => b.Content is TextBlock t && t.Text == "↓ Auswahl starten");
+                var start = UnifiedDialogAppearance.Children<Button>(host).Single(b => b.Content is TextBlock t
+                    && t.Text == (targets.Length == 1 ? "↓ Installieren" : "↓ Auswahl starten"));
                 Assert(start.IsEnabled, "batch can start with independent valid destinations"); start.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             }
             var batch = view.InstallEntriesAsync(choices); var destinations = choices.Select(e => Path.Combine(output, "Selected", e.Id)).ToArray(); Confirm(destinations); Wait(batch);

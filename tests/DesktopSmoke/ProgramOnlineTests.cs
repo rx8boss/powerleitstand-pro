@@ -46,7 +46,7 @@ internal static class ProgramOnlineTests
             try { Wait(CatalogWeb.ReadAsync(new Uri("https://example.com/"), new HashSet<string> { "example.com" }, 1024, CancellationToken.None)); throw new Exception("Offline HTTP allowed"); } catch (OnlineConnectionException) { checks++; }
             void Offline(Task action, string name) { try { Wait(action); throw new Exception("Offline action started: " + name); } catch (OnlineConnectionException) { checks++; } }
             Offline(new WindowsUpdateService().SearchAsync(false, CancellationToken.None), "Windows update");
-            Offline(UpdateService.CheckAsync(), "GitHub app update");
+            Offline(UpdateReleaseCatalog.LoadAsync(CancellationToken.None), "GitHub app update");
             Offline(new PrivacyDownloadService(Path.Combine(output, "OfflineDownloads")).DownloadAsync(true, new Progress<PrivacyProgress>(), CancellationToken.None), "O&O download");
             Offline(WinGetService.InstallProcessAsync(new ProcessStartInfo("DO_NOT_START.exe"), () => throw new Exception("Installer started offline")), "installer process");
             try { new ManufacturerService().OpenWebsite(ManufacturerCatalog.Apps[0]); throw new Exception("Browser started offline"); } catch (OnlineConnectionException) { checks++; }

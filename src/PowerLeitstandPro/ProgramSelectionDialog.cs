@@ -51,7 +51,7 @@ internal static class ProgramSelectionDialog
         stripe.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "UnifiedAccent"); Grid.SetColumn(stripe, 1); header.Children.Add(stripe);
         var close = new Button { Content = new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L12,12 M12,0 L0,12"), Width = 11, Height = 11, Stretch = Stretch.Uniform, StrokeThickness = 1.5 } };
         UnifiedDialogAppearance.Button(owner, close, DialogButtonKind.Close); AutomationProperties.SetName(close, L("Schließen", "Close")); Grid.SetColumn(close, 2); header.Children.Add(close); layout.Children.Add(header);
-        var rows = new StackPanel(); var chosen = options.Select(x => x with { Portable = null }).ToArray();
+        var rows = new StackPanel(); var chosen = options.Select(x => x.Installer is null ? x : x with { Portable = null }).ToArray();
         var start = Action(reinstalling ? L("↻ Neu installieren", "↻ Reinstall") : options.Count == 1 && !inventory.HasUpdate(options[0].Entry.Id) ? L("↓ Installieren", "↓ Install") : L("↓ Auswahl starten", "↓ Start selected")); start.Width = 156;
         var count = Text("", 10, true); count.VerticalAlignment = VerticalAlignment.Center;
         var targetChecks = new List<Func<bool>>();
@@ -122,6 +122,7 @@ internal static class ProgramSelectionDialog
                     : L("Offizieller Installer · Download mit SHA-256-Prüfung", "Official installer · download verified with SHA-256"), 10, true));
                 stack.Children.Add(Text(ProgramLocation.Shorten(github.Path), 10, true));
             }
+            System.Windows.Controls.CheckBox? shortcut = null; bool shortcutChanged = false;
             if (option.Reinstall || !inventory.HasUpdate(entry.Id))
             {
                 var picker = new ProgramInstallTargetPicker(owner, entry, english, (value, valid) => { chosen[index] = chosen[index] with { TargetPath = value }; Update(); },
@@ -139,8 +140,9 @@ internal static class ProgramSelectionDialog
                     var browse = Action("…"); browse.Width = 32; browse.Height = browse.MinHeight = 25; browse.Margin = new(7, 0, 0, 0); Grid.SetColumn(browse, 1); target.Children.Add(browse); stack.Children.Add(target);
                     var note = Text(entry.Id == "vlc" ? L("Offizielles VLC-ZIP ohne Installer. VLC verwaltet seine Einstellungen weiterhin wie bisher.", "Official VLC ZIP without installer. VLC continues to manage its settings as before.")
                         : L("OBS wird mit eigener portabler Konfiguration eingerichtet.", "OBS will use its own portable configuration."), 10, true); note.Margin = new(38, 5, 0, 0); note.Visibility = Visibility.Collapsed; stack.Children.Add(note);
-                    installer.Click += (_, _) => { chosen[index] = chosen[index] with { Portable = null }; picker.Visibility = Visibility.Visible; installer.Content = new TextBlock { Text = "✓ Installer", Foreground = Brushes.White }; portable.Content = new TextBlock { Text = portableLabel, Foreground = Brushes.White }; sourceLine.Text = installerSource; installer.BorderThickness = new(2); portable.BorderThickness = new(1); target.Visibility = note.Visibility = Visibility.Collapsed; Update(); };
-                    portable.Click += (_, _) => { chosen[index] = chosen[index] with { Portable = option.Portable }; picker.Visibility = Visibility.Collapsed; installer.Content = new TextBlock { Text = "Installer", Foreground = Brushes.White }; portable.Content = new TextBlock { Text = "✓ " + portableLabel, Foreground = Brushes.White }; sourceLine.Text = option.Portable.Version + (entry.Id == "vlc" ? " · VideoLAN · VLC ZIP" : " · OBS Project · Portable"); installer.BorderThickness = new(1); portable.BorderThickness = new(2); target.Visibility = note.Visibility = Visibility.Visible; Update(); };
+                    installer.Click += (_, _) => { chosen[index] = chosen[index] with { Portable = null }; picker.Visibility = Visibility.Visible; installer.Content = new TextBlock { Text = "✓ Installer", Foreground = Brushes.White }; portable.Content = new TextBlock { Text = portableLabel, Foreground = Brushes.White }; sourceLine.Text = installerSource; installer.BorderThickness = new(2); portable.BorderThickness = new(1); target.Visibility = note.Visibility = Visibility.Collapsed; if (!shortcutChanged && shortcut is not null) shortcut.IsChecked = false; Update(); };
+                    portable.Click += (_, _) => { chosen[index] = chosen[index] with { Portable = option.Portable }; picker.Visibility = Visibility.Collapsed; installer.Content = new TextBlock { Text = "Installer", Foreground = Brushes.White }; portable.Content = new TextBlock { Text = "✓ " + portableLabel, Foreground = Brushes.White }; sourceLine.Text = option.Portable.Version + (entry.Id == "vlc" ? " · VideoLAN · VLC ZIP" : " · OBS Project · Portable"); installer.BorderThickness = new(1); portable.BorderThickness = new(2); target.Visibility = note.Visibility = Visibility.Visible; if (!shortcutChanged && shortcut is not null) shortcut.IsChecked = true; Update(); };
+                    if (option.Installer is null) portable.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     browse.Click += (_, _) =>
                     {
                         string? parent;
@@ -164,11 +166,13 @@ internal static class ProgramSelectionDialog
             if (!option.Reinstall && !inventory.Installed.ContainsKey(entry.Id) && !view.IsInstalled(entry.Id)
                 && (option.Installer is not null || option.Portable is not null))
             {
-                var shortcut = new System.Windows.Controls.CheckBox
+                shortcut = new System.Windows.Controls.CheckBox
                 {
                     Name = "ProgramDesktopShortcut", Content = L("Desktop-Verknüpfung erstellen", "Create desktop shortcut"),
-                    IsChecked = false, Margin = new(0, 8, 0, 0), Padding = new(4, 0, 0, 0)
+                    IsChecked = chosen[index].Portable is not null || entry.Id == "adwcleaner", Margin = new(0, 8, 0, 0), Padding = new(4, 0, 0, 0)
                 };
+                chosen[index] = chosen[index] with { DesktopShortcut = shortcut.IsChecked == true };
+                shortcut.Click += (_, _) => shortcutChanged = true;
                 shortcut.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, "UnifiedText");
                 shortcut.Checked += (_, _) => chosen[index] = chosen[index] with { DesktopShortcut = true };
                 shortcut.Unchecked += (_, _) => chosen[index] = chosen[index] with { DesktopShortcut = false };

@@ -207,7 +207,7 @@ internal sealed class TeamSpeakInfoView : StackPanel, IDisposable
                 if (_closed || !_view.CanChooseProgramFile) return;
                 // A missing path cannot select one edition safely. Use Windows instead of
                 // exposing all TeamSpeak editions under a single deletion action.
-                try { _close(); await ProgramRemovalDialog.ShowAsync(_view, ProgramCatalog.Entries.Single(e => e.Id == "teamspeak"), copy.Path ?? ""); await _view.RefreshAsync(); }
+                try { _close(); await ProgramRemovalDialog.ShowAsync(_view, ProgramCatalog.Entries.Single(e => e.Id == "teamspeak"), copy.Path ?? ""); }
                 catch (Exception error) { _view.WriteLog?.Invoke(UiText.Error(error, _view.English)); }
             };
             details.Children.Add(remove);

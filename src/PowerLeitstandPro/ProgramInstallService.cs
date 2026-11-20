@@ -54,6 +54,7 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
     private readonly Dictionary<string, ProgramEntry> _discovered = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _websites = [];
     private readonly Dictionary<string, string> _installedPackageIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _verifiedUpgradeNames = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string?> _installedPackageVersions = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _ambiguousReinstallIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly Func<IReadOnlyList<VlcRegisteredCopy>>? _vlcCopies;
@@ -476,10 +477,51 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
             if (package.ReinstallProof?.Installed.VlcCopy is null) throw new InvalidOperationException("VLC-Updatekopie nicht bestätigt. / VLC update copy is unconfirmed.");
             return await ReinstallAsync(entry, package, VlcInventory(), started);
         }
-        return await _install(UpgradeCommand(entry, package), started);
+        var command = UpgradeCommand(entry, package);
+        if (package.VersionSource == "WinGet" && _verifiedUpgradeNames.TryGetValue(entry.Id, out var name))
+        {
+            using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var current = await _query(UpdateListCommand("--name", name, exact: true, upgradesOnly: false), limit.Token);
+            var rows = current.Output.Split('\n').Select(line => line.Trim())
+                .SkipWhile(line => !Regex.IsMatch(line, @"^[-─]{3,}$")).Skip(1)
+                .TakeWhile(line => line.Length != 0).ToArray();
+            var match = rows.Length == 1 ? UpdateRows(rows[0], package.Id) : null;
+            if (current.ExitCode != 0 || match is not { Count: 1 }
+                || !string.Equals(match[0].Groups["name"].Value, name, StringComparison.OrdinalIgnoreCase)
+                || !ProgramPortableUpdates.SameVersion(_lastEvidence.GetValueOrDefault(entry.Id)?.Version ?? "", match[0].Groups["old"].Value)
+                || match[0].Groups["new"].Value != package.Version)
+                throw new IOException("WinGet: Die genaue Installation konnte vor dem Update nicht erneut bestätigt werden. / The exact installation could not be reverified before updating.");
+
+            // WinGet can correlate an installed display name before it can filter by the catalog ID.
+            int selector = command.ArgumentList.IndexOf("--id");
+            command.ArgumentList[selector] = "--name";
+            command.ArgumentList[selector + 1] = name;
+        }
+        return await _install(command, started);
     }
 
-    // Only parse exact catalog identities from a read-only `list --upgrade-available` response.
+    private ProcessStartInfo UpdateListCommand(string? selector, string? value, bool exact = false, bool upgradesOnly = true)
+    {
+        var list = new ProcessStartInfo(_executable) { UseShellExecute = false, CreateNoWindow = true };
+        foreach (var arg in new[] { "list", "--source", "winget", "--disable-interactivity" }) list.ArgumentList.Add(arg);
+        if (upgradesOnly) list.ArgumentList.Add("--upgrade-available");
+        if (selector is not null) { list.ArgumentList.Add(selector); list.ArgumentList.Add(value!); }
+        if (exact) list.ArgumentList.Add("--exact");
+        return list;
+    }
+
+    private static IEnumerable<string> UpdatePackageIds(ProgramEntry entry)
+    {
+        if (entry.PackageId is { } id) yield return id;
+        if (entry.Id == "google-chrome") yield return "Google.Chrome.EXE";
+    }
+
+    private static MatchCollection UpdateRows(string output, string id) =>
+        Regex.Matches(output, @"^[ \t]*(?<name>[^\r\n]+?)[ \t]+" + Regex.Escape(id)
+            + @"[ \t]+(?<old>[A-Za-z0-9._+\-]+)[ \t]+(?<new>[A-Za-z0-9._+\-]+)(?:[ \t]+winget)?[ \t]*\r?$",
+            RegexOptions.IgnoreCase | RegexOptions.Multiline);
+
+    // Only parse exact catalog identities from a read-only WinGet upgrade list.
     // Unknown, truncated, pinned or malformed rows never create an actionable update.
     internal static Dictionary<string, string> ParseUpdates(string output, IDictionary<string, string?> installed, IEnumerable<ProgramEntry>? entries = null,
         IDictionary<string, string>? identities = null)
@@ -489,17 +531,15 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
         // Match exact IDs, reject pins/unknown versions/truncated rows and never infer a downgrade.
         foreach (var entry in entries ?? ProgramCatalog.Entries)
         {
-            var ids = entry.Id == "google-chrome" ? new[] { entry.PackageId, "Google.Chrome.EXE" } : new[] { entry.PackageId };
-            foreach (var id in ids.Where(x => x is not null))
+            foreach (var id in UpdatePackageIds(entry).Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                var matches = Regex.Matches(output, @"(?m)^[^\r\n]*?\s+" + Regex.Escape(id!)
-                    + @"\s+(?<old>[A-Za-z0-9._+\-]+)\s+(?<new>[A-Za-z0-9._+\-]+)(?:[ \t]+winget)?[ \t]*\r?$", RegexOptions.IgnoreCase);
+                var matches = UpdateRows(output, id);
                 if (matches.Count != 1) continue;
                 var old = matches[0].Groups["old"].Value; var next = matches[0].Groups["new"].Value;
                 if (!ProgramVersions.IsNewer(old, next)) continue;
                 if (updates.ContainsKey(entry.Id)) { updates.Remove(entry.Id); identities?.Remove(entry.Id); break; }
                 installed[entry.Id] = old; updates[entry.Id] = next;
-                if (identities is not null) identities[entry.Id] = id!;
+                if (identities is not null) identities[entry.Id] = id;
             }
         }
         return updates;
@@ -529,6 +569,8 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
         _recentInventory = null;
         var entries = selection ?? KnownEntries;
         var selectedIds = entries.Select(e => e.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (selection is null) _verifiedUpgradeNames.Clear();
+        else foreach (var id in selectedIds) _verifiedUpgradeNames.Remove(id);
         if (selection is null)
         { _recentExport = new Dictionary<string, string?>(); _recentUpdatesText = ""; _installedPackageIds.Clear(); _installedPackageVersions.Clear(); _ambiguousReinstallIds.Clear(); }
         var storeTask = selection is null || entries.Any(e => ProgramVersions.StoreFamilies.ContainsKey(e.Id))
@@ -543,7 +585,7 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
         var managed = await managedTask;
         ProgramManagedInventory.Merge(evidence, managed);
         if (_portableFile is not null) foreach (var pair in new ProgramPortableStore(_portableFile).Read()) if ((selection is null || selectedIds.Contains(pair.Key)) && !evidence.ContainsKey(pair.Key)) evidence[pair.Key] = pair.Value;
-        var installed = evidence.ToDictionary(x => x.Key, x => x.Value.Version);
+        var installed = evidence.Where(p => !p.Value.MissingPortableFile).ToDictionary(p => p.Key, p => p.Value.Version);
         var directUpdates = new Dictionary<string, PortableUpdate>();
         var githubUpdates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var githubPackages = new Dictionary<string, GitHubProgramUpdate>(StringComparer.OrdinalIgnoreCase);
@@ -597,20 +639,42 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
         // upgrades merely because an unrelated package delays inventory enrichment.
         try
         {
+            const int noInstalledPackage = unchecked((int)0x8A150014);
+            const int noUpgrade = unchecked((int)0x8A15002B);
+            var fallbackNames = new Dictionary<string, string>();
             async Task<WinGetResult> ListUpdatesAsync(CancellationToken queryToken)
             {
-                var ids = selection is null ? new string?[] { null } : entries.Where(e => e.PackageId is not null && evidence.GetValueOrDefault(e.Id) is not { WinGetCompatible: false })
-                    .SelectMany(e => e.Id == "google-chrome" ? new[] { e.PackageId, "Google.Chrome.EXE" } : new[] { e.PackageId }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                if (selection is null) return await _query(UpdateListCommand(null, null), queryToken);
                 var output = new System.Text.StringBuilder();
-                foreach (var id in ids)
+                foreach (var entry in entries)
                 {
-                    var list = new ProcessStartInfo(_executable) { UseShellExecute = false, CreateNoWindow = true };
-                    foreach (var arg in new[] { "list", "--upgrade-available", "--source", "winget", "--disable-interactivity" }) list.ArgumentList.Add(arg);
-                    if (id is not null) { list.ArgumentList.Add("--id"); list.ArgumentList.Add(id); list.ArgumentList.Add("--exact"); }
-                    var response = await _query(list, queryToken);
-                    if (response.ExitCode != 0 && response.ExitCode != unchecked((int)0x8A15002B)
-                        && !(selection is not null && response.ExitCode == unchecked((int)0x8A150014))) return response;
-                    output.AppendLine(response.Output);
+                    if (entry.PackageId is null || evidence.GetValueOrDefault(entry.Id) is { WinGetCompatible: false }) continue;
+                    var ids = UpdatePackageIds(entry).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                    bool missing = true;
+                    foreach (var id in ids)
+                    {
+                        var response = await _query(UpdateListCommand("--id", id, exact: true), queryToken);
+                        if (response.ExitCode == noInstalledPackage) continue;
+                        if (response.ExitCode != 0 && response.ExitCode != noUpgrade) return response;
+                        missing = false;
+                        output.AppendLine(response.Output);
+                    }
+                    if (!missing || evidence.GetValueOrDefault(entry.Id) is not { WinGetCompatible: true, Version: { } localVersion } proof
+                        || proof.LocationEvidence?.Alternatives is { Count: > 0 } || proof.ManagedCopies is { Count: > 1 }
+                        || string.IsNullOrWhiteSpace(entry.Name)) continue;
+
+                    var fallback = await _query(UpdateListCommand("--name", entry.Name), queryToken);
+                    if (fallback.ExitCode == noInstalledPackage || fallback.ExitCode == noUpgrade) continue;
+                    if (fallback.ExitCode != 0) return fallback;
+                    var matches = ids.SelectMany(id => UpdateRows(fallback.Output, id).Cast<Match>()).ToArray();
+                    if (matches.Length != 1) continue;
+                    var row = matches[0];
+                    string name = row.Groups["name"].Value;
+                    if (name.Contains('…') || name.EndsWith("...", StringComparison.Ordinal)
+                        || !ProgramPortableUpdates.SameVersion(localVersion, row.Groups["old"].Value)
+                        || !ProgramVersions.IsNewer(localVersion, row.Groups["new"].Value)) continue;
+                    output.AppendLine(row.Value.TrimEnd());
+                    fallbackNames[entry.Id] = name;
                 }
                 return new(0, output.ToString());
             }
@@ -633,6 +697,7 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
                     if (selection is not null && evidence.TryGetValue(id, out var localProof) && localProof.Version is { } localVersion
                         && !ProgramPortableUpdates.SameVersion(localVersion, installed[id] ?? ""))
                     { updates.Remove(id); installed[id] = localVersion; _installedPackageIds.Remove(id); Uncertain(id); continue; }
+                    if (fallbackNames.TryGetValue(id, out var name)) _verifiedUpgradeNames[id] = name;
                     if (_installedPackageIds.TryGetValue(id, out var packageId)) _installedPackageVersions[packageId] = installed[id];
                     evidence[id] = evidence.TryGetValue(id, out var proof) ? proof with { Version = installed[id] } : new(installed[id], "WinGet");
                 }
@@ -679,6 +744,7 @@ internal sealed partial class ProgramInstallService : IProgramInstallService, IP
                 foreach (var pair in _recentExport)
                     foreach (var entry in entries.Where(x => PackageMatches(x, pair.Key)))
                     {
+                        if (evidence.GetValueOrDefault(entry.Id)?.MissingPortableFile == true) continue;
                         if (evidence.GetValueOrDefault(entry.Id) is not { WinGetCompatible: false })
                         {
                             if (_installedPackageIds.TryGetValue(entry.Id, out var previousId) && !string.Equals(previousId, pair.Key, StringComparison.OrdinalIgnoreCase)) _ambiguousReinstallIds.Add(entry.Id);

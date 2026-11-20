@@ -123,6 +123,100 @@ internal static class ProgramGitHubRemovalTests
         Console.WriteLine("PASS " + checks + " GitHub/Ventoy/removal checks. No real installer/uninstaller executed; no user data or registry keys removed."); return 0;
     }
 
+    internal static int Dialog(App app, string output)
+    {
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher));
+        UiSoundService.MuteForTests = true;
+        var entry = ProgramCatalog.Entries.Single(e => e.PackageId == "Malwarebytes.AdwCleaner");
+        var other = ProgramCatalog.Entries.Single(e => e.Id == "firefox");
+        var main = new MainWindow(Path.Combine(output, "Settings"), new AppSettings { Theme = "Standard", SizeIndex = 1 }) { ShowActivated = false };
+        var reader = ProgramRemovalDialog.Reader;
+        var fixture = new InstalledProgram("removal-fixture", "AdwCleaner", "Malwarebytes", "8.8.0",
+            @"C:\Benutzer\Test\WinGet\Packages\Malwarebytes.AdwCleaner", "Registry", CatalogId: entry.Id,
+            WinGetProductCode: "fixture-only");
+        ProgramRemovalDialog.Reader = _ => [fixture];
+        int checks = 0, localReads = 0;
+        var logs = new List<string>();
+        void Assert(bool ok, string message) { if (!ok) throw new Exception(message); checks++; }
+        void Pump() { app.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle); main.UpdateLayout(); }
+        void Until(Func<bool> predicate)
+        {
+            var clock = Stopwatch.StartNew();
+            while (!predicate() && clock.Elapsed < TimeSpan.FromSeconds(15)) { Pump(); Thread.Sleep(5); }
+            Assert(predicate(), "Expected dialog state was not reached.");
+        }
+        static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        try
+        {
+            main.Show();
+            main.ShowWindowsUpdatesPage();
+            var page = (WindowsUpdatesPage)main.FindName("WindowsUpdatesPage");
+            var view = page.ShowPrograms(false);
+            view.Assets.AllowOnlineIcons = false;
+            view.Service = new ProgramInstallService(
+                query: (_, _) => throw new InvalidOperationException("No WinGet query should run."),
+                localReader: (entries, _) =>
+                {
+                    Assert(entries.Select(e => e.Id).SequenceEqual([entry.Id]), "Only the removed program is read.");
+                    localReads++;
+                    return Task.FromResult(new Dictionary<string, ProgramInstallation>());
+                });
+            view.WriteLog = logs.Add;
+            var inventory = new ProgramInventory(true, new Dictionary<string, string?> { [entry.Id] = "8.8", [other.Id] = "100.0" },
+                Updates: new Dictionary<string, string> { [entry.Id] = "8.9", [other.Id] = "101.0" });
+            typeof(ProgramCatalogView).GetProperty("Inventory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(view, inventory);
+            var host = (Grid)main.FindName("Root");
+            Grid Overlay() => host.Children.OfType<Grid>().Single(g => g.Name == "InstalledProgramsOverlay");
+            IEnumerable<Button> Buttons() => UnifiedDialogAppearance.Children<Button>(Overlay()).Where(b => b.IsVisible);
+            Button Caption(string caption) => Buttons().Single(b => (b.Content as TextBlock)?.Text == caption || b.Content as string == caption);
+            bool Shows(string text) => UnifiedDialogAppearance.Children<TextBlock>(Overlay()).Any(t => t.IsVisible && t.Text.Contains(text));
+
+            var task = ProgramRemovalDialog.ShowAsync(view);
+            Until(() => Shows("AdwCleaner"));
+            Click(Caption("Deinstallieren"));
+            Pump();
+            Assert(Shows("Programm deinstallieren") && Shows("Was wird entfernt?"), "List entry opens the confirmation.");
+            Assert(Shows("Portable App · WinGet") && Shows("Windows kann Administratorrechte anfordern."), "WinGet route and permission hint are shown.");
+            Click(Caption("Abbrechen"));
+            Pump();
+            Assert(Shows("Installierte Programme") && !Shows("Was wird entfernt?"), "Cancel returns to the list.");
+            Click(Caption("Schließen"));
+            Until(() => task.IsCompleted);
+            Assert(localReads == 0 && logs.Count == 0, "No uninstall, inspection or log entry on cancel.");
+
+            task = ProgramRemovalDialog.ShowAsync(view, entry);
+            Until(() => Buttons().Any(b => b.Name == "ProgramRemovalConfirm"));
+            Assert(Shows("Was wird entfernt?"), "Program detail opens the same confirmation directly.");
+            Assert(!view.InstalledButton.IsEnabled, "Catalog actions are locked while confirming.");
+            var bitmap = new RenderTargetBitmap((int)Math.Ceiling(main.ActualWidth), (int)Math.Ceiling(main.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(main);
+            var png = new PngBitmapEncoder();
+            png.Frames.Add(BitmapFrame.Create(bitmap));
+            using (var file = File.Create(Path.Combine(output, "Deinstallation-Seite-4.png"))) png.Save(file);
+
+            Click(Buttons().Single(b => b.Name == "ProgramRemovalConfirm"));
+            Until(() => logs.Any(text => text.Contains("Kein bestätigter Deinstallationsweg")));
+            Assert(Shows("Kein bestätigter Deinstallationsweg"), "A rejected fixture action shows the actual error.");
+            Assert(localReads == 0, "Failed removal does not clear installed status.");
+            Click(Caption("Schließen"));
+            Until(() => task.IsCompleted);
+
+            var recheck = view.RefreshRemovedProgramAsync(entry.Id);
+            Until(() => recheck.IsCompleted);
+            recheck.GetAwaiter().GetResult();
+            Assert(localReads == 1 && !view.IsInstalled(entry.Id) && !view.Inventory.HasUpdate(entry.Id), "Verified removal updates the affected row.");
+            Assert(view.IsInstalled(other.Id) && view.Inventory.HasUpdate(other.Id), "Other programs and their updates are preserved.");
+            Console.WriteLine($"PASS {checks} program removal dialog checks.");
+            return 0;
+        }
+        finally
+        {
+            ProgramRemovalDialog.Reader = reader;
+            main.Close();
+            Pump();
+        }
+    }
+
     internal static int Probe(string output) => Task.Run(async () =>
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));

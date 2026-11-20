@@ -55,7 +55,7 @@ internal static class ProgramScopedUpdateTests
     internal static int Ui(App app, string output)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher)); UiSoundService.MuteForTests = true;
-        int checks = 0, installs = 0, localReads = 0, lists = 0, confirmations = 0, changeTargetAtRead = 0; string available = "2.0"; bool failedSource = false, failClose = false; string? refuseToClose = null; int closeChecks = 0;
+        int checks = 0, installs = 0, localReads = 0, lists = 0, confirmations = 0, changeTargetAtRead = 0; string available = "2.0"; bool failedSource = false, failClose = false, nameRoute = true; string? refuseToClose = null; int closeChecks = 0;
         void Assert(bool ok, string message) { if (!ok) throw new Exception(message); checks++; }
         var discord = ProgramCatalog.Entries.Single(e => e.PackageId == "Discord.Discord");
         var firefox = ProgramCatalog.Entries.Single(e => e.Id == "firefox");
@@ -76,16 +76,32 @@ internal static class ProgramScopedUpdateTests
             var service=new ProgramInstallService((start, _) =>
             {
                 Assert(start.ArgumentList[0] is "list" or "show","Selected UI action must never export or scan all programs");
+                int nameIndex = start.ArgumentList.IndexOf("--name");
+                if (nameIndex >= 0)
+                {
+                    Assert(nameRoute && allowed.Contains(discord.Id) && start.ArgumentList[nameIndex + 1] == discord.Name,
+                        "A fallback read is confined to the selected program");
+                    string row = $"{discord.Name} {discord.PackageId} {versions[discord.Id]} {available}";
+                    if (start.ArgumentList.Contains("--exact"))
+                        return Task.FromResult(new WinGetResult(0, "Name Id Version Available\n--------------------\n" + row));
+                    lists++;
+                    return Task.FromResult(ProgramVersions.IsNewer(versions[discord.Id], available)
+                        ? new WinGetResult(0, row) : new WinGetResult(unchecked((int)0x8A15002B), ""));
+                }
                 int key=start.ArgumentList.IndexOf("--id");Assert(key>=0 && start.ArgumentList.Contains("--exact"),"Read-only package identity is exact");
                 var entry=new[]{discord,firefox}.Single(e=>e.PackageId==start.ArgumentList[key+1]);Assert(allowed.Contains(entry.Id),"No unrelated program may be queried");
                 if(failedSource) return Task.FromResult(new WinGetResult(unchecked((int)0x8A15000F),"Fixture source unavailable"));
                 if(start.ArgumentList[0]=="show") return Task.FromResult(new WinGetResult(0,"Found ["+entry.PackageId+"]\nVersion: "+available));
+                if (nameRoute && entry == discord) return Task.FromResult(new WinGetResult(unchecked((int)0x8A150014), ""));
                 lists++;return Task.FromResult(new WinGetResult(0,ProgramVersions.IsNewer(versions[entry.Id],available)?entry.Name+" "+entry.PackageId+" "+versions[entry.Id]+" "+available+" winget":"No updates"));
             },async(start,started)=>
             {
                 Assert(start.ArgumentList[0]=="upgrade" && start.ArgumentList.Contains("--silent") && start.ArgumentList.Contains("--version")
                     && !start.ArgumentList.Contains("--all") && !start.ArgumentList.Contains("--force"),"Only an exact automatic update can be executed");
-                var id=start.ArgumentList[start.ArgumentList.IndexOf("--id")+1];var entry=new[]{discord,firefox}.Single(e=>e.PackageId==id);
+                var selector = start.ArgumentList.IndexOf(nameRoute ? "--name" : "--id");
+                Assert(selector >= 0 && start.ArgumentList.Contains("--exact"), "Installer uses the freshly verified exact selector");
+                var identity = start.ArgumentList[selector + 1];
+                var entry = new[] { discord, firefox }.Single(e => nameRoute ? e.Name == identity : e.PackageId == identity);
                 Assert(allowed.Contains(entry.Id),"Only a selected installer may be called");started();installs++;
                 if(installerGate is not null) await installerGate.Task;
                 versions[entry.Id]=start.ArgumentList[start.ArgumentList.IndexOf("--version")+1];
@@ -115,7 +131,7 @@ internal static class ProgramScopedUpdateTests
             installerGate=new(TaskCreationOptions.RunContinuationsAsynchronously);action.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Until(()=>installs==1);
             int selectionCount=view.Selected.Count;view.Select(firefox.Id,true);
             Assert(view.IsWorking && view.Selected.Count==selectionCount,"Selection remains locked until the controlled installer has actually exited");
-            installerGate.SetResult();Until(()=>!view.IsWorking);installerGate=null;
+            installerGate.SetResult();Until(()=>!view.IsWorking);installerGate=null;nameRoute=false;
             Assert(versions[discord.Id]=="2.0" && view.Inventory.Installed[discord.Id]=="2.0","Actual shared information-button flow reaches a controlled update and result verification");
             Assert(confirmations==0,"A verified individual information-button update never asks for selection confirmation");
             Assert(view.Inventory.IsStale && view.Inventory.CheckedUtc==oldTime && view.Inventory.Installed[firefox.Id]=="1.0","Unrelated programs retain their original saved state");
@@ -188,6 +204,22 @@ internal static class ProgramScopedUpdateTests
 
     internal static int Logic(string output)
     {
+        string[] managerVariables = ["SCOOP", "SCOOP_GLOBAL", "ChocolateyInstall"];
+        var original = managerVariables.ToDictionary(key => key, Environment.GetEnvironmentVariable);
+        try
+        {
+            foreach (string key in managerVariables)
+                Environment.SetEnvironmentVariable(key, Path.Combine(output, "Isolated package managers", key));
+            return RunLogic(output);
+        }
+        finally
+        {
+            foreach (var (key, value) in original) Environment.SetEnvironmentVariable(key, value);
+        }
+    }
+
+    private static int RunLogic(string output)
+    {
         int checks = 0;
         void Assert(bool ok, string message) { if (!ok) throw new Exception(message); checks++; }
         var firefox = ProgramCatalog.Entries.Single(e => e.Id == "firefox");
@@ -198,6 +230,11 @@ internal static class ProgramScopedUpdateTests
         var cacheFile = Path.Combine(output, "Scoped-cache.json");
         var service = new ProgramInstallService((start, _) =>
         {
+            if (start.ArgumentList.Contains("--name"))
+            {
+                Assert(noOffer && start.ArgumentList[^1] == discord.Name, "No installed match checks the same program by name");
+                return Task.FromResult(new WinGetResult(unchecked((int)0x8A150014), ""));
+            }
             Assert(start.ArgumentList[0] == "list" && start.ArgumentList.Contains("--id") && start.ArgumentList.Contains("--exact")
                 && start.ArgumentList.Contains("--upgrade-available") && !start.ArgumentList.Contains("--include-pinned")
                 && !start.ArgumentList.Contains("--include-unknown"), "Selection check uses only filtered read-only list queries");
@@ -259,6 +296,57 @@ internal static class ProgramScopedUpdateTests
             }
             else Assert(offer is null, "No fabricated WinGet route for " + entry.Id);
         }
+        string fallbackOutput = "";
+        string? installedVersion = "1.0";
+        string exactNameOutput = "";
+        int fallbackCalls = 0, executed = 0;
+        var fallbackService = new ProgramInstallService((start, _) =>
+        {
+            if (start.ArgumentList[0] == "show")
+                return Task.FromResult(new WinGetResult(0, $"Found [{start.ArgumentList[2]}]\nVersion: 2.0"));
+            if (start.ArgumentList.Contains("--id"))
+                return Task.FromResult(new WinGetResult(unchecked((int)0x8A150014), ""));
+            Assert(start.ArgumentList[0] == "list" && start.ArgumentList.Contains("--name") && !start.ArgumentList.Contains("--all"),
+                "Fallback uses a scoped name query");
+            if (start.ArgumentList.Contains("--exact")) return Task.FromResult(new WinGetResult(0, exactNameOutput));
+            fallbackCalls++;
+            return Task.FromResult(new WinGetResult(0, fallbackOutput));
+        }, (start, _) =>
+        {
+            Assert(start.ArgumentList[0] == "upgrade" && start.ArgumentList.Contains("--exact") && start.ArgumentList.Contains("--version")
+                && start.ArgumentList[start.ArgumentList.IndexOf("--name") + 1] == "Opera GX Stable 1.0",
+                "Execution uses the exact locally confirmed display name and approved target version");
+            executed++;
+            return Task.FromResult(0);
+        }, localReader: (entries, _) => Task.FromResult(entries.ToDictionary(e => e.Id, _ => new ProgramInstallation(installedVersion, "Registry"))));
+        var eligible = catalog.Where(e => e.PackageId is not null && e.Id != "extra-electronicarts-eadesktop").ToArray();
+        foreach (var entry in eligible)
+        {
+            fallbackOutput = $"{entry.Name} {entry.PackageId} 1.0 2.0\r\nOther {entry.PackageId}.Other 1.0 9.0\r\n";
+            var checkedEntry = fallbackService.InspectUpdatesAsync([entry], default).GetAwaiter().GetResult();
+            Assert(checkedEntry.HasUpdate(entry.Id) && checkedEntry.Updates?[entry.Id] == "2.0", $"Fallback for {entry.Id} only accepts its catalog identity (installed {checkedEntry.Installed.GetValueOrDefault(entry.Id)}, offer {checkedEntry.Updates?.GetValueOrDefault(entry.Id)}, error {checkedEntry.Error})");
+        }
+        Assert(fallbackCalls == eligible.Length, "At most one name query per selected package, including aliases");
+        var gx = catalog.Single(e => e.Id == "opera-gx");
+        string gxRow = $"Opera GX Stable 1.0 {gx.PackageId} 1.0 2.0";
+        foreach (var unverified in new[] { gxRow + "\n" + gxRow, gxRow.Replace("1.0 2.0", "1.5 2.0"), gxRow.Replace("Opera GX Stable 1.0", "Opera GX…"), gxRow.Replace(gx.PackageId!, "Opera.Opera") })
+        {
+            fallbackOutput = unverified;
+            Assert(!fallbackService.InspectUpdatesAsync([gx], default).GetAwaiter().GetResult().HasUpdate(gx.Id),
+                "Ambiguous, wrong-version, truncated and other-product rows cannot start updates");
+        }
+        fallbackOutput = gxRow;
+        installedVersion = null;
+        Assert(!fallbackService.InspectUpdatesAsync([gx], default).GetAwaiter().GetResult().HasUpdate(gx.Id), "No fallback without a known local version");
+        installedVersion = "1.0";
+        var verified = fallbackService.InspectUpdatesAsync([gx], default).GetAwaiter().GetResult();
+        var gxOffer = fallbackService.ResolveCheckedUpdateAsync(gx, verified, default).GetAwaiter().GetResult()!;
+        exactNameOutput = "Name Id Version Available\n--------------------\n" + gxRow + "\n" + gxRow;
+        try { fallbackService.UpgradeAsync(gx, gxOffer, () => { }).GetAwaiter().GetResult(); throw new Exception("Ambiguous exact-name upgrade was launched"); }
+        catch (IOException) { Assert(executed == 0, "Ambiguous exact name blocks execution"); }
+        exactNameOutput = "Name Id Version Available\n--------------------\n" + gxRow;
+        Assert(fallbackService.UpgradeAsync(gx, gxOffer, () => { }).GetAwaiter().GetResult() == 0 && executed == 1,
+            "One matching installed row reaches the controlled Opera GX installer");
         Assert(installs == 0, "Read-only selected checks never launch installers");
         Console.WriteLine("PASS " + checks + " selected-update backend checks; no installer executed"); return 0;
     }

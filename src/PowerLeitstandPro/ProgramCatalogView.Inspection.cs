@@ -16,6 +16,39 @@ internal sealed partial class ProgramCatalogView
         Inventory = checkedInventory;
         Selected.Remove(entry.Id); RenderTiles(); RefreshAvailability();
     }
+    internal async Task RefreshRemovedProgramAsync(string id)
+    {
+        if (Service is not ProgramInstallService service || KnownEntries.FirstOrDefault(e => e.Id == id) is not { } entry) return;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var (proof, _, _) = await service.InspectEntryAsync(entry, timeout.Token, localOnly: true);
+        if (!ReferenceEquals(Service, service)) return;
+
+        Dictionary<string, T>? WithoutEntry<T>(IReadOnlyDictionary<string, T>? values)
+            => values?.Where(pair => pair.Key != id).ToDictionary(pair => pair.Key, pair => pair.Value);
+        var installed = WithoutEntry(Inventory.Installed)!;
+        var evidence = WithoutEntry(Inventory.Evidence) ?? [];
+        var sources = WithoutEntry(Inventory.InstalledSources) ?? [];
+        if (proof is not null)
+        {
+            evidence[id] = proof;
+            sources[id] = proof.Source;
+            if (!proof.MissingPortableFile) installed[id] = proof.Version;
+        }
+        if (!installed.ContainsKey(id)) ForgetInstallation(id);
+        Inventory = Inventory with
+        {
+            Installed = installed, Evidence = evidence, InstalledSources = sources,
+            Updates = WithoutEntry(Inventory.Updates), GitHubUpdates = WithoutEntry(Inventory.GitHubUpdates),
+            GitHubPackages = WithoutEntry(Inventory.GitHubPackages), PortableUpdates = WithoutEntry(Inventory.PortableUpdates),
+            ManagedPackages = WithoutEntry(Inventory.ManagedPackages), PendingUpdates = WithoutEntry(Inventory.PendingUpdates),
+            UnverifiedInstalledIds = Inventory.UnverifiedInstalledIds?.Where(value => value != id).ToArray(),
+            UnverifiedUpdateIds = Inventory.UnverifiedUpdateIds?.Where(value => value != id).ToArray(),
+            TerminalMsixUpdate = id == "windows-terminal" ? null : Inventory.TerminalMsixUpdate
+        };
+        Selected.Remove(id);
+        RenderTiles();
+    }
+
     private async Task<ProgramInventory> InspectInventoryAsync(CancellationToken token, bool reuseRecent)
     {
         var service = Service; var previous = Inventory; var progress = service as IProgramInspectionProgress; bool listening = true;

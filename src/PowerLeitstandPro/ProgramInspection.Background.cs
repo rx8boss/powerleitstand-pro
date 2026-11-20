@@ -71,7 +71,7 @@ internal sealed partial class ProgramInstallService
     internal void InvalidateSaved(string? id = null) => _inspectionCache?.Invalidate(id, KnownEntries);
 
     internal async Task<(ProgramInstallation? Installation, ProgramPackage? Package, DateTime CheckedUtc)> InspectEntryAsync(
-        ProgramEntry entry, CancellationToken token)
+        ProgramEntry entry, CancellationToken token, bool localOnly = false)
     {
         if (!Approved(entry)) throw new InvalidOperationException("Program entry is not part of the approved catalog.");
         await _inspectionGate.WaitAsync(token).ConfigureAwait(false);
@@ -90,13 +90,14 @@ internal sealed partial class ProgramInstallService
             {
                 var store = await ReadStoreForInspectionAsync(token).ConfigureAwait(false);
                 if (store.Complete && store.Entries.TryGetValue(entry.Id, out var app)) local[entry.Id] = app;
+                else if (localOnly && !store.Complete) throw new IOException(store.Error);
             }
             token.ThrowIfCancellationRequested();
             var evidence = _lastEvidence.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
             if (local.TryGetValue(entry.Id, out var proof)) evidence[entry.Id] = proof;
             else evidence.Remove(entry.Id);
             _lastEvidence = evidence;
-            var package = await ResolveAsync(entry, token).ConfigureAwait(false);
+            var package = localOnly ? null : await ResolveAsync(entry, token).ConfigureAwait(false);
             return (local.GetValueOrDefault(entry.Id), package, DateTime.UtcNow);
         }
         finally { _inspectionGate.Release(); }
@@ -131,6 +132,11 @@ internal sealed partial class ProgramInstallService
                 var old = previous.Evidence?.GetValueOrDefault(entry.Id);
                 var row = saved?.Rows.SingleOrDefault(r => r.Id == entry.Id);
                 if (!evidence.TryGetValue(entry.Id, out var fresh) || old is null) continue;
+                if (fresh.MissingPortableFile)
+                {
+                    installed.Remove(entry.Id); pending.Remove(entry.Id); proofs[entry.Id] = fresh;
+                    continue;
+                }
                 // Scope, channel and managed roots must agree; paths for ordinary/portable copies must agree too.
                 bool identity = (row?.Identity ?? ProgramInspectionCache.Identity(old)) == ProgramInspectionCache.Identity(fresh);
                 bool path = old.Source is "Scoop" or "Chocolatey" || string.Equals(old.Path, fresh.Path, StringComparison.OrdinalIgnoreCase);
@@ -147,7 +153,7 @@ internal sealed partial class ProgramInstallService
                 InstalledSources = proofs.ToDictionary(p => p.Key, p => p.Value.Source) };
             if (saved is not null)
             {
-                var rows = saved.Rows.Select(r => targets.ContainsKey(r.Id) ? r with { Version = installed.GetValueOrDefault(r.Id), Target = pending.GetValueOrDefault(r.Id) } : r).ToArray();
+                var rows = saved.Rows.Select(r => targets.ContainsKey(r.Id) ? r with { Version = installed.GetValueOrDefault(r.Id), Source = proofs.GetValueOrDefault(r.Id)?.Source ?? r.Source, Target = pending.GetValueOrDefault(r.Id) } : r).ToArray();
                 await Task.Run(() => _inspectionCache!.WriteLocal(saved with { Rows = rows }), token).ConfigureAwait(false);
             }
             return result;

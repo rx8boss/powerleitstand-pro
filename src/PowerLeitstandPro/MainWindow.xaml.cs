@@ -135,7 +135,7 @@ public partial class MainWindow : Window
         StartupTimings.Mark("Window services configured");
         LayoutUpdated += (_, _) => { UpdateReferenceCardDecorations(); UpdateOptionsViewport(); };
         Closed += (_, _) => { _windowClosed = true; _updatesPage?.CancelSearchOnClose(); StopRepairProgressAnimation(); StopNeonPresentation(); };
-        InstalledVersionText.Text = $"v{AppVersion.Installed} · WPF";
+        InstalledVersionText.Text = $"v{AppVersion.Build.Display} · WPF";
         _timer.Tick += TimerTick;
         _noticeAutoCloseTimer.Tick += (_, _) => CloseSettingsNotice(this, new RoutedEventArgs());
         PreviewMouseDown += CloseNoticeOnOutsideClick;
@@ -362,10 +362,9 @@ public partial class MainWindow : Window
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(12));
         try
         {
-            var update = await UpdateService.CheckAsync(cancellation.Token);
+            var releases = await LoadBellReleases(cancellation.Token);
             if (sequence != _updateCheckSequence) return;
-            _availableUpdate = update;
-            SetUpdateCheckState(_availableUpdate is null ? UpdateCheckState.Current : UpdateCheckState.Available);
+            ApplyAppReleases(releases);
             if (_availableUpdate is not null)
                 (System.Windows.Application.Current as App)?.ShowUpdateNotification(_availableUpdate.Version.ToString());
         }
@@ -411,11 +410,13 @@ public partial class MainWindow : Window
             _ => _english ? "Update check in progress" : "Update-Prüfung läuft"
         };
         UpdateNoticeButton.ToolTip = _english ? "Check for app updates" : "Nach App-Updates suchen";
-        System.Windows.Automation.AutomationProperties.SetName(UpdateNoticeButton, UpdateNoticeButton.ToolTip.ToString()!);
+        RefreshOptionalUpdateBadge();
         UpdateStatus.Visibility = state == UpdateCheckState.Checking || SettingsNoticePopup.IsOpen
             ? Visibility.Collapsed : Visibility.Visible;
         UpdateStatus.Text = state switch
         {
+            UpdateCheckState.Current when _settings.UpdatePreference == UpdatePreference.Beta => OptionalUpdates().Count > 0
+                ? (_english ? "Beta available" : "Beta verfügbar") : (_english ? "No beta available" : "Keine Beta verfügbar"),
             UpdateCheckState.Current => _english ? "This version is up to date." : "Diese Version ist aktuell.",
             UpdateCheckState.Available => (_english ? "New version available: " : "Neue Version verfügbar: ") + _availableUpdate?.Version,
             UpdateCheckState.Failed => _updateCheckFailedConnection
@@ -425,6 +426,7 @@ public partial class MainWindow : Window
         };
         BellStatusText.Text = state switch
         {
+            UpdateCheckState.Current when _settings.UpdatePreference == UpdatePreference.Beta => UpdateStatus.Text,
             UpdateCheckState.Current => _english ? "Up to date" : "Ist aktuell",
             UpdateCheckState.Available => _english ? "Update available" : "Update verfügbar",
             UpdateCheckState.Failed => _updateCheckFailedConnection
@@ -440,6 +442,7 @@ public partial class MainWindow : Window
         if (_bellChecking || _updateInProgress) return;
         _bellChecking = true;
         int sequence = ++_updateCheckSequence;
+        OptionalUpdatePopup.IsOpen = false;
         SetSettingsOverlay(showOptions: false, showNotice: false);
         SetUpdateCheckState(UpdateCheckState.Checking);
         SettingsNoticePopup.IsOpen = true;
@@ -463,13 +466,17 @@ public partial class MainWindow : Window
             if (sequence == _updateCheckSequence && SettingsNoticePopup.IsOpen) _noticeAutoCloseTimer.Start();
         }
         if (sequence != _updateCheckSequence) return;
-        var latest = releases.FirstOrDefault()?.Update;
-        _availableUpdate = latest is not null && latest.Version > AppVersion.Installed ? latest : null;
-        _updateCheckFailedConnection = false;
-        SetUpdateCheckState(_availableUpdate is null ? UpdateCheckState.Current : UpdateCheckState.Available);
-        if (_availableUpdate is null || IsBusy) return;
-        CloseSettingsNotice(this, new RoutedEventArgs());
-        ShowAppUpdateDialog(releases);
+        ApplyAppReleases(releases);
+        if (_availableUpdate is not null && !IsBusy)
+        {
+            CloseSettingsNotice(this, new RoutedEventArgs());
+            ShowAppUpdateDialog(releases);
+        }
+        else if (OptionalUpdates().Count > 0 && SettingsNoticePopup.IsOpen)
+        {
+            CloseSettingsNotice(this, new RoutedEventArgs());
+            ShowOptionalUpdateNotice();
+        }
     }
 
     private void CloseNoticeOnOutsideClick(object sender, MouseButtonEventArgs e)
@@ -518,15 +525,10 @@ public partial class MainWindow : Window
         {
             var manager = new UpdateManagerWindow(ThemePalette.For(SelectedTheme()), _english,
                 () => _timer.IsEnabled || _repairRunning,
-                load: releases is null ? null : _ => Task.FromResult(releases)) { Owner = this };
+                load: releases is null ? null : _ => Task.FromResult(releases),
+                preference: _settings.UpdatePreference, savePreference: SaveUpdatePreference) { Owner = this };
             var install = manager.ShowDialog() == true;
-            if (manager.ReleaseLoadSucceeded)
-            {
-                var latest = manager.LatestRelease;
-                _availableUpdate = latest is not null && latest.Version > AppVersion.Installed ? latest : null;
-                _updateCheckFailedConnection = false;
-                SetUpdateCheckState(_availableUpdate is null ? UpdateCheckState.Current : UpdateCheckState.Available);
-            }
+            if (manager.ReleaseLoadSucceeded) ApplyAppReleases(manager.Releases);
             if (!install || manager.SelectedUpdate is not { } selected) return;
             var download = new UpdateDownloadWindow(selected, ThemePalette.For(SelectedTheme()), _english,
                 () => _timer.IsEnabled || _repairRunning) { Owner = this };
@@ -577,8 +579,11 @@ public partial class MainWindow : Window
             ConfigureCompactScrolling(false);
         }
         if (SettingsRows is not null)
+        {
+            double settingsRowHeight = _effectiveSizeIndex switch { 0 => 32, 1 => 35, _ => 38 };
             for (int row = 0; row < SettingsRows.RowDefinitions.Count; row++)
-                if (row != 8) SettingsRows.RowDefinitions[row].Height = new GridLength(_effectiveSizeIndex == 0 ? 35 : 38);
+                if (row != 8) SettingsRows.RowDefinitions[row].Height = new GridLength(settingsRowHeight);
+        }
         if (IsLoaded) ApplyLayoutScale();
     }
 
@@ -1551,6 +1556,8 @@ public partial class MainWindow : Window
         CreateUserButton.ToolTip = _english ? "Create a local user" : "Lokalen Benutzer erstellen";
         EditUserButton.ToolTip = _english ? "Edit selected user" : "Ausgewählten Benutzer bearbeiten";
         RefreshUsersButton.ToolTip = _english ? "Refresh user list" : "Benutzerliste aktualisieren";
+        AppRemovalTitle.Text = _english ? "Remove app" : "App entfernen";
+        AppUninstallButton.Content = _english ? "Uninstall …" : "Deinstallieren …";
         UpdateTitle.Text = _english ? "Updates" : "Updates";
         UpdateAutomaticWindowsUpdateSearchLabel();
         UpdateEsuRestoreButton();

@@ -141,8 +141,8 @@ internal sealed partial class ProgramInfoCard
         _uninstallAction.Margin = new(0, 6, 0, 0); statusActions.Children.Add(_uninstallAction);
         _uninstallAction.Click += async (_, _) =>
         {
-            if (_closed || !view.CanChooseProgramFile || !view.Inventory.Installed.ContainsKey(entry.Id)) return;
-            try { Close(); await ProgramRemovalDialog.ShowAsync(view, entry); await view.RefreshAsync(); }
+            if (_closed || !view.CanChooseProgramFile || !view.Inventory.Installed.ContainsKey(entry.Id) && !view.PortableRegistrationWithoutFile(entry.Id)) return;
+            try { Close(); await ProgramRemovalDialog.ShowAsync(view, entry); }
             catch (Exception error) { view.WriteLog?.Invoke(UiText.Error(error, view.English)); }
         };
         RefreshVersionPresentation();
@@ -225,7 +225,7 @@ internal sealed partial class ProgramInfoCard
                 {
                     var proof = _singleEntryEvidence ?? view.Inventory.Evidence?.GetValueOrDefault(entry.Id);
                     var executable = await Task.Run(() => ProgramCatalogView.DesktopExecutable(entry, proof));
-                    if (!_closed) result.Text = view.CreateDesktopShortcut(entry, executable);
+                    if (!_closed) result.Text = view.CreateDesktopShortcut(entry, executable, portable: entry.Id == "adwcleaner" || proof?.Source == "Portable" || proof?.LocationEvidence?.Source == "WinGet portable");
                 }
                 catch (Exception error) when (ProgramPathResolver.ReadFailure(error)) { if (!_closed) result.Text = UiText.Error(error, view.English); }
                 finally { if (!_closed) { shortcut.IsEnabled = true; ResetIdle(); } }
@@ -329,8 +329,10 @@ internal sealed partial class ProgramInfoCard
         if (_singleEntryCheckedUtc is not null && _singleEntryEvidence is null || newer || StorePending && _view.Inventory.StoreError is not null) _installedText.Foreground = new SolidColorBrush(Color.FromRgb(255, 180, 67));
         else _installedText.SetResourceReference(TextBlock.ForegroundProperty, installed ? "ReadyBrush" : "UnifiedMuted");
         bool update = CanUpdate(), publisher = EaOpenAvailable;
+        bool missingPortable = _view.PortableRegistrationWithoutFile(_entry.Id);
+        if (missingPortable) _installedText.Text = _view.InstallationStatus(_entry.Id);
         if (publisher) _installedText.Text = L("Installiert · Update über EA App", "Installed · update through EA app");
-        bool pending = NeedsEntryCheck && !update && !publisher;
+        bool pending = (missingPortable || NeedsEntryCheck) && !update && !publisher;
         _updateAction.Visibility = update || publisher || pending ? Visibility.Visible : Visibility.Collapsed;
         bool showAvailableVersion = HasVersionCheck || update || publisher;
         _installedVersionField.Visibility = ProgramVersions.ConfirmedVersion(installedVersion) is not null || showAvailableVersion
@@ -342,7 +344,7 @@ internal sealed partial class ProgramInfoCard
             : publisher ? L("EA App zum Aktualisieren öffnen. Automatische Updates müssen in EA aktiviert sein.", "Open EA app to update. Automatic updates must be enabled in EA.")
             : L("Update installieren · bestätigte aktuelle Version", "Install update · verified current version");
         AutomationProperties.SetName(_updateAction, pending ? L("Programmstand erneut prüfen", "Check application state again") : publisher ? L("EA App zum Aktualisieren öffnen", "Open EA app to update") : L("Update installieren", "Install update"));
-        _uninstallAction.Visibility = installed ? Visibility.Visible : Visibility.Collapsed;
+        _uninstallAction.Visibility = installed || missingPortable ? Visibility.Visible : Visibility.Collapsed;
         bool install = !installed && _singleEntryEvidence is null && _view.CanOfferNewInstall(_entry);
         _versionAction.Visibility = installed || install ? Visibility.Visible : Visibility.Collapsed;
         _versionAction.Name = install ? "ProgramInfoInstall" : "ProgramInfoStatusReinstall";

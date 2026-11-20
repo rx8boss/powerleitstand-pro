@@ -59,7 +59,7 @@ internal sealed class ProgramInspectionCache(string file)
     internal static ProgramInventory Display(Document doc)
     {
         var evidence = doc.Rows.ToDictionary(r => r.Id, r => new ProgramInstallation(r.Version, r.Source, r.Path, false, r.Variant));
-        return new(false, doc.Rows.ToDictionary(r => r.Id, r => r.Version), Evidence: evidence,
+        return new(false, doc.Rows.Where(r => r.Source != ProgramInstallation.MissingWinGetPortable).ToDictionary(r => r.Id, r => r.Version), Evidence: evidence,
             InstalledSources: evidence.ToDictionary(p => p.Key, p => p.Value.Source), CheckedUtc: doc.CheckedUtc,
             FromCache: true, IsStale: true, StoreCheckComplete: false,
             PendingUpdates: doc.Rows.Where(r => r.Target is not null).ToDictionary(r => r.Id, r => r.Target!), SavedPartial: !doc.Complete);
@@ -68,10 +68,10 @@ internal sealed class ProgramInspectionCache(string file)
     {
         if (!inventory.Complete || !inventory.UpdateCheckComplete || !inventory.StoreCheckComplete || !inventory.UpdateSourcesComplete || inventory.IsPartial || inventory.IsStale
             || inventory.Error is not null || inventory.OnlineError is not null || inventory.StoreError is not null || inventory.CheckedUtc is null) return false;
-        var rows = entries.Where(e => inventory.Installed.ContainsKey(e.Id)).Take(513).Select(e =>
+        var rows = entries.Where(e => inventory.Installed.ContainsKey(e.Id) || inventory.Evidence?.GetValueOrDefault(e.Id)?.MissingPortableFile == true).Take(513).Select(e =>
         {
             var proof = inventory.Evidence?.GetValueOrDefault(e.Id) ?? new(inventory.Installed[e.Id], "WinGet");
-            return new Row(e.Id, CatalogKey(e), inventory.Installed[e.Id], proof.Source, proof.Path, proof.Variant, Identity(proof),
+            return new Row(e.Id, CatalogKey(e), inventory.Installed.GetValueOrDefault(e.Id), proof.Source, proof.Path, proof.Variant, Identity(proof),
                 inventory.Updates?.GetValueOrDefault(e.Id) ?? inventory.GitHubUpdates?.GetValueOrDefault(e.Id));
         }).ToArray();
         if (rows.Length > 512) return false;
@@ -91,7 +91,13 @@ internal sealed class ProgramInspectionCache(string file)
         var rows = previous?.Rows.ToDictionary(r => r.Id) ?? [];
         foreach (var entry in known)
         {
-            if (!inventory.Evidence.TryGetValue(entry.Id, out var proof) || !inventory.Installed.ContainsKey(entry.Id)) continue;
+            if (!inventory.Evidence.TryGetValue(entry.Id, out var proof)) continue;
+            if (proof.MissingPortableFile)
+            {
+                rows[entry.Id] = new(entry.Id, CatalogKey(entry), null, proof.Source, proof.Path, proof.Variant, Identity(proof), null);
+                continue;
+            }
+            if (!inventory.Installed.ContainsKey(entry.Id)) continue;
             var identity = Identity(proof); var old = rows.GetValueOrDefault(entry.Id);
             if (old is not null && old.Target is not null && (old.Identity != identity
                 || proof.Source is not ("Scoop" or "Chocolatey") && !string.Equals(old.Path, proof.Path, StringComparison.OrdinalIgnoreCase))) continue;

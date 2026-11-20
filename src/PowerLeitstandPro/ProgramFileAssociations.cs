@@ -86,7 +86,7 @@ internal sealed class ProgramFileAssociations(string file, Func<IReadOnlyList<Vl
                     if (copy is not null) evidence[entry.Id] = new(copy.Version, "Registry", copy.Executable);
                     continue;
                 }
-                if (!evidence.TryGetValue(entry.Id, out var known)) evidence[entry.Id] = selected;
+                if (!evidence.TryGetValue(entry.Id, out var known) || known.MissingPortableFile) evidence[entry.Id] = selected;
                 else if (entry.Id == "vlc" && selected.Variant == VlcPortableUpdates.Variant)
                 { if (VlcPortableUpdates.CanAdopt(known, selected.Path!)) evidence[entry.Id] = selected; }
                 else if (entry.Id == "obs-studio" && selected.Source == "Portable" && known.ManagedCopies is not { Count: > 0 })

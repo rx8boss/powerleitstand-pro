@@ -19,6 +19,7 @@ internal sealed class AppSettings
     public bool RequestAdministratorOnLaunch { get; set; }
     public bool CheckUpdatesOnFirstOpen { get; set; } = true;
     public bool EsuRegistrationConfirmed { get; set; }
+    public UpdatePreference UpdatePreference { get; set; }
     public int? WindowLeftPx { get; set; }
     public int? WindowTopPx { get; set; }
     public string? WindowMonitor { get; set; }
@@ -29,6 +30,7 @@ internal sealed class AppSettings
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path ?? SettingsPath)) ?? new AppSettings();
             settings.Theme = ThemePalette.NormalizeName(settings.Theme);
+            if (!Enum.IsDefined(settings.UpdatePreference)) settings.UpdatePreference = UpdatePreference.Stable;
             if (settings.SizePreferenceVersion < 2)
             {
                 // Version 1 stored Small, Compact, Large, Very large, Automatic.

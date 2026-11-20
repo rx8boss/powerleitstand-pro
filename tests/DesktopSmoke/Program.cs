@@ -120,6 +120,9 @@ internal static class Program
             if (args.Contains("--program-targets-live")) return ProgramInstallTargetTests.Live(output);
             if (args.Contains("--github-plan-probe")) return ProgramGitHubRemovalTests.Probe(output);
             if (args.Contains("--github-removal")) return ProgramGitHubRemovalTests.Run(app, output, args.Contains("--logic-only"));
+            if (args.Contains("--removal-dialog")) return ProgramGitHubRemovalTests.Dialog(app, output);
+            if (args.Contains("--app-uninstall")) return AppUninstallTests.Run(app, output);
+            if (args.Contains("--app-update-channels")) return AppUpdateChannelTests.Run(app, output);
             if (args.Contains("--inspection-cache")) return ProgramInspectionCacheTests.Run(app, output, false);
             if (args.Contains("--inspection-cache-ui")) return ProgramInspectionCacheTests.Run(app, output, true);
             if (args.Contains("--inspection-live")) return ProgramInspectionCacheTests.Live(output, null);
@@ -181,6 +184,7 @@ internal static class Program
             if (args.Contains("--languages")) return LanguageTests.Run(app, output);
             if (args.Contains("--update-bell")) return UpdateManagerTests.Bell(app, output);
             if (args.Contains("--updates")) return UpdateManagerTests.Run(app, output);
+            if (args.Contains("--backup-limit")) return UpdateManagerTests.Run(app, output, backupsOnly: true);
             if (args.Contains("--manager-exe")) return ManagerExeIntegration.Run(output, args.Last());
             // Regression: previous checks used non-active windows and missed Close -> Deactivated -> Close.
             if (args.Contains("--active-only"))
