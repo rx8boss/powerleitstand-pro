@@ -101,6 +101,7 @@ internal static class AppUpdateChannelTests
         try
         {
             main.Show(); Pump();
+            Assert(((TextBlock)main.FindName("InstalledVersionText")).Text == $"v{stable}", "The footer shows only the numeric version.");
             main.LoadBellReleases = _ => Task.FromResult(releases);
             var button = (Button)main.FindName("UpdateNoticeButton");
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -182,7 +183,8 @@ internal static class AppUpdateChannelTests
                 Wait(() => noBeta.ReleaseLoadSucceeded);
                 Assert(((ListBox)noBeta.FindName("VersionList")).Items.Count == 0
                     && ((TextBlock)noBeta.FindName("LatestText")).Text == "Keine Beta verfügbar"
-                    && !((TextBlock)noBeta.FindName("InstalledText")).IsVisible,
+                    && ((TextBlock)noBeta.FindName("InstalledText")) is { IsVisible: true } installed
+                    && installed.Text == "Installiert: " + AppVersion.Build.Display,
                     "No stable version is shown in the empty beta view.");
                 noBeta.UpdateLayout();
                 Screenshot(noBeta, noBeta.RenderSize, "Keine-Beta-verfügbar.png");

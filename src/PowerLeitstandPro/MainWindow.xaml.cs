@@ -135,7 +135,7 @@ public partial class MainWindow : Window
         StartupTimings.Mark("Window services configured");
         LayoutUpdated += (_, _) => { UpdateReferenceCardDecorations(); UpdateOptionsViewport(); };
         Closed += (_, _) => { _windowClosed = true; _updatesPage?.CancelSearchOnClose(); StopRepairProgressAnimation(); StopNeonPresentation(); };
-        InstalledVersionText.Text = $"v{AppVersion.Build.Display} · WPF";
+        InstalledVersionText.Text = $"v{AppVersion.Installed}";
         _timer.Tick += TimerTick;
         _noticeAutoCloseTimer.Tick += (_, _) => CloseSettingsNotice(this, new RoutedEventArgs());
         PreviewMouseDown += CloseNoticeOnOutsideClick;

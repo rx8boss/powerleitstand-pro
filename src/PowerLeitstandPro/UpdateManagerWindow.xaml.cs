@@ -161,8 +161,6 @@ public partial class UpdateManagerWindow : Window
         {
             var available = UpdateReleaseCatalog.Visible(_releases, _installedBuild, _preference);
             var newest = available.FirstOrDefault();
-            InstalledText.Visibility = _preference == UpdatePreference.Beta && _installedBuild.Channel != UpdateChannel.Beta
-                ? Visibility.Collapsed : Visibility.Visible;
             LatestText.Text = newest is null
                 ? (ReleaseLoadSucceeded && _preference == UpdatePreference.Beta
                     ? (_english ? "No beta available" : "Keine Beta verfügbar")
