@@ -6,19 +6,17 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
-        Neu in Version 1.1.9 – Hotfix 2 zum Testen
+        Neu in Version 1.1.9 – Hotfix 3
 
-        • Die Programmliste zeigt im Microsoft-Store-Filter eigenständige Apps des angemeldeten Kontos. Optionale Windows-Standard-Apps lassen sich separat mit einer Erklärung zur Entfernung prüfen.
-        • Gesperrte Deinstallationsaktionen zeigen ihren Grund. Ein vorhandenes Windows-Datum wird gekennzeichnet. Registrierte Ersatzbefehle werden vor der Verwendung geprüft.
-        • Unter Einstellungen lässt sich auch eine portable Kopie entfernen. Der Dialog zeigt den Dateipfad und bietet Protokolle, Einstellungen mit Sound-Cache sowie Programmsicherungen einzeln zur Auswahl an.
+        • „Stabil + Hotfixes“ wählt bei einem Update den neuesten passenden Hotfix vor. Im Bestätigungsfenster kannst du die stabile Grundversion wählen oder zur Versionsliste zurückgehen.
+        • Die Fußzeile zeigt die Versionsnummer. Unter Einstellungen → Updates siehst du zusätzlich den installierten Hotfix oder die Beta-Nummer.
         """;
 
     internal const string English = """
-        New in version 1.1.9 – Hotfix 2 for testing
+        New in version 1.1.9 – Hotfix 3
 
-        • The Microsoft Store filter lists standalone apps for the signed-in account. Optional Windows default apps have a separate view explaining the effect of removal.
-        • Disabled uninstall actions show their reason. The list labels dates supplied by Windows and checks registered alternative commands before use.
-        • Settings can remove a portable copy. The dialog shows the executable path and offers separate choices for logs, settings with the sound cache, and program backups.
+        • Stable + hotfixes preselects the latest applicable hotfix. In the confirmation window you can choose the stable base release or return to the version list.
+        • The footer shows the version number. Settings → Updates also shows the installed hotfix or beta number.
         """;
 
     internal const string Current = "## Deutsch\n" + German + "\n\n## English\n" + English;
