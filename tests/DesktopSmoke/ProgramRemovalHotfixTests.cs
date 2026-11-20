@@ -20,7 +20,8 @@ internal static class ProgramRemovalHotfixTests
         var oldReader = ProgramRemovalDialog.Reader;
         InstalledProgram[] sample = [new("registry-sample", "3D Printer Manager", "Vendor", "1.0", @"C:\Apps\Printer", "Registry"),
             new("store|Vendor.Wintoys_abc123", "Wintoys", "Vendor", "3.0.22.0", @"C:\Apps\Wintoys", "Windows-App", PackageFamily: "Vendor.Wintoys_abc123"),
-            new("store|Windows.Protected_abc123", "Windows-Systemkomponente", "Microsoft", "1.0.0.0", null, "Windows-App", Protected: true, PackageFamily: "Windows.Protected_abc123")];
+            new("registry-blocked", "Gesicherter Eintrag", "Vendor", "1", null, "Registry", Protected: true, BlockReason: "file"),
+            new("weather", "Wetter", "Microsoft", "1.0.0.0", null, "Windows-App", PackageFamily: "Microsoft.BingWeather_8wekyb3d8bbwe", Inbox: true)];
         ProgramRemovalDialog.Reader = _ => sample;
         var main = new MainWindow(Path.Combine(output, "Settings"), new AppSettings { Theme = "Standard", SizeIndex = 1 }) { ShowActivated = false };
         void Pump() { app.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle); main.UpdateLayout(); }
@@ -47,9 +48,9 @@ internal static class ProgramRemovalHotfixTests
                 Assert(Shows("3D Printer Manager"), "All filter includes programs and apps");
                 ClickType("apps"); Pump();
                 Assert(Shows("Wintoys") && !Shows("3D Printer Manager"), "App filter excludes desktop programs");
-                Assert(Shows(english ? "Protected Windows app" : "Geschützte Windows-App"), "Protected app has visible explanation");
+                Assert(!Shows("Wetter"), "Inbox entry excluded from Store filter");
                 var removeButtons = UnifiedDialogAppearance.Children<Button>(Overlay()).Where(b => b.IsVisible && (b.Content as TextBlock)?.Text == (english ? "Uninstall" : "Deinstallieren")).ToArray();
-                Assert(removeButtons.Count(b => b.IsEnabled) == 1 && removeButtons.Count(b => !b.IsEnabled) == 1, "Unmapped app removable, protected app blocked");
+                Assert(removeButtons.Length == 1 && removeButtons[0].IsEnabled, "Unmapped app removable, protected app blocked");
                 foreach (var button in UnifiedDialogAppearance.Children<Button>(Overlay()).Where(b => b.IsVisible))
                 {
                     var bounds = button.TransformToAncestor(Overlay()).TransformBounds(new Rect(button.RenderSize));
@@ -60,7 +61,8 @@ internal static class ProgramRemovalHotfixTests
                     var bmp = new RenderTargetBitmap((int)Math.Ceiling(main.ActualWidth), (int)Math.Ceiling(main.ActualHeight), 96, 96, PixelFormats.Pbgra32); bmp.Render(main);
                     var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bmp)); using var file = File.Create(Path.Combine(output, "Installierte-Programme-und-Apps.png")); png.Save(file);
                 }
-                ClickType("programs"); Pump(); Assert(Shows("3D Printer Manager") && !Shows("Wintoys"), "Program filter excludes apps");
+                ClickType("defaults"); Pump(); Assert(Shows("Wetter") && !Shows("Wintoys"), "Dedicated view contains optional inbox app only");
+                ClickType("programs"); Pump(); Assert(Shows(english ? "registered uninstaller file is missing" : "Deinstallationsdatei fehlt"), "Reason visible for unavailable uninstall action"); Assert(Shows("3D Printer Manager") && !Shows("Wintoys"), "Program filter excludes apps");
                 UnifiedDialogAppearance.Children<Button>(Overlay()).Single(b => (b.Content as TextBlock)?.Text == (english ? "Close" : "Schließen")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Until(() => task.IsCompleted);
             }
@@ -75,6 +77,12 @@ internal static class ProgramRemovalHotfixTests
     {
         int checks = 0;
         void Assert(bool ok, string message) { if (!ok) throw new Exception(message); checks++; }
+        Assert(ProgramStoreApplications.Eligible(3, false, true, "Vendor.App_abc123")
+            && !ProgramStoreApplications.Eligible(0, false, true, "Vendor.App_abc123")
+            && !ProgramStoreApplications.Eligible(3, true, true, "Vendor.App_abc123")
+            && !ProgramStoreApplications.Eligible(3, false, false, "Vendor.App_abc123")
+            && !ProgramStoreApplications.Eligible(2, false, true, "Microsoft.Windows.FilePicker_cw5n1h2txyewy")
+            && ProgramStoreApplications.Eligible(2, false, true, "Microsoft.BingWeather_8wekyb3d8bbwe"), "Origin, user-facing main app and exact inbox-family filter");
         var row = ProgramStoreApplications.Rows([new("Vendor.Unknown_abc123", "Example", "Vendor", "1.2.0.0", null, false)]).Single();
         Assert(!row.Protected && row.CatalogId is null && ProgramRemovalService.StoreFamily(row) == "Vendor.Unknown_abc123", "Unknown app uses its own family");
         Assert(ProgramRemovalDialog.MatchesType(row, "apps") && !ProgramRemovalDialog.MatchesType(row, "programs"), "Source filter uses package type");

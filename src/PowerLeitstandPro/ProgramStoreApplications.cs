@@ -4,12 +4,14 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
 using Windows.ApplicationModel;
 using Windows.Management.Deployment;
 
 namespace PowerControlProWpf;
 
-internal sealed record ProgramStoreApplication(string Family, string Name, string Publisher, string Version, string? Location, bool Protected);
+internal sealed record ProgramStoreApplication(string Family, string Name, string Publisher, string Version, string? Location, bool Protected, int Origin = 0);
 internal sealed record ProgramStoreApplicationsSnapshot(IReadOnlyList<ProgramStoreApplication> Applications, bool Complete,
     string? Error = null, string? Provider = null);
 
@@ -17,6 +19,23 @@ internal sealed record ProgramStoreApplicationsSnapshot(IReadOnlyList<ProgramSto
 // Catalog/startup scans keep their small, identity-verified family set.
 internal static class ProgramStoreApplications
 {
+    [DllImport("kernelbase.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern int GetStagedPackageOrigin(string packageFullName, out int origin);
+
+    internal static string? Purpose(string? family, bool english) => family switch
+    {
+        "Microsoft.BingWeather_8wekyb3d8bbwe" => english ? "Removes the Weather app and its forecasts." : "Entfernt die Wetter-App mit ihren Vorhersagen.",
+        "Microsoft.WindowsFeedbackHub_8wekyb3d8bbwe" => english ? "Removes the app used to send Windows feedback." : "Entfernt die App zum Senden von Windows-Feedback.",
+        "Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe" => english ? "Removes the Solitaire card games." : "Entfernt die Solitaire-Kartenspiele.",
+        "Microsoft.549981C3F5F10_8wekyb3d8bbwe" => english ? "Removes the standalone Cortana assistant." : "Entfernt den eigenständigen Cortana-Assistenten.",
+        _ => null
+    };
+    internal static bool Eligible(int origin, bool protectedPackage, bool hasApp, string family) =>
+        !protectedPackage && hasApp && (origin == 3 || origin == 2 && Purpose(family, false) is not null);
+
+    internal static HashSet<string> ProvisionedFamilies() =>
+        !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) ? throw new PlatformNotSupportedException() : new PackageManager().FindProvisionedPackages().Select(p => p.Id.FamilyName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     internal static bool ValidFamily(string? family) => family is { Length: > 0 and <= 256 }
         && Regex.IsMatch(family, @"\A[A-Za-z0-9.-]+_[A-Za-z0-9]+\z");
     internal static string FriendlyName(string name, string? candidate)
@@ -29,50 +48,77 @@ internal static class ProgramStoreApplications
         string first;
         try
         {
-            using var limit = CancellationTokenSource.CreateLinkedTokenSource(token); limit.CancelAfter(TimeSpan.FromSeconds(5));
-            var items = await (primary ?? ReadNativeAsync)(limit.Token).WaitAsync(limit.Token).ConfigureAwait(false);
-            token.ThrowIfCancellationRequested(); return new(items, true, Provider: "Windows PackageManager");
+            using var limit = CancellationTokenSource.CreateLinkedTokenSource(token); limit.CancelAfter(TimeSpan.FromSeconds(8));
+            var items = await (primary ?? ReadPowerShellAsync)(limit.Token).WaitAsync(limit.Token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested(); return new(items, true, Provider: "Windows PowerShell");
         }
         catch (Exception e) when (Failure(e)) { token.ThrowIfCancellationRequested(); first = Short(e.Message); }
         try
         {
             using var limit = CancellationTokenSource.CreateLinkedTokenSource(token); limit.CancelAfter(TimeSpan.FromSeconds(12));
-            var items = await (fallback ?? ReadPowerShellAsync)(limit.Token).WaitAsync(limit.Token).ConfigureAwait(false);
-            token.ThrowIfCancellationRequested(); return new(items, true, Provider: "Windows PowerShell");
+            var items = await (fallback ?? ReadNativeAsync)(limit.Token).WaitAsync(limit.Token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested(); return new(items, true, Provider: "Windows PackageManager");
         }
         catch (Exception e) when (Failure(e))
         { token.ThrowIfCancellationRequested(); return new([], false, first + "; " + Short(e.Message)); }
     }
+    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern int SHLoadIndirectString(string source, StringBuilder result, uint length, IntPtr reserved);
+
+    private static string? LocalTitle(string? title, string? package, string name)
+    {
+        if (title is null || !title.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase) || package is null) return title;
+        string key = title["ms-resource:".Length..];
+        var buffer = new StringBuilder(512);
+        foreach (string uri in new[] { title, "ms-resource://" + name + "/Resources/" + key.TrimStart('/') })
+            if (SHLoadIndirectString("@{" + package + "?" + uri + "}", buffer, 512, IntPtr.Zero) == 0 && buffer.Length > 0) return buffer.ToString();
+        return null;
+    }
+
+    private static string? ApplicationTitle(string? location)
+    {
+        if (location is null || !Path.IsPathFullyQualified(location) || location.StartsWith(@"\\", StringComparison.Ordinal)) return null;
+        try
+        {
+            using var input = XmlReader.Create(Path.Combine(location, "AppxManifest.xml"), new XmlReaderSettings
+                { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 2 * 1024 * 1024 });
+            var manifest = XDocument.Load(input);
+            var visual = manifest.Root?.Elements().FirstOrDefault(x => x.Name.LocalName == "Applications")?.Elements()
+                .Where(x => x.Name.LocalName == "Application").SelectMany(x => x.Elements())
+                .FirstOrDefault(x => x.Name.LocalName == "VisualElements" && (string?)x.Attribute("AppListEntry") != "none");
+            return visual is null ? null : (string?)visual.Attribute("DisplayName") ?? "";
+        }
+        catch (Exception e) when (Failure(e) || e is XmlException) { return null; }
+    }
+
     private static string Short(string value) => value.Length > 300 ? value[..300] : value;
     private static bool Failure(Exception e) => ProgramPathResolver.ReadFailure(e) || e is JsonException or OperationCanceledException
         or InvalidOperationException or TypeLoadException or TypeInitializationException;
 
-    internal static Task<IReadOnlyList<ProgramStoreApplication>> ReadNativeAsync(CancellationToken token) => Task.Run<IReadOnlyList<ProgramStoreApplication>>(() =>
+    internal static Task<IReadOnlyList<ProgramStoreApplication>> ReadNativeAsync(CancellationToken token) => Task.Run<IReadOnlyList<ProgramStoreApplication>>(async () =>
     {
+        // Package.SignatureKind alone does not expose the effective NonRemovable flag.
+        string removableJson = await QueryPackagesAsync("ConvertTo-Json -InputObject @(Get-AppxPackage -PackageTypeFilter Main -ErrorAction Stop | Where-Object { $_.NonRemovable -eq $false } | Select-Object -ExpandProperty PackageFullName) -Compress", token).ConfigureAwait(false);
+        var removable = (JsonSerializer.Deserialize<string[]>(removableJson) ?? []).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var rows = new List<object>(); int count = 0;
         foreach (var package in new PackageManager().FindPackagesForUser(string.Empty))
         {
             token.ThrowIfCancellationRequested(); if (++count > 4096) throw new IOException("Store package enumeration exceeds limit.");
             if (package.IsFramework || package.IsResourcePackage || package.IsBundle || package.IsOptional) continue;
             var id = package.Id; var version = id.Version;
+            if (!removable.Contains(id.FullName) || GetStagedPackageOrigin(id.FullName, out int origin) != 0
+                || !Eligible(origin, package.SignatureKind == PackageSignatureKind.System, true, id.FamilyName)) continue;
             string name = id.Name, publisher = id.Publisher, directory = "";
             try { if (!string.IsNullOrWhiteSpace(package.DisplayName)) name = package.DisplayName; }
             catch (Exception e) when (Failure(e)) { }
-            if (name == id.Name || Guid.TryParse(name, out _) || name.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    var appEntries = package.GetAppListEntriesAsync().AsTask(token).GetAwaiter().GetResult();
-                    var names = appEntries.Select(e => e.DisplayInfo.DisplayName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToArray();
-                    if (names.Length == 1) name = FriendlyName(name, names[0]);
-                }
-                catch (Exception e) when (Failure(e)) { token.ThrowIfCancellationRequested(); }
-            }
             try { if (!string.IsNullOrWhiteSpace(package.PublisherDisplayName)) publisher = package.PublisherDisplayName; }
             catch (Exception e) when (Failure(e)) { }
             try { directory = package.InstalledLocation?.Path ?? ""; }
             catch (Exception e) when (Failure(e)) { }
-            rows.Add(new { PackageFamilyName = id.FamilyName, Name = name, Publisher = publisher,
+            var title = ApplicationTitle(directory);
+            if (title is null) continue;
+            if (name == id.Name || Guid.TryParse(name, out _)) name = FriendlyName(name, title);
+            rows.Add(new { Origin = origin, HasApp = true, PackageFamilyName = id.FamilyName, Name = name, Publisher = publisher,
                 Version = $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}", InstallLocation = directory,
                 NonRemovable = package.SignatureKind == Windows.ApplicationModel.PackageSignatureKind.System });
         }
@@ -81,18 +127,19 @@ internal static class ProgramStoreApplications
 
     internal static async Task<IReadOnlyList<ProgramStoreApplication>> ReadPowerShellAsync(CancellationToken token)
     {
-        var command = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"))
-            { UseShellExecute = false, CreateNoWindow = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
-        string script = "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); $names=@{}; "
-            + "try { Get-StartApps -ErrorAction Stop | ForEach-Object { $family=($_.AppID -split '!',2)[0]; if(!$names.ContainsKey($family)){$names[$family]=$_.Name} } } catch {} ; "
-            + "@(Get-AppxPackage -PackageTypeFilter Main -ErrorAction Stop | Select-Object PackageFamilyName,"
-            + "@{Name='Name';Expression={if($names.ContainsKey($_.PackageFamilyName)){$names[$_.PackageFamilyName]}else{$_.Name}}},"
+        string script = "@(Get-AppxPackage -PackageTypeFilter Main -ErrorAction Stop | Where-Object { $_.NonRemovable -eq $false -and $_.SignatureKind -ne 'System' } | Select-Object PackageFullName,PackageFamilyName,IsFramework,IsResourcePackage,IsBundle,IsOptional,Name,"
             + "@{Name='Publisher';Expression={$_.Publisher}},@{Name='Version';Expression={$_.Version.ToString()}},"
             + "InstallLocation,NonRemovable) | ConvertTo-Json -Compress";
-        foreach (string arg in new[] { "-NoProfile", "-NonInteractive", "-Command", script }) command.ArgumentList.Add(arg);
-        var result = await WinGetService.QueryAsync(command, token).ConfigureAwait(false);
+        return Parse(await QueryPackagesAsync(script, token).ConfigureAwait(false));
+    }
+    private static async Task<string> QueryPackagesAsync(string script, CancellationToken token)
+    {
+        var command = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"))
+            { UseShellExecute = false, CreateNoWindow = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
+        foreach (string arg in new[] { "-NoProfile", "-NonInteractive", "-Command", "[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); " + script }) command.ArgumentList.Add(arg);
+        var result = await WinGetService.QueryAsync(command, token, 4 * 1024 * 1024).ConfigureAwait(false);
         if (result.ExitCode != 0) throw new IOException("Windows-App-Paketprüfung fehlgeschlagen. / Windows app package check failed.");
-        return Parse(string.IsNullOrWhiteSpace(result.Output) ? "[]" : result.Output.Trim());
+        return string.IsNullOrWhiteSpace(result.Output) ? "[]" : result.Output.Trim();
     }
     internal static IReadOnlyList<ProgramStoreApplication> Parse(string json)
     {
@@ -111,10 +158,17 @@ internal static class ProgramStoreApplications
             if (!ValidFamily(family)
                 || name is null || name.Length is 0 or > 250 || !System.Version.TryParse(version, out var parsed)
                 || Flag("IsFramework") || Flag("IsResourcePackage") || Flag("IsBundle") || Flag("IsOptional")) continue;
+            int origin = 0;
+            if (row.TryGetProperty("Origin", out var knownOrigin)) knownOrigin.TryGetInt32(out origin);
+            else if (Text("PackageFullName") is { } full && GetStagedPackageOrigin(full, out origin) != 0) origin = 0;
             string? directory = Text("InstallLocation");
+            if (origin is not (2 or 3)) continue;
+            string? title = row.TryGetProperty("HasApp", out _) ? null : ApplicationTitle(directory);
+            if (!Eligible(origin, Flag("NonRemovable"), Flag("HasApp") || title is not null, family!)) continue;
+            if (title is not null) name = FriendlyName(name, LocalTitle(title, Text("PackageFullName"), name));
             if (directory is null || !Path.IsPathFullyQualified(directory) || directory.StartsWith(@"\\", StringComparison.Ordinal)
                 || !Directory.Exists(directory)) directory = null;
-            found.Add(new(family!, name, Text("Publisher") ?? "", parsed.ToString(), directory, Flag("NonRemovable")));
+            found.Add(new(family!, name, Text("Publisher") ?? "", parsed.ToString(), directory, Flag("NonRemovable"), origin));
         }
         // The same family may have architecture/staging rows. Keep one deterministic
         // current-user version per family; never combine identities by display name.
@@ -129,7 +183,7 @@ internal static class ProgramStoreApplications
             string? id = ProgramVersions.StoreFamilies.FirstOrDefault(p => p.Value.Equals(app.Family, StringComparison.OrdinalIgnoreCase)).Key;
             var entry = ProgramCatalog.Entries.FirstOrDefault(e => e.Id == id);
             return new InstalledProgram("store|" + app.Family, entry?.Name ?? app.Name, entry?.Publisher ?? app.Publisher,
-                app.Version, app.Location, "Windows-App", CatalogId: id, Protected: app.Protected, PackageFamily: app.Family);
+                app.Version, app.Location, "Windows-App", CatalogId: id, Protected: app.Protected, PackageFamily: app.Family, Inbox: app.Origin == 2);
         }).ToArray();
 
     internal static bool IsPresent(string family)

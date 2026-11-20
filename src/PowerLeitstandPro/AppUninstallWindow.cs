@@ -12,7 +12,7 @@ namespace PowerControlProWpf;
 
 internal sealed class AppUninstallWindow : Window
 {
-    internal bool KeepData { get; private set; } = true;
+    internal string[] DataGroups { get; private set; } = [];
 
     internal AppUninstallWindow(Window owner, ThemePalette palette, bool english, string executable, AppUninstall.Registration? installation)
     {
@@ -48,46 +48,61 @@ internal sealed class AppUninstallWindow : Window
         }
 
         var body = new StackPanel();
-        var keep = new CheckBox
+        body.Children.Add(Card(installation is null ? L("Portable Programmdatei", "Portable executable") : L("WinGet-Installation", "WinGet installation"),
+            Text(executable), Text(L("Die App schließt sich nach deiner Bestätigung.", "The app closes when you confirm."), true)));
+        var choices = new List<CheckBox>();
+        var sizeToken = new CancellationTokenSource();
+        Closed += (_, _) => sizeToken.Cancel();
+        CheckBox Choice(string id, string label, string paths)
         {
-            Name = "KeepUninstallData",
-            Content = Text(L("Einstellungen und Protokolle behalten", "Keep settings and logs")),
-            IsChecked = true,
-            Margin = new Thickness(0, 3, 0, 0)
-        };
-        AutomationProperties.SetName(keep, L("Einstellungen und Protokolle behalten", "Keep settings and logs"));
-        if (installation is not null)
-        {
-            body.Children.Add(Card(L("Was wird entfernt?", "What will be removed?"),
-                Text(L("WinGet entfernt die installierte App und ihren Eintrag.", "WinGet removes the installed app and its registration."))));
-            var data = Text(L("Ohne Haken werden diese Daten deines Windows-Kontos gelöscht.", "Uncheck to delete these files from your Windows account."), true);
-            var paths = Text(Path.Combine(AppUninstall.DataFolder, "settings.json") + "\n" + Path.Combine(AppUninstall.DataFolder, "logs"), true);
-            paths.Margin = new Thickness(0, 5, 0, 0);
-            paths.Visibility = Visibility.Collapsed;
-            keep.Unchecked += (_, _) => paths.Visibility = Visibility.Visible;
-            keep.Checked += (_, _) => paths.Visibility = Visibility.Collapsed;
-            body.Children.Add(Card(L("Einstellungen und Protokolle", "Settings and logs"), keep, data, paths));
-            body.Children.Add(Text(L("PowerLeitstand PRO wird vor der Deinstallation geschlossen.", "PowerLeitstand PRO closes before it is uninstalled."), true));
+            var box = new CheckBox { Tag = id, Content = Text(label + " · " + paths), Margin = new Thickness(0, 4, 0, 2), IsChecked = false };
+            AutomationProperties.SetName(box, label);
+            var token = sizeToken.Token;
+            Loaded += async (_, _) =>
+            {
+                try
+                {
+                    long bytes = await Task.Run(() =>
+                    {
+                        long total = 0;
+                        var items = new Stack<string>(paths.Split(", ").Select(leaf => Path.Combine(AppUninstall.DataFolder, leaf)));
+                        while (items.TryPop(out var path))
+                        {
+                            token.ThrowIfCancellationRequested();
+                            if (!ProgramRemovalService.NoLinks(path)) throw new IOException();
+                            FileAttributes attr;
+                            try { attr = File.GetAttributes(path); } catch (FileNotFoundException) { continue; } catch (DirectoryNotFoundException) { continue; }
+                            if ((attr & FileAttributes.Directory) == 0) total += new FileInfo(path).Length;
+                            else foreach (var child in Directory.EnumerateFileSystemEntries(path)) items.Push(child);
+                        }
+                        return total;
+                    }, token);
+                    if (!token.IsCancellationRequested) box.Content = Text(label + " · " + paths + " · " + (bytes < 1024 ? bytes + " B" : (bytes / 1048576d).ToString("0.##") + " MB"));
+                }
+                catch (Exception ex) when (ex is OperationCanceledException || ProgramPathResolver.ReadFailure(ex)) { }
+            };
+            choices.Add(box);
+            return box;
         }
-        else
-        {
-            body.Children.Add(Card(L("Manuell entpackte Kopie", "Manually extracted copy"),
-                Text(L("Schließe PowerLeitstand PRO und entferne diese Datei anschließend im Explorer.", "Close PowerLeitstand PRO, then remove this file in File Explorer.")),
-                Text(executable, true)));
-            body.Children.Add(Text(L("Deine Einstellungen und Protokolle bleiben erhalten.", "Your settings and logs are kept."), true));
-        }
+        body.Children.Add(Card(L("Zusätzlich entfernen", "Also remove"),
+            Text(AppUninstall.DataFolder, true),
+            Choice("logs", L("Protokolle und Diagnoseberichte", "Logs and diagnostic reports"), "logs"),
+            Choice("settings", L("Einstellungen und Cache", "Settings and cache"), "settings.json, sound-cache"),
+            Choice("backups", L("Programmsicherungen", "Program backups"), "Backups"),
+            Text(L("Ohne Auswahl wird nur das Programm entfernt. Weitere Kopien in diesem Windows-Konto können dieselben Daten verwenden.",
+                "Leave all boxes clear to remove only the program. Other copies in this Windows account may use the same data."), true)));
 
         var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var cancel = new Button { Content = L("Abbrechen", "Cancel"), MinWidth = 87, Height = 34, Margin = new Thickness(0, 0, 8, 0), IsCancel = true };
         var action = new Button
         {
             Name = "ConfirmAppUninstall",
-            Content = Text(installation is null ? L("Ordner öffnen", "Open folder") : L("Deinstallieren", "Uninstall")),
+            Content = Text(L("Deinstallieren", "Uninstall")),
             Height = 34, MinWidth = 145
         };
         action.Click += (_, _) =>
         {
-            KeepData = keep.IsChecked == true;
+            DataGroups = choices.Where(x => x.IsChecked == true).Select(x => (string)x.Tag).ToArray();
             DialogResult = true;
         };
         footer.Children.Add(cancel);
@@ -97,7 +112,7 @@ internal sealed class AppUninstallWindow : Window
         Content = frame;
         DialogLayout.Compose(this, frame, palette, Title, english, body, footer, preferredWidth: 638);
         cancel.Style = (Style)FindResource("ManagerDialogTextButton");
-        UnifiedDialogAppearance.Button(this, action, installation is null ? DialogButtonKind.Primary : DialogButtonKind.Danger);
+        UnifiedDialogAppearance.Button(this, action, DialogButtonKind.Danger);
         var header = UnifiedDialogAppearance.Children<Grid>(frame).Single(grid => grid.Name == "UnifiedDialogHeader");
         var subtitle = UnifiedDialogAppearance.Children<TextBlock>(header).Single(text => text.Text == "PowerLeitstand PRO");
         subtitle.Text = L("Version ", "Version ") + AppVersion.Installed + " · " + (installation is null

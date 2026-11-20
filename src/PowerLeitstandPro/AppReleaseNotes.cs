@@ -6,21 +6,19 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
-        Neu in Version 1.1.9 – Hotfix 1 zum Testen
+        Neu in Version 1.1.9 – Hotfix 2 zum Testen
 
-        • Installierte Programme erscheinen schrittweise. Die erste Liste benötigt keine vollständige Suche nach Programmdateien und Startmenü-Verknüpfungen. Die ausführliche Prüfung erfolgt beim ausgewählten Programm.
-        • Die Filter Alle, Programme und Windows-Apps trennen klassische Programme von Windows-App-Paketen. Suche und Kategorien lassen sich weiterhin kombinieren.
-        • Windows-Apps verwenden nach Möglichkeit ihren verständlichen Anzeigenamen. Zusätzliche App-Pakete können anhand ihrer eigenen bestätigten Paketidentität entfernt werden, unabhängig vom Programmkatalog.
-        • Vor jeder App-Entfernung werden Benutzerregistrierung, Paketversion und Schutzstatus erneut geprüft. Geschützte Windows-Pakete bleiben gesperrt. Die Deinstallation betrifft nur das aktuelle Windows-Konto.
+        • Die Programmliste zeigt im Microsoft-Store-Filter eigenständige Apps des angemeldeten Kontos. Optionale Windows-Standard-Apps lassen sich separat mit einer Erklärung zur Entfernung prüfen.
+        • Gesperrte Deinstallationsaktionen zeigen ihren Grund. Ein vorhandenes Windows-Datum wird gekennzeichnet. Registrierte Ersatzbefehle werden vor der Verwendung geprüft.
+        • Unter Einstellungen lässt sich auch eine portable Kopie entfernen. Der Dialog zeigt den Dateipfad und bietet Protokolle, Einstellungen mit Sound-Cache sowie Programmsicherungen einzeln zur Auswahl an.
         """;
 
     internal const string English = """
-        New in version 1.1.9 – Hotfix 1 for testing
+        New in version 1.1.9 – Hotfix 2 for testing
 
-        • Installed programs appear progressively. The initial list no longer requires a complete executable and Start menu shortcut search. Detailed checks run for the selected program.
-        • All, Programs and Windows apps filters separate desktop programs from Windows app packages. Search and category filters can still be combined.
-        • Windows apps use friendly display names when available. Additional app packages can be removed using their own verified package identity, independently of the program catalog.
-        • User registration, package version and protection status are rechecked before every app removal. Protected Windows packages remain blocked. Removal affects only the current Windows account.
+        • The Microsoft Store filter lists standalone apps for the signed-in account. Optional Windows default apps have a separate view explaining the effect of removal.
+        • Disabled uninstall actions show their reason. The list labels dates supplied by Windows and checks registered alternative commands before use.
+        • Settings can remove a portable copy. The dialog shows the executable path and offers separate choices for logs, settings with the sound cache, and program backups.
         """;
 
     internal const string Current = "## Deutsch\n" + German + "\n\n## English\n" + English;

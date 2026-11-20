@@ -21,12 +21,7 @@ public partial class MainWindow
             var registration = AppUninstall.Detect(executable);
             var dialog = new AppUninstallWindow(this, ThemePalette.For(SelectedTheme()), _english, executable, registration);
             if (dialog.ShowDialog() != true || IsBusy) return;
-            if (registration is null)
-            {
-                using var explorer = Process.Start(new ProcessStartInfo(Path.GetDirectoryName(executable)!) { UseShellExecute = true });
-                return;
-            }
-            AppUninstall.Launch(executable, registration, dialog.KeepData, _english);
+            AppUninstall.Launch(executable, registration, dialog.DataGroups, _english);
             System.Windows.Application.Current.Shutdown();
         }
         catch (Exception error)

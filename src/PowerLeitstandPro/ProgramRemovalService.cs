@@ -11,7 +11,7 @@ internal sealed record InstalledProgram(string Id, string Name, string Publisher
     string Source, RegistryHive Hive = RegistryHive.CurrentUser, RegistryView View = RegistryView.Registry64,
     string? RegistryPath = null, string? Command = null, string? CatalogId = null, bool Protected = false,
     ProgramPathEvidence? LocationEvidence = null, string? PackageVersion = null, string? WinGetProductCode = null, bool MissingPortableFile = false,
-    string? PackageFamily = null, bool DetailsPending = false);
+    string? PackageFamily = null, bool DetailsPending = false, bool Inbox = false, DateTime? WindowsDate = null, string? BlockReason = null);
 internal sealed record ProgramRemainder(string Kind, string Path, string Description);
 
 internal sealed class ProgramRemovalService
@@ -40,7 +40,7 @@ internal sealed class ProgramRemovalService
                     using var key = parent!.OpenSubKey(child); string? name = key?.GetValue("DisplayName") as string;
                     if (string.IsNullOrWhiteSpace(name) || name.Length > 250 || key?.GetValue("SystemComponent") is int system && system == 1) continue;
                     string publisher = key?.GetValue("Publisher") as string ?? "";
-                    string? command = key?.GetValue("UninstallString") as string;
+                    string? command = RegisteredCommand(key!);
                     var catalog = entries.Where(e => ProgramLocalInventory.Matches(e, name, publisher)).ToArray();
                     if (target is not null && catalog.Length == 0) continue;
                     string path = UninstallRoot + "\\" + child;
@@ -53,10 +53,18 @@ internal sealed class ProgramRemovalService
                         location = ProgramLocalInventory.WinGetPortableLocation(key!, registration, entry, locations, location);
                     bool missing = !fast && code is not null && location?.Executable is null
                         && ProgramLocalInventory.PortableWinGetFileMissing(registration.InstallLocation, key!.GetValue("PortableTargetFullPath") as string);
+                    string? block = key!.GetValue("NoRemove") is int flag && flag != 0 ? "policy" : null;
+                    if (block is null && code is null)
+                    {
+                        if (string.IsNullOrWhiteSpace(command)) block = "absent";
+                        else try { ParseCommand(command); } catch (FileNotFoundException) { block = "file"; } catch (IOException) { block = "unknown"; }
+                    }
+                    var windowsDate = DateTime.TryParseExact(key.GetValue("InstallDate") as string, "yyyyMMdd",
+                        System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date) ? date : (DateTime?)null;
                     found.Add(new(hive + "|" + view + "|" + child, name, publisher,
                         version, location?.Path ?? (fast ? RegisteredDirectory(registration.InstallLocation) : null), "Registry", hive, view, path, command,
-                        knownTarget && catalog.Length == 1 ? catalog[0].Id : null, key?.GetValue("NoRemove") is int noRemove && noRemove == 1 || command is null,
-                        LocationEvidence: location, WinGetProductCode: code, MissingPortableFile: missing, DetailsPending: fast));
+                        knownTarget && catalog.Length == 1 ? catalog[0].Id : null, block is not null,
+                        LocationEvidence: location, WinGetProductCode: code, MissingPortableFile: missing, DetailsPending: fast, WindowsDate: windowsDate, BlockReason: block));
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException or SecurityException) { }
             }
@@ -93,6 +101,25 @@ internal sealed class ProgramRemovalService
         => found.DistinctBy(p => p.Source + "|" + p.Name + "|" + p.Version + "|" + p.Location + "|" + p.Command + "|" + (p.Source == "Windows-App" ? p.Id : p.Source is "Scoop" or "Chocolatey" ? p.Id : p.WinGetProductCode is not null ? p.Hive.ToString() : ""), StringComparer.OrdinalIgnoreCase)
             .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
 
+    private static string? RegisteredCommand(RegistryKey key)
+    {
+        string? primary = key.GetValue("UninstallString") as string;
+        if (key.GetValue("QuietUninstallString") is not string quiet || string.IsNullOrWhiteSpace(quiet)) return primary;
+        try { if (!string.IsNullOrWhiteSpace(primary)) { ParseCommand(primary); return primary; } } catch (IOException) { }
+        try
+        {
+            var parsed = ParseCommand(quiet);
+            string leaf = key.Name[(key.Name.LastIndexOf('\\') + 1)..];
+            if (Guid.TryParse(leaf, out var product) && parsed.FileName.Equals(Path.Combine(Environment.SystemDirectory, "msiexec.exe"), StringComparison.OrdinalIgnoreCase)
+                && parsed.Arguments.Contains(product.ToString("B"), StringComparison.OrdinalIgnoreCase)) return quiet;
+            if (key.GetValue("InstallLocation") is string folder && Path.IsPathFullyQualified(folder)
+                && Path.GetFullPath(folder).TrimEnd('\\').Length > 3
+                && Path.GetFullPath(parsed.FileName).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + "\\", StringComparison.OrdinalIgnoreCase)) return quiet;
+        }
+        catch (Exception e) when (ProgramPathResolver.ReadFailure(e)) { }
+        return primary;
+    }
+
     private static string? RegisteredDirectory(string? path)
     {
         try { return path is not null && Path.IsPathFullyQualified(path) && ProgramPortableUpdates.PlainPath(path) && Directory.Exists(path) ? path : null; }
@@ -106,7 +133,7 @@ internal sealed class ProgramRemovalService
         using var root = RegistryKey.OpenBaseKey(program.Hive, program.View);
         using var key = root.OpenSubKey(program.RegistryPath ?? throw new IOException("Programmeintrag fehlt. / Program registration missing."));
         if (program.Protected || key is null || key.GetValue("NoRemove") is int noRemove && noRemove == 1
-            || key.GetValue("DisplayName") as string != program.Name || key.GetValue("UninstallString") as string != program.Command)
+            || key.GetValue("DisplayName") as string != program.Name || RegisteredCommand(key) != program.Command)
             throw new IOException("Der Programmeintrag hat sich geändert. Bitte die Liste neu öffnen. / Program registration changed. Please reopen the list.");
         var entry = ProgramCatalog.Entries.FirstOrDefault(e => e.Id == program.CatalogId);
         var registration = ProgramPathResolver.Registration(key, key.Name[(key.Name.LastIndexOf('\\') + 1)..], program.Name, program.Publisher, program.Version, program.Hive, program.View);
@@ -140,9 +167,9 @@ internal sealed class ProgramRemovalService
 
     internal static ProcessStartInfo UninstallCommand(InstalledProgram program)
     {
-        if (program.Protected || program.Source != "Registry" || program.Command is null || program.RegistryPath is null) throw new IOException("Kein bestätigter Deinstallationsweg. / No verified uninstaller.");
+        if (program.Protected || program.Source != "Registry" || (program.Command is null && program.WinGetProductCode is null) || program.RegistryPath is null) throw new IOException("Kein bestätigter Deinstallationsweg. / No verified uninstaller.");
         using var root = RegistryKey.OpenBaseKey(program.Hive, program.View); using var key = root.OpenSubKey(program.RegistryPath);
-        if ((key?.GetValue("UninstallString") as string) != program.Command || (key?.GetValue("DisplayName") as string) != program.Name)
+        if (key is null || key.GetValue("NoRemove") is int flag && flag != 0 || RegisteredCommand(key) != program.Command || (key?.GetValue("DisplayName") as string) != program.Name)
             throw new IOException("Der Programmeintrag hat sich geändert. / Program entry changed.");
         if (program.WinGetProductCode is { } productCode)
         {
@@ -150,7 +177,7 @@ internal sealed class ProgramRemovalService
                 throw new IOException("Der portable WinGet-Eintrag hat sich geändert. / The portable WinGet registration changed.");
             return PortableWinGetUninstallCommand(productCode, program.Hive);
         }
-        return ParseCommand(program.Command);
+        return ParseCommand(program.Command!);
     }
 
     internal static ProcessStartInfo PortableWinGetUninstallCommand(string productCode, RegistryHive hive)
@@ -172,8 +199,10 @@ internal sealed class ProgramRemovalService
         if (!match.Success) throw new IOException("Uninstaller command is not a verified EXE");
         string file = match.Groups[1].Value, arguments = match.Groups[2].Value;
         if (string.Equals(file, "msiexec.exe", StringComparison.OrdinalIgnoreCase)) file = System.IO.Path.Combine(Environment.SystemDirectory, "msiexec.exe");
-        if (!System.IO.Path.IsPathFullyQualified(file) || !File.Exists(file) || !ProgramPortableUpdates.PlainPath(file)
+        if (!System.IO.Path.IsPathFullyQualified(file) || file.StartsWith(@"\\", StringComparison.Ordinal)
             || file.IndexOfAny(['\r', '\n', '"']) >= 0 || arguments.IndexOfAny(['\r', '\n']) >= 0) throw new IOException("Invalid uninstaller path");
+        if (!File.Exists(file)) throw new FileNotFoundException("Registrierte Programmdatei fehlt. / Registered file missing.", file);
+        if (!ProgramPortableUpdates.PlainPath(file)) throw new IOException("Invalid uninstaller path");
         if (System.IO.Path.GetFileName(file).Equals("msiexec.exe", StringComparison.OrdinalIgnoreCase))
         {
             var product = Regex.Match(arguments, @"^/[IX]\s*(\{[0-9a-f-]{36}\})(?:\s.*)?$", RegexOptions.IgnoreCase);

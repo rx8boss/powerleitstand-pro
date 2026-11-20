@@ -73,7 +73,9 @@ internal sealed class WinGetService : IWinGetService
     }
     public Task<int> InstallAsync(string manufacturer, Action started) => _install(Command(manufacturer, true), started);
     public void OpenSetup() { OnlineConnection.RequireNetwork(); Process.Start(new ProcessStartInfo(SetupUrl) { UseShellExecute = true }); }
-    internal static async Task<WinGetResult> QueryAsync(ProcessStartInfo start, CancellationToken token)
+    internal static Task<WinGetResult> QueryAsync(ProcessStartInfo start, CancellationToken token) => QueryAsync(start, token, 65536);
+
+    internal static async Task<WinGetResult> QueryAsync(ProcessStartInfo start, CancellationToken token, int outputLimit)
     {
         bool online = start.ArgumentList.FirstOrDefault() is "search" or "show" or "source";
         if (online) await OnlineConnection.CheckAsync(token);
@@ -85,7 +87,7 @@ internal sealed class WinGetService : IWinGetService
         {
             var text = new StringBuilder(); var buffer = new char[2048]; int count;
             while ((count = await reader.ReadAsync(buffer.AsMemory(), token)) > 0)
-                if (text.Length < 65536) text.Append(buffer, 0, Math.Min(count, 65536 - text.Length));
+                if (text.Length < outputLimit) text.Append(buffer, 0, Math.Min(count, outputLimit - text.Length));
             return text.ToString();
         }
         var output = Read(process.StandardOutput); var error = Read(process.StandardError);

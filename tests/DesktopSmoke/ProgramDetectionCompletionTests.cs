@@ -16,6 +16,10 @@ internal static class ProgramDetectionCompletionTests
             var managed = ProgramManagedInventory.Read(ProgramCatalog.Entries, limit.Token);
             var merged = new Dictionary<string, ProgramInstallation>(); ProgramManagedInventory.Merge(merged, managed);
             var store = await ProgramStoreApplications.ReadAsync(limit.Token);
+            using var nativeLimit = new CancellationTokenSource(TimeSpan.FromSeconds(35));
+            var native = await ProgramStoreApplications.ReadNativeAsync(nativeLimit.Token);
+            var shellRows = await ProgramStoreApplications.ReadPowerShellAsync(nativeLimit.Token);
+            Assert(native.Select(x => x.Family).ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(shellRows.Select(x => x.Family)), "Both providers agree on the actual current-user family set");
             Assert(store.Complete, "Live Store enumeration completed: " + store.Error);
             File.WriteAllText(Path.Combine(output, "Quellen-Abgleich-Privat.json"), JsonSerializer.Serialize(new
             { Checked = DateTimeOffset.Now, Managed = managed, Merged = merged, Store = store }, new JsonSerializerOptions { WriteIndented = true }));
@@ -104,28 +108,28 @@ internal static class ProgramDetectionCompletionTests
         try { new ProgramPathResolver().ResolveManaged(entry, copy, canceled.Token); } catch (OperationCanceledException) { stopped = true; }
         Assert(stopped, "Package file scan observes cancellation");
         string Json(params object[] values) => JsonSerializer.Serialize(values);
-        object Store(string family, string version, bool nonRemovable = false) => new { PackageFamilyName = family, Name = "Store sample", Publisher = "Vendor", Version = version, InstallLocation = output, NonRemovable = nonRemovable };
-        var parsed = ProgramStoreApplications.Parse(Json(Store("Vendor.App_abc123", "1.2.0.0"), Store("vendor.app_ABC123", "2.0.0.0"), Store("Vendor.Other_xyz321", "1.0.0.0", true),
+        object Store(string family, string version, bool nonRemovable = false) => new { Origin = 3, HasApp = true, PackageFamilyName = family, Name = "Store sample", Publisher = "Vendor", Version = version, InstallLocation = output, NonRemovable = nonRemovable };
+        var parsed = ProgramStoreApplications.Parse(Json(Store("Vendor.App_abc123", "1.2.0.0"), Store("vendor.app_ABC123", "2.0.0.0"), Store("Vendor.Other_xyz321", "1.0.0.0", true), Store("Vendor.Visible_xyz321", "1.0.0.0"),
             new { PackageFamilyName = "Vendor.Framework_abc123", Name = "Framework", Version = "1.0.0.0", IsFramework = true },
             new { PackageFamilyName = "Vendor.Resource_abc123", Name = "Resource", Version = "1.0.0.0", IsResourcePackage = true },
             new { PackageFamilyName = "Vendor.Optional_abc123", Name = "Optional", Version = "1.0.0.0", IsOptional = true },
             Store("invalid family", "1.0.0.0"), Store("Vendor.BadVersion_abc123", "missing"), new { PackageFamilyName = 123, Name = "bad", Version = true }));
         Assert(parsed.Count == 2, "Store main apps retained; malformed/resource/framework/optional entries excluded");
         Assert(parsed.Single(p => p.Family.Equals("Vendor.App_abc123", StringComparison.OrdinalIgnoreCase)).Version == "2.0.0.0", "Duplicate family chooses current numeric version case-insensitively");
-        Assert(parsed.All(p => p.Location == output) && parsed.Single(p => p.Family == "Vendor.Other_xyz321").Protected, "Store location and system protection retained");
+        Assert(parsed.All(p => p.Location == output) && !parsed.Any(p => p.Family == "Vendor.Other_xyz321"), "Store location and system protection retained");
         var unmapped = ProgramStoreApplications.Rows(parsed);
         Assert(unmapped.Count == 2 && unmapped.All(p => p.CatalogId is null && p.PackageFamily is not null)
-            && unmapped.Count(p => p.Protected) == 1, "Unmapped Store apps keep independent identity and system protection");
+            && unmapped.All(p => !p.Protected), "Unmapped Store apps keep independent identity and system protection");
         var known = ProgramStoreApplications.Rows(ProgramStoreApplications.Parse(Json(Store(ProgramVersions.StoreFamilies["chatgpt"], "1.2.3.0")))).Single();
         Assert(known.CatalogId == "chatgpt" && known.Name == "ChatGPT" && !known.Protected, "Exact known family preserves existing catalog uninstall route");
-        var unknownPath = ProgramStoreApplications.Parse(Json(new { PackageFamilyName = "Vendor.Path_abc123", Name = "Path", Version = "1.0.0.0", InstallLocation = @"\\server\share" })).Single();
+        var unknownPath = ProgramStoreApplications.Parse(Json(new { Origin = 3, HasApp = true, PackageFamilyName = "Vendor.Path_abc123", Name = "Path", Version = "1.0.0.0", InstallLocation = @"\\server\share" })).Single();
         Assert(unknownPath.Location is null, "Network path is not a program location");
         int calls = 0;
         Task<IReadOnlyList<ProgramStoreApplication>> Success(CancellationToken _) { calls++; return Task.FromResult(parsed); }
         var primary = await ProgramStoreApplications.ReadAsync(CancellationToken.None, Success, _ => throw new Exception("Fallback must not run"));
         Assert(primary.Complete && primary.Applications.Count == 2 && calls == 1, "Primary Store read succeeds without PowerShell");
         var fallback = await ProgramStoreApplications.ReadAsync(CancellationToken.None, _ => Task.FromException<IReadOnlyList<ProgramStoreApplication>>(new IOException("first")), Success);
-        Assert(fallback.Complete && fallback.Provider == "Windows PowerShell" && calls == 2, "Independent Store fallback supplies complete result");
+        Assert(fallback.Complete && fallback.Provider == "Windows PackageManager" && calls == 2, "Independent Store fallback supplies complete result");
         var failed = await ProgramStoreApplications.ReadAsync(CancellationToken.None, _ => Task.FromException<IReadOnlyList<ProgramStoreApplication>>(new IOException("first")),
             _ => Task.FromException<IReadOnlyList<ProgramStoreApplication>>(new IOException("second")));
         Assert(!failed.Complete && failed.Error!.Contains("first") && failed.Error.Contains("second"), "Store failure is not successful absence");
