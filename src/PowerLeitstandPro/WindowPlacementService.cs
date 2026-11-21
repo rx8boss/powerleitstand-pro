@@ -40,6 +40,16 @@ internal static class WindowPlacementService
         SetPosition(window, target);
     }
 
+    internal static void CenterOnOwner(Window window)
+    {
+        if (window.Owner is not { } owner || !TryGetBounds(owner, out var parent) || !TryGetBounds(window, out var child)) return;
+        var area = Forms.Screen.FromRectangle(parent).WorkingArea;
+        var center = WindowPlacementMath.Center(parent, child.Width, child.Height);
+        SetPosition(window, new Point(
+            Math.Clamp(center.X, area.Left, Math.Max(area.Left, area.Right - child.Width)),
+            Math.Clamp(center.Y, area.Top, Math.Max(area.Top, area.Bottom - child.Height))));
+    }
+
     internal static void CenterOnCursorScreen(Window window)
     {
         if (!TryGetBounds(window, out var bounds)) return;

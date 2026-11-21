@@ -105,7 +105,9 @@ internal static class AppUpdateChannelTests
             var builds = new[] { new AppBuild(stable), new(stable, UpdateChannel.Hotfix, 10), AppVersion.Build,
                 new(stable, UpdateChannel.Hotfix, 3), new(upcoming, UpdateChannel.Beta, 1) }.Distinct();
             var catalog = builds.Select(b => new UpdateRelease(new AvailableUpdate(b.Version, "", "")
-                { Channel = b.Channel, Revision = b.Number }, AppReleaseNotes.Current, default)).ToArray();
+                { Channel = b.Channel, Revision = b.Number }, b.Channel == UpdateChannel.Stable
+                    ? "## Deutsch\n" + string.Join("\n", Enumerable.Range(1, 24).Select(n => $"• **Änderung {n}** Versionshinweise lassen sich in der Updateübersicht öffnen."))
+                    : AppReleaseNotes.Current, default)).ToArray();
             var historyWindow = new UpdateManagerWindow(ThemePalette.For("Standard"), false, () => false,
                 load: _ => Task.FromResult<IReadOnlyList<UpdateRelease>>(catalog), preference: UpdatePreference.Hotfixes) { Owner = main };
             try
@@ -126,7 +128,18 @@ internal static class AppUpdateChannelTests
                             opened = true; detail.UpdateLayout();
                             Assert(((TextBlock)detail.FindName("Product")).Text.Contains(build.Version.ToString()), "Correct base release");
                             Assert(((Border)detail.FindName("InstalledBadge")).IsVisible == (build == AppVersion.Build), "Installed badge compares full identity");
-                            Assert(((ItemsControl)detail.FindName("Cards")).Items.Count == 2, "Two localized note cards");
+                            Assert(((ItemsControl)detail.FindName("Cards")).Items.Count == (build.Channel == UpdateChannel.Stable ? 24 : ReleaseDetailsWindow.NotesFor(((UpdateRelease)choice.Payload).Update, AppReleaseNotes.Current, false).Length), "All localized notes shown");
+                            var scroll = (ScrollViewer)detail.FindName("ChangesScroll");
+                            Assert(scroll.VerticalScrollBarVisibility == ScrollBarVisibility.Hidden, "No visible details scrollbar");
+                            Assert(Math.Abs(detail.Top + detail.ActualHeight / 2 - historyWindow.Top - historyWindow.ActualHeight / 2) <= 3 &&
+                                Math.Abs(detail.Left + detail.ActualWidth / 2 - historyWindow.Left - historyWindow.ActualWidth / 2) <= 3, "Details centered on update manager");
+                            if (build.Channel == UpdateChannel.Stable)
+                            {
+                                Assert(scroll.VerticalOffset == 0 && scroll.ScrollableHeight > 0 && detail.ActualHeight <= historyWindow.ActualHeight, "Long notes start at the top within owner height");
+                                scroll.ScrollToEnd(); detail.UpdateLayout();
+                                Assert(scroll.VerticalOffset > 0, "Long notes scroll with hidden bar");
+                                scroll.ScrollToHome(); detail.UpdateLayout();
+                            }
                             Screenshot(detail, detail.RenderSize, snapshot);
                         }
                         finally { detail.Close(); }
@@ -137,6 +150,23 @@ internal static class AppUpdateChannelTests
                     Assert(opened && ((UpdateManagerWindow.Choice)historyList.SelectedItem).Payload.Equals(choice.Payload), "Click opens details and return retains selection");
                 }
                 OpenBuild(new(stable), "Details-Stable.png");
+                var stableRow = historyList.Items.Cast<UpdateManagerWindow.Choice>().First(row => row.HistoryLabel != null);
+                Assert(stableRow.HistoryLabel == "3 Hotfixes", "Hotfix count matches the catalog");
+                historyList.ScrollIntoView(stableRow); historyList.UpdateLayout();
+                var stableItem = (ListBoxItem)historyList.ItemContainerGenerator.ContainerFromItem(stableRow);
+                stableItem.ApplyTemplate(); stableItem.UpdateLayout(); Pump();
+                IEnumerable<Button> VisualButtons(DependencyObject parent)
+                {
+                    if (parent is Button button) yield return button;
+                    for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+                        foreach (var child in VisualButtons(VisualTreeHelper.GetChild(parent, i))) yield return child;
+                }
+                var historyButton = VisualButtons(stableItem).Single(button => button.IsVisible);
+                historyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+                Assert(!historyWindow.OwnedWindows.OfType<ReleaseDetailsWindow>().Any(window => window.IsVisible) &&
+                    historyList.Items.Cast<UpdateManagerWindow.Choice>().Count(row => row.Payload is UpdateRelease release && release.Update.Channel == UpdateChannel.Hotfix) == 3,
+                    "Hotfix count expands history without opening stable details");
+                Screenshot(historyWindow, historyWindow.RenderSize, "Versionsliste-Hotfixanzahl.png");
                 var revisions = historyList.Items.Cast<UpdateManagerWindow.Choice>().Select(x => ((UpdateRelease)x.Payload).Update)
                     .Where(u => u.Channel == UpdateChannel.Hotfix).Select(u => u.Revision).ToArray();
                 Assert(revisions.SequenceEqual(revisions.Distinct().OrderDescending()) && revisions.Contains(3), "All hotfixes appear once in descending numeric order");
@@ -146,12 +176,15 @@ internal static class AppUpdateChannelTests
             }
             finally { historyWindow.Close(); }
             var baseRelease = new AvailableUpdate(upcoming, "stable.exe", new string('b', 64));
-            var fix = baseRelease with { Channel = UpdateChannel.Hotfix, Revision = 10, DownloadUrl = "hotfix.zip", Sha256 = new string('c', 64) };
+            var fix = baseRelease with { Channel = UpdateChannel.Hotfix, Revision = 10, DownloadUrl = "hotfix.zip", Sha256 = new string('c', 64), Notes = AppReleaseNotes.Current };
             foreach (var english in new[] { false, true })
-            foreach (var action in new[] { "default", "switch", "manual", "cancel", "stable-only", "no-hotfix" })
+            foreach (var action in new[] { "default", "switch", "manual", "cancel", "previous", "back", "stable-only", "no-hotfix" })
             {
+                var previous = fix with { Revision = 9, DownloadUrl = "previous.zip", Sha256 = new string('d', 64),
+                    Notes = "## Deutsch\n• **Frühere Fassung** Änderung für Hotfix neun.\n## English\n• **Earlier edition** Change for hotfix nine." };
                 var candidates = new List<UpdateRelease> { new(baseRelease, "", default) };
-                if (action != "no-hotfix") candidates.Add(new(fix, "", default));
+                if (action == "previous") candidates.Add(new(previous, previous.Notes, default));
+                if (action != "no-hotfix") candidates.Add(new(fix, fix.Notes, default));
                 var manager = new UpdateManagerWindow(ThemePalette.For("Standard"), english, () => false,
                     load: _ => Task.FromResult<IReadOnlyList<UpdateRelease>>(candidates),
                     preference: action == "stable-only" ? UpdatePreference.Stable : UpdatePreference.Hotfixes) { Owner = main };
@@ -165,15 +198,45 @@ internal static class AppUpdateChannelTests
                         var radio = (RadioButton)confirm.FindName("StableEdition");
                         Assert(radio.IsVisible == (action is not ("stable-only" or "no-hotfix")), "Paired choices only for an applicable hotfix.");
                         if (action == "switch") radio.IsChecked = true;
+                        if (action == "previous")
+                        {
+                            var picker = (ComboBox)confirm.FindName("HotfixPicker");
+                            Assert(picker.Items.Count == 2, "All matching revisions in picker");
+                            picker.SelectedIndex = 1;
+                            Assert(UnifiedDialogAppearance.Children<TextBlock>((StackPanel)confirm.FindName("FullNotes")).Any(t => t.Text.Contains(english ? "hotfix nine" : "Hotfix neun")), "Selected notes visible");
+
+                        }
                         if (action == "default" && !english)
+                            {
                             Screenshot(confirm, confirm.RenderSize, "Hotfix-Installationsauswahl.png");
+                            confirm.UpdateLayout();
+                            Screenshot(confirm, confirm.RenderSize, "Hotfix-Alle-Aenderungen.png");
+                        }
+                        if (radio.IsVisible && action != "cancel")
+                        {
+                            confirm.Dispatcher.BeginInvoke(() =>
+                            {
+                                var final = confirm.OwnedWindows.OfType<UpdateInstallWindow>().Single();
+                                Assert(UnifiedDialogAppearance.Children<TextBlock>(final).Any(t => t.Text.Contains(english ? "Change for hotfix nine" : "Änderung für Hotfix neun")) || action != "previous", "Final preview includes the chosen revision notes");
+                                Assert(final.SelectedUpdate == confirm.SelectedUpdate && ((TextBlock)final.FindName("TargetText")).Text.Contains(confirm.SelectedUpdate.Build.Display),
+                                    "Final summary matches selected package");
+                                if (action == "default" && !english)
+                                    Screenshot(final, final.RenderSize, "Hotfix-Bestaetigung.png");
+                                ((Button)final.FindName(action == "back" ? "CancelButton" : "ConfirmButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                            }, DispatcherPriority.ApplicationIdle);
+                        }
                         ((Button)confirm.FindName(action == "cancel" ? "CancelButton" : "ConfirmButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        if (action == "back")
+                        {
+                            Assert(confirm.IsVisible, "Back retains selection dialog");
+                            ((Button)confirm.FindName("CancelButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        }
                     }, DispatcherPriority.ApplicationIdle);
                     ((Button)manager.FindName("InstallButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                    if (action == "cancel") manager.Close();
+                    if (action is "cancel" or "back") manager.Close();
                 }, DispatcherPriority.ApplicationIdle);
                 manager.ShowDialog();
-                Assert(manager.SelectedUpdate == (action == "cancel" ? null : action == "default" ? fix : baseRelease),
+                Assert(manager.SelectedUpdate == (action is "cancel" or "back" ? null : action == "previous" ? previous : action == "default" ? fix : baseRelease),
                     "Confirmed edition supplies its own URL and digest: " + action);
             }
             Assert(((TextBlock)main.FindName("InstalledVersionText")).Text == $"v{stable}", "The footer shows only the numeric version.");

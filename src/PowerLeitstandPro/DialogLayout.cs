@@ -35,6 +35,18 @@ internal static class DialogLayout
         return result;
     }
 
+    internal static Border UpdateCard(params FrameworkElement[] elements)
+    {
+        var card = new Border
+        {
+            Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 0, 0, 10),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Child = Stack(elements)
+        };
+        card.SetResourceReference(Border.BorderBrushProperty, "DialogBorder");
+        card.SetResourceReference(Border.BackgroundProperty, "DialogInput");
+        return card;
+    }
+
     internal static Grid Actions(params Button[] buttons)
     {
         var grid = new Grid();

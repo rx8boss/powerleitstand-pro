@@ -52,12 +52,13 @@ public partial class UpdateDownloadWindow : Window
         HeaderCloseButton.Tag = "UnifiedHeaderClose";
         UnifiedDialogAppearance.Buttons(this, palette);
         VersionText.Margin = new Thickness(0, 0, 0, 12);
-        PhaseText.FontSize = 16; PhaseText.Margin = new Thickness(0, 0, 0, 12);
+        PhaseText.FontWeight = FontWeights.SemiBold; PhaseText.FontSize = 16; PhaseText.Margin = new Thickness(0, 0, 0, 12);
         DownloadBar.Height = 26; DownloadBar.Margin = new Thickness(0, 0, 0, 8);
         HintText.Margin = new Thickness(0, 10, 0, 0); HintText.FontSize = 13;
         DialogLayout.Compose(this, DialogFrame, palette, HeaderText.Text, english,
-            DialogLayout.Stack(VersionText, PhaseText, DownloadBar, TransferredText, HintText),
+            DialogLayout.Stack(VersionText, DialogLayout.UpdateCard(PhaseText, DownloadBar, TransferredText), HintText),
             DialogLayout.Actions(CancelButton), HeaderCloseButton);
+        ContentRendered += (_, _) => WindowPlacementService.CenterOnOwner(this);
         ContentRendered += RunDownload;
         Closing += GuardClosing;
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { RequestCancellation(); e.Handled = true; } };

@@ -10,7 +10,7 @@ namespace PowerControlProWpf;
 
 public partial class ReleaseDetailsWindow : Window
 {
-    private sealed record Card(string Heading, string Body, string Icon);
+    internal sealed record Card(string Heading, string Body, string Icon);
     private const string ListIcon = "M 2,3 H 20 V 19 H 2 Z M 6,8 H 16 M 6,12 H 14";
     private const string DownloadIcon = "M 11,1 V 13 M 6,8 L 11,13 L 16,8 M 2,14 V 19 H 20 V 14";
     private const string DisplayIcon = "M 2,2 H 21 V 15 H 2 Z M 11,15 V 20 M 6,20 H 16";
@@ -25,7 +25,7 @@ public partial class ReleaseDetailsWindow : Window
         UnifiedDialogAppearance.Button(this, BackToList, DialogButtonKind.Primary);
         FontFamily = new System.Windows.Media.FontFamily(palette.FontFamily);
         Resources["CardSurface"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(palette.Colors[3]));
-        Resources["CardLine"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(palette.Colors[8])) { Opacity = .45 };
+        Resources["CardLine"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(palette.Colors[8])) { Opacity = .8 };
         var build = release.Update.Build;
         Heading.Text = build.Channel switch
         {
@@ -41,17 +41,22 @@ public partial class ReleaseDetailsWindow : Window
         BackToList.Content = english ? "←  Back to version list" : "←  Zurück zur Versionsliste";
         AutomationProperties.SetName(CloseButton, english ? "Close" : "Schließen");
         CloseButton.ToolTip = AutomationProperties.GetName(CloseButton);
-        var notes = release.Notes;
-        if (build.Channel == UpdateChannel.Stable)
-            notes = Regex.Split(notes, @"(?im)^##[ \t]+Hotfix[ \t]+\d+[ \t]*\r?$")[0];
-        Cards.ItemsSource = MakeCards(AppReleaseNotes.Select(notes, english));
+        Cards.ItemsSource = NotesFor(release.Update, release.Notes, english);
         SourceInitialized += (_, _) =>
         {
             var area = WindowPlacementService.GetCursorWorkAreaInDips(this);
             Width = Math.Min(548, Math.Max(260, Math.Min(area.Width - 24, Owner?.ActualWidth ?? 548)));
-            MaxHeight = Math.Max(220, Math.Min(680, area.Height - 36));
+            MaxHeight = Math.Max(220, Math.Min(Math.Min(680, area.Height - 36), Owner is { ActualHeight: > 0 } owner ? owner.ActualHeight - 24 : 680));
             ChangesScroll.MaxHeight = Math.Max(64, MaxHeight - 196);
         };
+        ContentRendered += (_, _) => WindowPlacementService.CenterOnOwner(this);
+    }
+
+    internal static Card[] NotesFor(AvailableUpdate update, string notes, bool english)
+    {
+        if (update.Channel == UpdateChannel.Stable)
+            notes = Regex.Split(notes, @"(?im)^##[ \t]+Hotfix[ \t]+\d+[ \t]*\r?$")[0];
+        return MakeCards(AppReleaseNotes.Select(notes, english)).ToArray();
     }
 
     private static IEnumerable<Card> MakeCards(string notes)

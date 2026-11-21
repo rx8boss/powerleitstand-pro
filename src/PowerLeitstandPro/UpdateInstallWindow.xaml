@@ -22,8 +22,22 @@
    <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled"><StackPanel><StackPanel x:Name="EditionChoices" Margin="0,0,0,12">
      <StackPanel.Resources><ResourceDictionary Source="UpdateChoiceStyle.xaml"/></StackPanel.Resources>
      <TextBlock x:Name="EditionPrompt" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
-     <RadioButton x:Name="HotfixEdition" Margin="0,0,0,6" Padding="10,6" FontSize="14"/>
-     <RadioButton x:Name="StableEdition" Margin="0" Padding="10,6" FontSize="14"/>
+     <Border x:Name="HotfixTile" BorderThickness="1" CornerRadius="7" Padding="9" Margin="0,0,0,6" MouseLeftButtonUp="HotfixTileClicked">
+      <Border.Style><Style TargetType="Border">
+       <Setter Property="Background" Value="{DynamicResource DialogInput}"/><Setter Property="BorderBrush" Value="{DynamicResource DialogLine}"/>
+       <Style.Triggers><DataTrigger Binding="{Binding IsChecked, ElementName=HotfixEdition}" Value="True">
+        <Setter Property="Background" Value="{DynamicResource DialogButtonBackground}"/><Setter Property="BorderBrush" Value="{DynamicResource DialogAccent}"/>
+       </DataTrigger></Style.Triggers></Style></Border.Style>
+      <StackPanel>
+       <DockPanel><ComboBox x:Name="HotfixPicker" DockPanel.Dock="Right" MinWidth="98" MaxDropDownHeight="155" ScrollViewer.VerticalScrollBarVisibility="Hidden" VerticalAlignment="Center" Margin="8,0,0,0"/>
+        <RadioButton x:Name="HotfixEdition" Style="{x:Null}" GroupName="Edition" Foreground="{DynamicResource DialogText}" VerticalContentAlignment="Center" VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold"/>
+       </DockPanel>
+       <StackPanel x:Name="HotfixInfo" Margin="0,6,0,0">
+        <Border x:Name="NotesClip" Padding="8" Background="{DynamicResource DialogInput}" BorderBrush="{DynamicResource DialogLine}" BorderThickness="1" CornerRadius="7"><StackPanel x:Name="FullNotes"/></Border>
+       </StackPanel>
+      </StackPanel>
+     </Border>
+     <RadioButton x:Name="StableEdition" GroupName="Edition" Margin="0" Padding="10,6" FontSize="14"/>
     </StackPanel><TextBlock x:Name="RestartText" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock x:Name="SafetyText" FontSize="12" Foreground="{DynamicResource DialogSubtleText}" TextWrapping="Wrap" LineHeight="19" Margin="0,8,0,0"/><TextBlock x:Name="OlderVersionText" Visibility="Collapsed" FontSize="12" TextWrapping="Wrap" Margin="0,7,0,0"/></StackPanel></ScrollViewer>
    <Grid Grid.Row="6"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
     <Button x:Name="ConfirmButton" Style="{StaticResource ActionButton}" Click="Confirm"><StackPanel Orientation="Horizontal"><Path Data="M 8,0 L 8,12 M 3,7 L 8,12 L 13,7 M 0,12 L 0,17 L 16,17 L 16,12" Stroke="{DynamicResource DialogBorder}" StrokeThickness="1.7" Width="16" Height="17" Margin="0,0,9,0"/><TextBlock x:Name="ConfirmCaption" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/></StackPanel></Button>

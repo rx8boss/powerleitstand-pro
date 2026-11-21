@@ -178,7 +178,7 @@ public partial class UpdateManagerWindow : Window
                 if (r.Update.Channel == UpdateChannel.Stable && fixes.Any())
                 {
                     var expanded = _expandedVersion == r.Update.Version;
-                    choices.Add(row with { HistoryLabel = $"{(expanded ? "▾" : "▸")} {fixes.Count()} {(fixes.Count() == 1 ? "Hotfix" : "Hotfixes")}" });
+                    choices.Add(row with { HistoryLabel = $"{fixes.Count()} {(fixes.Count() == 1 ? "Hotfix" : "Hotfixes")}" });
                     if (expanded)
                         foreach (var fix in fixes) choices.Add(ReleaseChoice(fix) with { Title = $"      Hotfix {fix.Update.Revision}" });
                 }
@@ -243,11 +243,6 @@ public partial class UpdateManagerWindow : Window
     private void OpenReleaseDetails(Choice row)
     {
         var release = (UpdateRelease)row.Payload;
-        if (row.HistoryLabel is not null && _expandedVersion != release.Update.Version)
-        {
-            _expandedVersion = release.Update.Version;
-            ApplyView(release);
-        }
         new ReleaseDetailsWindow(CurrentPalette, _english, release, _installedBuild) { Owner = this }.ShowDialog();
         VersionList.ScrollIntoView(VersionList.SelectedItem);
         (VersionList.ItemContainerGenerator.ContainerFromItem(VersionList.SelectedItem) as ListBoxItem)?.Focus();
@@ -302,7 +297,9 @@ public partial class UpdateManagerWindow : Window
         if (_closed) return;
         var choice = VersionList.SelectedItem as Choice;
         InstallButton.IsEnabled = !_working && !_busy() && _verified && choice is not null &&
-            (choice.Payload is AppBackup || choice.Payload is UpdateRelease r && r.Update.Build != _installedBuild);
+            (choice.Payload is AppBackup || choice.Payload is UpdateRelease r && (r.Update.Build != _installedBuild ||
+                r.Update.Channel == UpdateChannel.Stable && _preference == UpdatePreference.Hotfixes &&
+                _releases.Any(f => f.Update.Version == r.Update.Version && f.Update.Channel == UpdateChannel.Hotfix)));
         DeleteBackupButton.IsEnabled = !_working && choice?.Payload is AppBackup;
         RecoveryButton.IsEnabled = !_working;
         ChangesButton.IsEnabled = !_working && choice is not null;
@@ -321,13 +318,11 @@ public partial class UpdateManagerWindow : Window
             _ => null
         };
         if (update is null) return;
-        AvailableUpdate? alternative = null;
-        if (_preference == UpdatePreference.Hotfixes && choice.Payload is UpdateRelease)
-        {
-            alternative = UpdateReleaseCatalog.Visible(_releases, _installedBuild, _preference).Select(r => r.Update)
-                .FirstOrDefault(other => other.Version == update.Version && other.Channel != update.Channel);
-        }
-        var confirmation = new UpdateInstallWindow(CurrentPalette, _english, _installedBuild.Version, update, alternative) { Owner = this };
+        var editions = _preference == UpdatePreference.Hotfixes && choice.Payload is UpdateRelease && update.Channel != UpdateChannel.Beta
+            ? _releases.Where(r => r.Update.Version == update.Version && r.Update.Channel != UpdateChannel.Beta)
+                .Select(r => r.Update).OrderByDescending(u => u.Build).ToArray()
+            : [];
+        var confirmation = new UpdateInstallWindow(CurrentPalette, _english, _installedBuild.Version, update, editions) { Owner = this };
         if (confirmation.ShowDialog() != true) return;
         if (_busy()) { RefreshActions(); return; }
         SelectedUpdate = confirmation.SelectedUpdate;

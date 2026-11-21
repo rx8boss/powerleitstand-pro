@@ -6,17 +6,19 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
-        Neu in Version 1.1.9 – Hotfix 4
+        Neu in Version 1.1.9 – Hotfix 5
 
-        • **Versionshinweise öffnen** Ein Klick auf eine stabile Version, Beta oder einen Hotfix öffnet ein eigenes Infofenster. Jede Änderung steht in einer Kachel. Die installierte Fassung trägt ein Häkchen.
-        • **Frühere Hotfixes ansehen** Unter „Stabil + Hotfixes“ lassen sich die Hotfixes einer stabilen Version aufklappen. Auch der installierte und ältere Hotfixes bleiben dort sichtbar.
+        • **Hotfix auswählen** Der Installationsdialog zeigt die Änderungen des gewählten Hotfixes direkt als Kacheln. Über die Auswahl kannst du zwischen verfügbaren Hotfixes wechseln.
+        • **Installation bestätigen** Vor dem Download siehst du die installierte und die ausgewählte Fassung sowie die Änderungen. Über „Zurück“ kannst du deine Auswahl anpassen.
+        • **Hotfix-Verlauf öffnen** Ein Klick auf die Hotfix-Anzahl klappt die zugehörigen Versionen in der Liste auf oder zu.
         """;
 
     internal const string English = """
-        New in version 1.1.9 – Hotfix 4
+        New in version 1.1.9 – Hotfix 5
 
-        • **Open release notes** Click a stable release, beta, or hotfix to open its own details window. Each change appears in a card. A check mark identifies the installed build.
-        • **Browse earlier hotfixes** Under Stable + hotfixes, expand a stable release to see its hotfix history, including installed and older fixes.
+        • **Choose a hotfix** The installation dialog displays the selected hotfix changes as cards. Use the selector to switch between available hotfixes.
+        • **Confirm installation** Review the installed and selected editions and their changes before downloading. Choose “Back” to adjust your selection.
+        • **Open hotfix history** Click the hotfix count to expand or collapse the versions in the list.
         """;
 
     internal const string Current = "## Deutsch\n" + German + "\n\n## English\n" + English;

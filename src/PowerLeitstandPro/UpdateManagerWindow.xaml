@@ -51,8 +51,9 @@
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Margin="0,0,10,0" VerticalAlignment="Center"/>
         <TextBlock Grid.Column="1" Text="{Binding Summary}" FontSize="12" Foreground="{DynamicResource DialogAccent}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-        <Button Grid.Column="2" Content="{Binding HistoryLabel}" Margin="4,0,0,0" Padding="5,0" MinHeight="0" Height="20" FontSize="11" VerticalAlignment="Center" Click="ToggleHistory">
-         <Button.Style><Style TargetType="Button" BasedOn="{StaticResource ActionButton}"><Style.Triggers><DataTrigger Binding="{Binding HistoryLabel}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style>
+        <Button Grid.Column="2" Content="{Binding HistoryLabel}" Margin="6,0,0,0" Padding="4,2" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource DialogAccent}" Background="Transparent" BorderThickness="0" Cursor="Hand" Click="ToggleHistory">
+         <Button.Template><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border></ControlTemplate></Button.Template>
+         <Button.Style><Style TargetType="Button"><Style.Triggers><DataTrigger Binding="{Binding HistoryLabel}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style>
         </Button>
        </Grid></DataTemplate></ListBox.ItemTemplate>
       </ListBox>

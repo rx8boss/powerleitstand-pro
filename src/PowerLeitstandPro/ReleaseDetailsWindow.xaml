@@ -20,16 +20,16 @@
    </Border>
    <Grid Grid.Row="1" Margin="20,14,20,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
     <TextBlock x:Name="ChangesHeading" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-    <ScrollViewer x:Name="ChangesScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="True">
+    <ScrollViewer x:Name="ChangesScroll" Grid.Row="1" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly" HorizontalScrollBarVisibility="Disabled" Focusable="True">
      <ItemsControl x:Name="Cards" HorizontalContentAlignment="Stretch"><ItemsControl.ItemTemplate>
       <DataTemplate><Border Margin="0,0,0,7" Padding="12" Background="{DynamicResource CardSurface}" BorderBrush="{DynamicResource CardLine}" BorderThickness="1" CornerRadius="8">
        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition/></Grid.ColumnDefinitions>
         <Border Width="32" Height="32" CornerRadius="7" Background="{DynamicResource DialogButtonBackground}" VerticalAlignment="Top" HorizontalAlignment="Left">
          <Path Width="19" Height="19" Stretch="Uniform" Stroke="{DynamicResource DialogBorder}" StrokeThickness="1.7" StrokeLineJoin="Round" Data="{Binding Icon}"/>
         </Border>
-        <StackPanel Grid.Column="1"><TextBlock Text="{Binding Heading}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap">
+        <StackPanel Grid.Column="1"><TextBlock Text="{Binding Heading}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap">
          <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Margin" Value="0,0,0,3"/><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style>
-        </TextBlock><TextBlock Text="{Binding Body}" Foreground="{DynamicResource UnifiedMuted}" TextWrapping="Wrap" FontSize="13" LineHeight="19"/></StackPanel>
+        </TextBlock><TextBlock Text="{Binding Body}" Foreground="{DynamicResource UnifiedText}" TextWrapping="Wrap" FontSize="14" LineHeight="21"/></StackPanel>
        </Grid>
       </Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
     </ScrollViewer>
