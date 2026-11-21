@@ -6,17 +6,17 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
-        Neu in Version 1.1.9 – Hotfix 3
+        Neu in Version 1.1.9 – Hotfix 4
 
-        • „Stabil + Hotfixes“ wählt bei einem Update den neuesten passenden Hotfix vor. Im Bestätigungsfenster kannst du die stabile Grundversion wählen oder zur Versionsliste zurückgehen.
-        • Die Fußzeile zeigt die Versionsnummer. Unter Einstellungen → Updates siehst du zusätzlich den installierten Hotfix oder die Beta-Nummer.
+        • **Versionshinweise öffnen** Ein Klick auf eine stabile Version, Beta oder einen Hotfix öffnet ein eigenes Infofenster. Jede Änderung steht in einer Kachel. Die installierte Fassung trägt ein Häkchen.
+        • **Frühere Hotfixes ansehen** Unter „Stabil + Hotfixes“ lassen sich die Hotfixes einer stabilen Version aufklappen. Auch der installierte und ältere Hotfixes bleiben dort sichtbar.
         """;
 
     internal const string English = """
-        New in version 1.1.9 – Hotfix 3
+        New in version 1.1.9 – Hotfix 4
 
-        • Stable + hotfixes preselects the latest applicable hotfix. In the confirmation window you can choose the stable base release or return to the version list.
-        • The footer shows the version number. Settings → Updates also shows the installed hotfix or beta number.
+        • **Open release notes** Click a stable release, beta, or hotfix to open its own details window. Each change appears in a card. A check mark identifies the installed build.
+        • **Browse earlier hotfixes** Under Stable + hotfixes, expand a stable release to see its hotfix history, including installed and older fixes.
         """;
 
     internal const string Current = "## Deutsch\n" + German + "\n\n## English\n" + English;
