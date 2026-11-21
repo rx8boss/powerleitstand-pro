@@ -101,6 +101,50 @@ internal static class AppUpdateChannelTests
         try
         {
             main.Show(); Pump();
+            // Exercise an actual row click, including clicks on the already selected version.
+            var builds = new[] { new AppBuild(stable), new(stable, UpdateChannel.Hotfix, 10), AppVersion.Build,
+                new(stable, UpdateChannel.Hotfix, 3), new(upcoming, UpdateChannel.Beta, 1) }.Distinct();
+            var catalog = builds.Select(b => new UpdateRelease(new AvailableUpdate(b.Version, "", "")
+                { Channel = b.Channel, Revision = b.Number }, AppReleaseNotes.Current, default)).ToArray();
+            var historyWindow = new UpdateManagerWindow(ThemePalette.For("Standard"), false, () => false,
+                load: _ => Task.FromResult<IReadOnlyList<UpdateRelease>>(catalog), preference: UpdatePreference.Hotfixes) { Owner = main };
+            try
+            {
+                historyWindow.Show(); Wait(() => historyWindow.ReleaseLoadSucceeded);
+                var historyList = (ListBox)historyWindow.FindName("VersionList");
+                void OpenBuild(AppBuild build, string snapshot)
+                {
+                    var choice = historyList.Items.Cast<UpdateManagerWindow.Choice>().Single(x => ((UpdateRelease)x.Payload).Update.Build == build);
+                    historyList.ScrollIntoView(choice); historyList.UpdateLayout();
+                    var item = (ListBoxItem)historyList.ItemContainerGenerator.ContainerFromItem(choice);
+                    bool opened = false;
+                    historyWindow.Dispatcher.BeginInvoke(() =>
+                    {
+                        if (historyWindow.OwnedWindows.OfType<ReleaseDetailsWindow>().SingleOrDefault() is not { } detail) return;
+                        try
+                        {
+                            opened = true; detail.UpdateLayout();
+                            Assert(((TextBlock)detail.FindName("Product")).Text.Contains(build.Version.ToString()), "Correct base release");
+                            Assert(((Border)detail.FindName("InstalledBadge")).IsVisible == (build == AppVersion.Build), "Installed badge compares full identity");
+                            Assert(((ItemsControl)detail.FindName("Cards")).Items.Count == 2, "Two localized note cards");
+                            Screenshot(detail, detail.RenderSize, snapshot);
+                        }
+                        finally { detail.Close(); }
+                    }, DispatcherPriority.ApplicationIdle);
+                    item.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+                        { RoutedEvent = System.Windows.Input.Mouse.MouseUpEvent });
+                    Pump();
+                    Assert(opened && ((UpdateManagerWindow.Choice)historyList.SelectedItem).Payload.Equals(choice.Payload), "Click opens details and return retains selection");
+                }
+                OpenBuild(new(stable), "Details-Stable.png");
+                var revisions = historyList.Items.Cast<UpdateManagerWindow.Choice>().Select(x => ((UpdateRelease)x.Payload).Update)
+                    .Where(u => u.Channel == UpdateChannel.Hotfix).Select(u => u.Revision).ToArray();
+                Assert(revisions.SequenceEqual(revisions.Distinct().OrderDescending()) && revisions.Contains(3), "All hotfixes appear once in descending numeric order");
+                if (AppVersion.Build.Channel == UpdateChannel.Hotfix) OpenBuild(AppVersion.Build, "Details-Hotfix.png");
+                ((RadioButton)historyWindow.FindName("BetaChannel")).IsChecked = true;
+                OpenBuild(new(upcoming, UpdateChannel.Beta, 1), "Details-Beta.png");
+            }
+            finally { historyWindow.Close(); }
             var baseRelease = new AvailableUpdate(upcoming, "stable.exe", new string('b', 64));
             var fix = baseRelease with { Channel = UpdateChannel.Hotfix, Revision = 10, DownloadUrl = "hotfix.zip", Sha256 = new string('c', 64) };
             foreach (var english in new[] { false, true })

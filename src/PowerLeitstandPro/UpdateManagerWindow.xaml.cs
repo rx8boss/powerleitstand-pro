@@ -18,7 +18,9 @@ public partial class UpdateManagerWindow : Window
     internal sealed record Choice(string Title, string Subtitle, string Badge, object Payload)
     {
         public string Summary => Payload is AppBackup || string.IsNullOrWhiteSpace(Badge) ? Subtitle : Badge;
+        public string? HistoryLabel { get; init; }
     }
+    private Version? _expandedVersion;
     private readonly AppBackupStore _store;
     private readonly Func<CancellationToken, Task<IReadOnlyList<UpdateRelease>>> _load;
     private readonly Func<bool> _busy;
@@ -130,7 +132,7 @@ public partial class UpdateManagerWindow : Window
         if (!_recovery) ApplyView();
     }
 
-    private void ApplyView()
+    private void ApplyView(UpdateRelease? keepSelection = null)
     {
         _selectionSequence++;
         _verified = false;
@@ -166,17 +168,33 @@ public partial class UpdateManagerWindow : Window
                     ? (_english ? "No beta available" : "Keine Beta verfügbar")
                     : (_english ? "No release data loaded" : "Keine Versionsdaten geladen"))
                 : (newest.Update.Build.CompareTo(_installedBuild) > 0 ? (_english ? "Available: " : "Verfügbar: ") : (_english ? "Latest on GitHub: " : "Neueste auf GitHub: ")) + newest.Update.Build.Display;
-            foreach (var r in available) choices.Add(new("Version " + r.Update.Build.Display,
-                r.Published == DateTimeOffset.MinValue ? "GitHub" : r.Published.ToLocalTime().ToString("dd.MM.yyyy · HH:mm"),
-                r.Update.Build == _installedBuild ? (_english ? "Installed" : "Installiert")
-                    : r.Update.Channel == UpdateChannel.Stable ? (_english ? "Stable" : "Stabil") : r.Update.Channel.ToString(), r));
+            var history = _releases.Where(r => _preference == UpdatePreference.Hotfixes && r.Update.Channel == UpdateChannel.Hotfix)
+                .OrderByDescending(r => r.Update.Revision).ToLookup(r => r.Update.Version);
+            foreach (var r in available)
+            {
+                if (r.Update.Channel == UpdateChannel.Hotfix && r.Update.Version == _expandedVersion) continue;
+                var row = ReleaseChoice(r);
+                var fixes = history[r.Update.Version];
+                if (r.Update.Channel == UpdateChannel.Stable && fixes.Any())
+                {
+                    var expanded = _expandedVersion == r.Update.Version;
+                    choices.Add(row with { HistoryLabel = $"{(expanded ? "▾" : "▸")} {fixes.Count()} {(fixes.Count() == 1 ? "Hotfix" : "Hotfixes")}" });
+                    if (expanded)
+                        foreach (var fix in fixes) choices.Add(ReleaseChoice(fix) with { Title = $"      Hotfix {fix.Update.Revision}" });
+                }
+                else choices.Add(row);
+            }
+            if (_preference == UpdatePreference.Beta && _installedBuild.Channel == UpdateChannel.Beta &&
+                _releases.FirstOrDefault(r => r.Update.Build == _installedBuild) is { } installedBeta)
+                choices.Add(ReleaseChoice(installedBeta));
         }
         VersionList.ItemsSource = choices;
         if (choices.Count > 0)
         {
-            var recommended = choices.FindIndex(x => x.Payload is UpdateRelease r && r.Update.Channel != UpdateChannel.Beta
-                && r.Update.Build.CompareTo(_installedBuild) > 0);
-            VersionList.SelectedIndex = Math.Max(0, recommended);
+            var newestRecommendation = _recovery ? null : LatestRelease;
+            var recommended = _recovery ? -1 : choices.FindIndex(x => x.Payload is UpdateRelease r && r.Update == newestRecommendation);
+            var retained = keepSelection is null ? -1 : choices.FindIndex(x => Equals(x.Payload, keepSelection));
+            VersionList.SelectedIndex = retained >= 0 ? retained : Math.Max(0, recommended);
             // A value-equal selection may survive ItemsSource replacement without SelectionChanged.
             PendingSelection = UpdateSelectionAsync();
         }
@@ -191,6 +209,49 @@ public partial class UpdateManagerWindow : Window
     }
 
     private void VersionSelected(object sender, SelectionChangedEventArgs e) => PendingSelection = UpdateSelectionAsync();
+
+    private Choice ReleaseChoice(UpdateRelease r) => new("Version " + r.Update.Build.Display,
+        r.Published == DateTimeOffset.MinValue ? "GitHub" : r.Published.ToLocalTime().ToString("dd.MM.yyyy · HH:mm"),
+        r.Update.Build == _installedBuild ? (_english ? "Installed" : "Installiert")
+            : r.Update.Channel == UpdateChannel.Stable ? (_english ? "Stable" : "Stabil") : r.Update.Channel.ToString(), r);
+
+    private void ToggleHistory(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: Choice { Payload: UpdateRelease release } }) return;
+        e.Handled = true;
+        _expandedVersion = _expandedVersion == release.Update.Version ? null : release.Update.Version;
+        ApplyView(release);
+        VersionList.ScrollIntoView(VersionList.SelectedItem);
+    }
+
+    private void ReleaseClicked(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject source ||
+            ItemsControl.ContainerFromElement(VersionList, source) is not ListBoxItem { DataContext: Choice { Payload: UpdateRelease } row }) return;
+        VersionList.SelectedItem = row;
+        OpenReleaseDetails(row);
+        e.Handled = true;
+    }
+
+    private void ReleaseKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || Keyboard.FocusedElement is Button || VersionList.SelectedItem is not Choice { Payload: UpdateRelease } row) return;
+        e.Handled = true;
+        OpenReleaseDetails(row);
+    }
+
+    private void OpenReleaseDetails(Choice row)
+    {
+        var release = (UpdateRelease)row.Payload;
+        if (row.HistoryLabel is not null && _expandedVersion != release.Update.Version)
+        {
+            _expandedVersion = release.Update.Version;
+            ApplyView(release);
+        }
+        new ReleaseDetailsWindow(CurrentPalette, _english, release, _installedBuild) { Owner = this }.ShowDialog();
+        VersionList.ScrollIntoView(VersionList.SelectedItem);
+        (VersionList.ItemContainerGenerator.ContainerFromItem(VersionList.SelectedItem) as ListBoxItem)?.Focus();
+    }
 
     private async Task UpdateSelectionAsync()
     {
@@ -263,7 +324,7 @@ public partial class UpdateManagerWindow : Window
         AvailableUpdate? alternative = null;
         if (_preference == UpdatePreference.Hotfixes && choice.Payload is UpdateRelease)
         {
-            alternative = VersionList.Items.Cast<Choice>().Select(item => ((UpdateRelease)item.Payload).Update)
+            alternative = UpdateReleaseCatalog.Visible(_releases, _installedBuild, _preference).Select(r => r.Update)
                 .FirstOrDefault(other => other.Version == update.Version && other.Channel != update.Channel);
         }
         var confirmation = new UpdateInstallWindow(CurrentPalette, _english, _installedBuild.Version, update, alternative) { Owner = this };
@@ -293,7 +354,11 @@ public partial class UpdateManagerWindow : Window
         NotesScroll.ScrollToTop();
         _ = Dispatcher.BeginInvoke((Action)(() => { NotesScroll.Focus(); UpdateScrollHints(); }), DispatcherPriority.Loaded);
     }
-    private void OpenNotes(object s, RoutedEventArgs e) => ShowNotesView();
+    private void OpenNotes(object s, RoutedEventArgs e)
+    {
+        if (VersionList.SelectedItem is Choice { Payload: UpdateRelease } row) OpenReleaseDetails(row);
+        else ShowNotesView();
+    }
     private void ApplyNavigation()
     {
         if (DetailPanel is null) return;

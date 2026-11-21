@@ -206,16 +206,23 @@ internal static class UpdateManagerTests
                     Assert(back.Width == 28 && back.Height == 28 && close.ActualWidth == 28 && close.ActualHeight == 28, "compact square header buttons");
                     Assert(back.Content is System.Windows.Shapes.Path && close.Content is System.Windows.Shapes.Path, "header icons use vector geometry");
                     Assert(!w.IsNotesView && ((FrameworkElement)w.FindName("DetailPanel")).Visibility == Visibility.Collapsed, "notes hidden behind button");
+                    w.Dispatcher.BeginInvoke(() =>
+                    {
+                        var detail = w.OwnedWindows.OfType<ReleaseDetailsWindow>().Single();
+                        try
+                        {
+                            detail.UpdateLayout();
+                            var scroll = (ScrollViewer)detail.FindName("ChangesScroll");
+                            Assert(((ItemsControl)detail.FindName("Cards")).Items.Count >= 50, "all note cards visible through scrolling");
+                            Assert(scroll.ScrollableHeight > 0, "long release notes scroll inside the dialog");
+                            scroll.ScrollToBottom(); Pump();
+                            Assert(scroll.VerticalOffset > 0, "last card reachable");
+                            scroll.ScrollToTop(); Pump();
+                            if (!english && !small && theme == "Standard") Save(detail, "Aenderungen-Standard");
+                        }
+                        finally { detail.Close(); }
+                    }, DispatcherPriority.ApplicationIdle);
                     ((Button)w.FindName("ChangesButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
-                    Assert(w.IsNotesView && ((Button)w.FindName("InstallButton")).Visibility == Visibility.Collapsed, "changes button opens same-window notes view");
-                    Assert(list.Items.Count == 4 && ((TextBlock)w.FindName("NotesText")).Text.Contains("50"), "release list and full notes " + theme + " / " + english + " / " + small);
-                    notes.ScrollToTop(); Pump();
-                    Assert(notes.ScrollableHeight > 0 && ((Button)w.FindName("NotesDown")).Visibility == Visibility.Visible && ((Button)w.FindName("NotesUp")).Visibility == Visibility.Collapsed, "initial overflow arrows");
-                    notes.ScrollToBottom(); Pump();
-                    Assert(((Button)w.FindName("NotesUp")).Visibility == Visibility.Visible && ((Button)w.FindName("NotesDown")).Visibility == Visibility.Collapsed, "bottom overflow arrows");
-                    Assert(notes.ComputedVerticalScrollBarVisibility == Visibility.Collapsed, "notes scrollbar remains invisible");
-                    if (!english && !small && theme == "Standard") Save(w, "Aenderungen-Standard");
-                    ((Button)w.FindName("BackButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
                     Assert(!w.IsNotesView && !w.IsRecoveryView && list.SelectedIndex == 0, "back from changes retains version selection");
                     foreach (var name in new[] { "ChangesButton", "InstallButton", "CloseButton", "HeaderCloseButton" })
                     {

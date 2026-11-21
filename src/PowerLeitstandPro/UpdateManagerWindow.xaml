@@ -46,8 +46,15 @@
      <Grid x:Name="ListPanel"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <TextBlock x:Name="ListHeading" Text="Version auswählen" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,5"/>
       <TextBlock x:Name="ListHint" Grid.Row="1" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource DialogSubtleText}" Visibility="Collapsed"/>
-      <ListBox Grid.Row="2" x:Name="VersionList" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource DialogText}" MaxHeight="120" Padding="0" ItemContainerStyle="{StaticResource Choice}" ScrollViewer.CanContentScroll="True" VirtualizingPanel.ScrollUnit="Item" ScrollViewer.VerticalScrollBarVisibility="Hidden" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="VersionSelected">
-       <ListBox.ItemTemplate><DataTemplate><Grid ToolTip="{Binding Subtitle}"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Grid.Column="1" Text="{Binding Summary}" FontSize="12" Foreground="{DynamicResource DialogAccent}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/></Grid></DataTemplate></ListBox.ItemTemplate>
+      <ListBox Grid.Row="2" x:Name="VersionList" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource DialogText}" MaxHeight="120" Padding="0" ItemContainerStyle="{StaticResource Choice}" ScrollViewer.CanContentScroll="True" VirtualizingPanel.ScrollUnit="Item" ScrollViewer.VerticalScrollBarVisibility="Hidden" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="VersionSelected" MouseLeftButtonUp="ReleaseClicked" PreviewKeyDown="ReleaseKeyDown">
+       <ListBox.ItemTemplate><DataTemplate><Grid ToolTip="{Binding Subtitle}">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Margin="0,0,10,0" VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="1" Text="{Binding Summary}" FontSize="12" Foreground="{DynamicResource DialogAccent}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        <Button Grid.Column="2" Content="{Binding HistoryLabel}" Margin="4,0,0,0" Padding="5,0" MinHeight="0" Height="20" FontSize="11" VerticalAlignment="Center" Click="ToggleHistory">
+         <Button.Style><Style TargetType="Button" BasedOn="{StaticResource ActionButton}"><Style.Triggers><DataTrigger Binding="{Binding HistoryLabel}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style>
+        </Button>
+       </Grid></DataTemplate></ListBox.ItemTemplate>
       </ListBox>
       <TextBlock Grid.Row="3" x:Name="ListScrollHint" Text="⌄ Weitere Versionen durch Scrollen" Foreground="{DynamicResource DialogSubtleText}" FontSize="10" Margin="0,2,0,2" Visibility="Collapsed"/>
      </Grid>
