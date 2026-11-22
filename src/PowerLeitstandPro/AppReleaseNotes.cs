@@ -6,16 +6,18 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
-        Neu in Version 1.1.9 – Hotfix 5
+        Neu in Version 1.1.9 – Hotfix 6
 
+        • **Portable EXE** Die benötigte .NET-Desktoplaufzeit ist in der EXE enthalten.
         • **Hotfix auswählen** Der Installationsdialog zeigt die Änderungen des gewählten Hotfixes direkt als Kacheln. Über die Auswahl kannst du zwischen verfügbaren Hotfixes wechseln.
         • **Installation bestätigen** Vor dem Download siehst du die installierte und die ausgewählte Fassung sowie die Änderungen. Über „Zurück“ kannst du deine Auswahl anpassen.
         • **Hotfix-Verlauf öffnen** Ein Klick auf die Hotfix-Anzahl klappt die zugehörigen Versionen in der Liste auf oder zu.
         """;
 
     internal const string English = """
-        New in version 1.1.9 – Hotfix 5
+        New in version 1.1.9 – Hotfix 6
 
+        • **Portable EXE** The required .NET desktop runtime is included in the executable.
         • **Choose a hotfix** The installation dialog displays the selected hotfix changes as cards. Use the selector to switch between available hotfixes.
         • **Confirm installation** Review the installed and selected editions and their changes before downloading. Choose “Back” to adjust your selection.
         • **Open hotfix history** Click the hotfix count to expand or collapse the versions in the list.
