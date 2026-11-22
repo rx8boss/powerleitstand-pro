@@ -178,6 +178,7 @@ internal static class Program
             if (args.Contains("--startup-packages-ui")) return StartupPackageTests.RunUi(app, output);
             if (args.Contains("--esu")) return WindowsEsuTests.Run(app, output);
             if (args.Contains("--esu-account-live")) return WindowsEsuTests.AccountLive();
+            if (args.Contains("--timer-gpu-verification")) return TimerGpuVerification.Run(app, output);
             if (args.Contains("--animated-progress")) return AnimatedProgressTests.Run(app, output);
             if (args.Contains("--windows-updates")) return WindowsUpdateTests.Run(app, output, args.Contains("--cached-wua-probe"));
             if (args.Contains("--manufacturers")) return ManufacturerTests.Run(app, output);

@@ -1,0 +1,7 @@
+LibreHardwareMonitorLib 0.9.6 — https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
+DiskInfoToolkit 1.1.2 — https://github.com/Blacktempel/DiskInfoToolkit
+RAMSPDToolkit-NDD 1.4.2 — https://github.com/Blacktempel/RAMSPDToolkit
+These components use the Mozilla Public License 2.0. See LibreHardwareMonitor-MPL-2.0.txt.
+
+HidSharp 2.6.4 — https://software.seekye.com/hidsharp
+Copyright 2010–2025 James F. Bellinger. See HidSharp-Apache-2.0.txt.

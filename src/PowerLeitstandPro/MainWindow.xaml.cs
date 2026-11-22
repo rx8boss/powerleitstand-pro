@@ -652,7 +652,9 @@ public partial class MainWindow : Window
             if (IsInside(button, WindowsUpdatesHost) || IsInside(button, SettingsPanel) || IsInside(button, LogBox) || IsInside(button, UserLogBox) || IsInside(button, RepairLogBox) || IsInside(button, UserList)) continue;
             if (!_baseButtonSizes.TryGetValue(button, out var baseSize))
                 _baseButtonSizes[button] = baseSize = button.FontSize;
-            button.FontSize = Math.Round(baseSize * factor);
+            button.FontSize = ReferenceEquals(button, CompactTimerMinusMinute) || ReferenceEquals(button, CompactTimerPlusMinute)
+                || ReferenceEquals(button, CompactTimerMinusHour) || ReferenceEquals(button, CompactTimerPlusHour)
+                ? baseSize : Math.Round(baseSize * factor);
             if (ReferenceEquals(button.Style, Resources["HeaderButton"]) || ReferenceEquals(button.Style, Resources["HeaderNoticeButton"]) || ReferenceEquals(button.Style, Resources["CloseButtonStyle"]) || ReferenceEquals(button.Style, Resources["PageArrowButton"]))
             {
                 var isPageArrow = ReferenceEquals(button, PagePrevious) || ReferenceEquals(button, PageNext);

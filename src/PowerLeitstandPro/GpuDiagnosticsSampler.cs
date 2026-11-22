@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using LibreHardwareMonitor.Hardware;
 
 namespace PowerControlProWpf;
 
@@ -21,6 +22,7 @@ internal sealed class GpuDiagnosticsSampler : IDisposable
     private GpuDiagnostic[] _latest = [];
     private long _nextRead, _lastSuccess;
     private bool _disposed;
+    private Computer? _sensors;
 
     internal IReadOnlyList<GpuDiagnostic> Sample(long now, string? registeredModels = null)
     {
@@ -36,15 +38,19 @@ internal sealed class GpuDiagnosticsSampler : IDisposable
             ? _latest.Select(g => g with { Usage = null, Temperature = null, UsedMemory = null }).ToArray() : _latest;
     }
 
-    private static async Task<GpuDiagnostic[]> ReadAsync(CancellationToken stopping, string? registeredModels)
+    private async Task<GpuDiagnostic[]> ReadAsync(CancellationToken stopping, string? registeredModels)
     {
         var displays = ReadDisplayAdapters();
         var fallback = (registeredModels ?? "").Split(" / ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(name => !displays.Any(d => d.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
             .Select(name => new GpuDiagnostic("registry:" + name, name, null, null, null, null, null, false, "Windows"));
-        displays = displays.Concat(fallback).ToArray();
-        var helper = Path.Combine(Environment.SystemDirectory, "nvidia-smi.exe");
-        if (!File.Exists(helper)) return displays;
+        displays = MergeSensors(displays.Concat(fallback).ToArray());
+        var helper = new[]
+        {
+            Path.Combine(Environment.SystemDirectory, "nvidia-smi.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "NVIDIA Corporation", "NVSMI", "nvidia-smi.exe")
+        }.FirstOrDefault(File.Exists);
+        if (helper is null) return displays;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(stopping);
         deadline.CancelAfter(TimeSpan.FromSeconds(3));
         using var process = new Process { StartInfo = new ProcessStartInfo(helper)
@@ -66,8 +72,16 @@ internal sealed class GpuDiagnosticsSampler : IDisposable
             if (process.ExitCode != 0) return displays;
             var primaryName = displays.FirstOrDefault(g => g.IsPrimary)?.Name;
             var measured = ParseNvidiaOutput(await output, primaryName).ToList();
-            // Other vendors remain visible even when the driver offers no telemetry interface here.
-            measured.AddRange(displays.Where(d => !measured.Any(g => g.Name.Equals(d.Name, StringComparison.OrdinalIgnoreCase))));
+            for (int i = 0; i < measured.Count; i++)
+            {
+                var gpu = measured[i];
+                var matches = displays.Where(d => d.Name.Equals(gpu.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (gpu.Temperature is null && matches.Length == 1 && measured.Count(g => g.Name.Equals(gpu.Name, StringComparison.OrdinalIgnoreCase)) == 1)
+                    measured[i] = gpu with { Temperature = matches[0].Temperature };
+            }
+            // Do not merge distinct GPUs solely by a shared model name.
+            measured.AddRange(displays.Where(d => !measured.Any(g => g.Name.Equals(d.Name, StringComparison.OrdinalIgnoreCase))
+                || measured.Count(g => g.Name.Equals(d.Name, StringComparison.OrdinalIgnoreCase)) > 1));
             return measured.OrderByDescending(g => g.IsPrimary).ThenBy(g => g.Id, StringComparer.Ordinal).ToArray();
         }
         catch (Exception e) when (e is OperationCanceledException or IOException or System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -77,6 +91,46 @@ internal sealed class GpuDiagnosticsSampler : IDisposable
             try { if (started && !process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync().ConfigureAwait(false); } }
             catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
         }
+    }
+
+    private GpuDiagnostic[] MergeSensors(GpuDiagnostic[] displays)
+    {
+        try
+        {
+            if (_sensors is null)
+            {
+                var computer = new Computer { IsGpuEnabled = true };
+                try { computer.Open(); _sensors = computer; }
+                catch { computer.Close(); throw; }
+            }
+            var sensors = new List<GpuDiagnostic>();
+            foreach (var hardware in _sensors.Hardware.Where(h => h.HardwareType is HardwareType.GpuAmd or HardwareType.GpuNvidia or HardwareType.GpuIntel))
+            {
+                hardware.Update();
+                var temperature = hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature
+                    && (s.Name.Equals("GPU Core", StringComparison.OrdinalIgnoreCase) || s.Name.Equals("GPU", StringComparison.OrdinalIgnoreCase))
+                    && s.Value is >= 0 and <= 150)?.Value;
+                sensors.Add(new(hardware.Identifier.ToString(), hardware.Name, null, temperature, null, null, null, false, "LibreHardwareMonitor"));
+            }
+            foreach (var sensor in sensors)
+            {
+                var matches = displays.Where(d => d.Name.Equals(sensor.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (matches.Length == 1 && sensors.Count(s => s.Name.Equals(sensor.Name, StringComparison.OrdinalIgnoreCase)) == 1)
+                {
+                    var index = Array.IndexOf(displays, matches[0]);
+                    displays[index] = matches[0] with { Temperature = sensor.Temperature, Source = sensor.Source };
+                }
+                else
+                {
+                    displays = displays.Append(sensor).ToArray();
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception or DllNotFoundException or TypeInitializationException)
+        {
+            System.Diagnostics.Trace.TraceWarning("GPU sensors unavailable: " + e.Message);
+        }
+        return displays;
     }
 
     internal static GpuDiagnostic[] ParseNvidiaOutput(string text, string? primaryName)
@@ -133,8 +187,8 @@ internal sealed class GpuDiagnosticsSampler : IDisposable
     {
         if (_disposed) return;
         _disposed = true; _stop.Cancel();
-        if (_read is { IsCompleted: false } pending) _ = pending.ContinueWith(_ => _stop.Dispose(), TaskScheduler.Default);
-        else _stop.Dispose();
+        if (_read is { IsCompleted: false } pending) _ = pending.ContinueWith(_ => { _sensors?.Close(); _stop.Dispose(); }, TaskScheduler.Default);
+        else { _sensors?.Close(); _stop.Dispose(); }
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

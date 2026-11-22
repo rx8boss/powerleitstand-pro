@@ -136,7 +136,10 @@ public partial class MainWindow
         ((FrameworkElement)StandardDiskLabel.Parent).SetValue(AutomationProperties.NameProperty, _english ? "Drive details" : "Laufwerksdetails");
         ((FrameworkElement)StandardNetworkLabel.Parent).SetValue(AutomationProperties.NameProperty, _english ? "Network details" : "Netzwerkdetails");
         UpdateGpuMetricLayout();
-        var gpu = data.Gpus.FirstOrDefault(g => g.IsPrimary) ?? data.Gpus.FirstOrDefault();
+        var gpu = data.Gpus.FirstOrDefault(g => g.IsPrimary && g.Temperature is not null)
+            ?? data.Gpus.FirstOrDefault(g => g.Temperature is not null)
+            ?? data.Gpus.FirstOrDefault(g => g.IsPrimary)
+            ?? data.Gpus.FirstOrDefault();
         StandardGpuLabel.Text = "GPU: " + DiagnosticNumber(gpu?.Usage) + (gpu?.Usage is not null ? "%" : "") + " · " + DiagnosticNumber(gpu?.Temperature) + " °C";
         ((FrameworkElement)StandardGpuLabel.Parent).SetValue(AutomationProperties.NameProperty, _english ? "Graphics card details" : "Grafikkartendetails");
         StandardWindowsLabel.Text = data.Pc?.Windows ?? "Windows";
