@@ -41,6 +41,7 @@ internal sealed class GpuDiagnosticsSampler : IDisposable
     private async Task<GpuDiagnostic[]> ReadAsync(CancellationToken stopping, string? registeredModels)
     {
         var displays = ReadDisplayAdapters();
+        displays = MergeWindowsAdapters(displays, ReadWindowsAdapters());
         var fallback = (registeredModels ?? "").Split(" / ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(name => !displays.Any(d => d.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
             .Select(name => new GpuDiagnostic("registry:" + name, name, null, null, null, null, null, false, "Windows"));
@@ -91,6 +92,13 @@ internal sealed class GpuDiagnosticsSampler : IDisposable
             try { if (started && !process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync().ConfigureAwait(false); } }
             catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
         }
+    }
+
+    internal static GpuDiagnostic[] MergeWindowsAdapters(GpuDiagnostic[] displays, GpuDiagnostic[] windows)
+    {
+        return displays.Concat(windows.Where(adapter =>
+            !displays.Any(existing => existing.Id.Equals(adapter.Id, StringComparison.OrdinalIgnoreCase)
+                || existing.Name.Equals(adapter.Name, StringComparison.OrdinalIgnoreCase)))).ToArray();
     }
 
     private GpuDiagnostic[] MergeSensors(GpuDiagnostic[] displays)
@@ -167,6 +175,38 @@ internal sealed class GpuDiagnosticsSampler : IDisposable
         }
         if (quoted) return [];
         fields.Add(text.ToString().Trim()); return fields;
+    }
+
+    private static GpuDiagnostic[] ReadWindowsAdapters()
+    {
+        var result = new List<GpuDiagnostic>();
+        try
+        {
+            var scope = new System.Management.ManagementScope(@"\.
+oot\cimv2",
+                new System.Management.ConnectionOptions { Timeout = TimeSpan.FromSeconds(3) });
+            var query = new System.Management.ObjectQuery("SELECT Name, PNPDeviceID FROM Win32_VideoController");
+            using var searcher = new System.Management.ManagementObjectSearcher(scope, query,
+                new System.Management.EnumerationOptions { Timeout = TimeSpan.FromSeconds(3) });
+            using var devices = searcher.Get();
+            foreach (System.Management.ManagementObject device in devices)
+            {
+                using (device)
+                {
+                    var name = device["Name"]?.ToString()?.Trim();
+                    var id = device["PNPDeviceID"]?.ToString()?.Trim();
+                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(id) ||
+                        !id.StartsWith("PCI\\", StringComparison.OrdinalIgnoreCase)) continue;
+                    result.Add(new(id, name, null, null, null, null, null, false, "Windows"));
+                }
+            }
+        }
+        catch (Exception e) when (e is System.Management.ManagementException or System.Runtime.InteropServices.COMException
+            or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException)
+        {
+            Trace.TraceWarning("Windows graphics adapter query unavailable: " + e.Message);
+        }
+        return result.ToArray();
     }
 
     private static GpuDiagnostic[] ReadDisplayAdapters()

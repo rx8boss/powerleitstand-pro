@@ -6,18 +6,18 @@ namespace PowerControlProWpf;
 internal static class AppReleaseNotes
 {
     internal const string German = """
-        Neu in Version 1.1.9 – Hotfix 7
+        Neu in Version 1.1.9 – Hotfix 8
 
-        • **Timergröße** Die Schrift der Timerknöpfe bleibt bei automatischer und fester Fenstergröße lesbar.
-        • **GPU-Temperatur** Grafikkarten und verfügbare Temperatursensoren von NVIDIA, AMD und Intel werden automatisch erkannt.
+        • **Intel und AMD erkennen** Zusätzliche Windows-Abfrage für Grafikkarten, auch bei umschaltbarer Laptop-Grafik.
+        • **GPU-Temperatur** Verfügbare Sensorwerte werden automatisch angezeigt, soweit Treiber und Hardware sie bereitstellen.
         • **Portable EXE** Die benötigte .NET-Desktoplaufzeit ist enthalten.
         """;
 
     internal const string English = """
-        New in version 1.1.9 – Hotfix 7
+        New in version 1.1.9 – Hotfix 8
 
-        • **Timer size** Timer button text remains readable at automatic and fixed window sizes.
-        • **GPU temperature** Graphics adapters and available NVIDIA, AMD and Intel temperature sensors are detected automatically.
+        • **Detect Intel and AMD** Additional Windows graphics adapter detection, including laptops with switchable graphics.
+        • **GPU temperature** Available sensor readings are shown automatically when provided by hardware and drivers.
         • **Portable EXE** The required .NET desktop runtime is included.
         """;
 

@@ -23,6 +23,17 @@ internal static class TimerGpuVerification
             }
             hardware.Close();
         }
+        var detected = new[] { new GpuDiagnostic("display", "NVIDIA GeForce", null, null, null, null, null, true, "Windows") };
+        var windowsAdapters = new[]
+        {
+            new GpuDiagnostic(@"PCI\VEN_8086\GPU", "Intel UHD Graphics", null, null, null, null, null, false, "Windows"),
+            new GpuDiagnostic(@"PCI\VEN_1002\GPU", "AMD Radeon", null, null, null, null, null, false, "Windows"),
+            new GpuDiagnostic(@"PCI\VEN_10DE\GPU", "NVIDIA GeForce", null, null, null, null, null, false, "Windows")
+        };
+        var merged = GpuDiagnosticsSampler.MergeWindowsAdapters(detected, windowsAdapters);
+        if (merged.Length != 3 || !merged.Any(g => g.Name == "Intel UHD Graphics") || !merged.Any(g => g.Name == "AMD Radeon"))
+            throw new Exception("Windows graphics adapter merge lost a detected GPU or duplicated the NVIDIA display.");
+        Console.WriteLine("Intel/AMD/NVIDIA Erkennung: Testdaten erfolgreich.");
         using var sampler = new GpuDiagnosticsSampler();
         IReadOnlyList<GpuDiagnostic> gpus = [];
         var deadline = DateTime.UtcNow.AddSeconds(25);
